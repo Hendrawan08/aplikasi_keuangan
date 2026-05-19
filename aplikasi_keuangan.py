@@ -2,7 +2,8 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 import altair as alt
-from datetime import datetime, time, date
+from datetime import datetime, time, date, timedelta
+import pytz
 import traceback
 
 # ==========================================
@@ -14,67 +15,99 @@ st.markdown("<p style='text-align: center; color: #37474F;'>Sistem Pencatatan Pr
 st.markdown("---")
 
 # ==========================================
-# KONFIGURASI SUPABASE (Gunakan secrets di production)
+# KONFIGURASI SUPABASE & TIMEZONE
 # ==========================================
 SUPABASE_URL = "https://lmyvddqwmmpsrpigzygi.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxteXZkZHF3bW1wc3JwaWd6eWdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNzQ0NjQsImV4cCI6MjA5NDc1MDQ2NH0.Cv41r1Mo6fR164y3g8OX-zP_Cmj0NiR9zyRzkmYJi9I"
+
+# Zona waktu Indonesia (fallback ke UTC+7 jika pytz gagal)
+try:
+    TZ = pytz.timezone('Asia/Jakarta')
+except:
+    TZ = pytz.FixedOffset(7 * 60)  # offset manual +7 jam
+
+def waktu_sekarang_wib():
+    """Mengembalikan datetime sekarang dalam zona WIB."""
+    return datetime.now(TZ)
+
+# ==========================================
+# KONEKSI DATABASE (DENGAN PROTEKSI PROXY)
+# ==========================================
+import os
+for var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
+    os.environ.pop(var, None)
 
 @st.cache_resource
 def init_supabase() -> Client:
     try:
         client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        # Tes koneksi sederhana (opsional)
+        # Tes ringan
         client.auth.get_session()
         return client
     except Exception as e:
-        st.error(f"❌ Gagal tersambung ke database cloud: {e}")
+        st.error(f"❌ Gagal tersambung ke database: {e}")
         st.stop()
 
 supabase = init_supabase()
 
 # ==========================================
-# SESSION STATE & PERSISTENSI ANGGARAN
+# SESSION STATE & MANAJEMEN ANGGARAN
 # ==========================================
 if 'user_aktif' not in st.session_state:
     st.session_state.user_aktif = None
 if 'anggaran_terkunci' not in st.session_state:
     st.session_state.anggaran_terkunci = {}
-if 'pesan_error' not in st.session_state:
-    st.session_state.pesan_error = ""
+if 'muat_anggaran_sukses' not in st.session_state:
+    st.session_state.muat_anggaran_sukses = False
 
 KAMUS_BULAN = {
     1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
     7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
 }
 
-def muat_anggaran_dari_cloud(user_id):
-    """Ambil semua anggaran yang tersimpan di tabel budgets untuk user ini."""
+def muat_anggaran_dari_cloud(uid, paksa=False):
+    """Ambil semua anggaran dari tabel budgets untuk user ini.
+       Jika gagal, session tetap dipertahankan.
+    """
+    if not paksa and st.session_state.muat_anggaran_sukses:
+        # Sudah berhasil muat sebelumnya, tidak perlu ulang (kecuali dipaksa)
+        return
     try:
-        res = supabase.table("budgets").select("*").eq("user_id", user_id).execute()
+        res = supabase.table("budgets").select("*").eq("user_id", uid).execute()
         if res.data:
+            baru = {}
             for row in res.data:
                 key = row["bulan_key"]
-                st.session_state.anggaran_terkunci[key] = row["nominal"]
+                baru[key] = row["nominal"]
+            st.session_state.anggaran_terkunci = baru
+            st.session_state.muat_anggaran_sukses = True
+            # Tidak perlu st.rerun() karena fungsi ini dipanggil sebelum render utama
+        else:
+            # Tidak ada data, kosongkan saja
+            st.session_state.anggaran_terkunci = {}
+            st.session_state.muat_anggaran_sukses = True
     except Exception as e:
-        st.warning(f"Gagal memuat anggaran tersimpan: {e}")
+        st.error(f"Gagal memuat anggaran dari cloud: {e}")
+        st.session_state.muat_anggaran_sukses = False
 
-def simpan_anggaran_ke_cloud(user_id, bulan_key, nominal):
-    """Simpan satu entri anggaran ke tabel budgets (upsert)."""
+def simpan_anggaran_ke_cloud(uid, bulan_key, nominal):
+    """Simpan / update anggaran ke tabel budgets."""
     try:
-        # Hapus dulu jika ada
-        supabase.table("budgets").delete().eq("user_id", user_id).eq("bulan_key", bulan_key).execute()
-        # Insert baru
+        # Upsert: hapus lalu insert
+        supabase.table("budgets").delete().eq("user_id", uid).eq("bulan_key", bulan_key).execute()
         supabase.table("budgets").insert({
-            "user_id": user_id,
+            "user_id": uid,
             "bulan_key": bulan_key,
             "nominal": nominal,
-            "updated_at": datetime.now().isoformat()
+            "updated_at": datetime.now(TZ).isoformat()
         }).execute()
+        return True
     except Exception as e:
-        st.error(f"Gagal menyimpan anggaran ke cloud: {e}")
+        st.error(f"Gagal menyimpan anggaran: {e}")
+        return False
 
 # ==========================================
-# 3. GERBANG AUTH
+# 3. GERBANG AUTH (LOGIN / DAFTAR)
 # ==========================================
 if st.session_state.user_aktif is None:
     tab_login, tab_daftar = st.tabs(["🔑 Masuk", "📝 Daftar"])
@@ -85,7 +118,8 @@ if st.session_state.user_aktif is None:
             try:
                 resp = supabase.auth.sign_in_with_password({"email": email, "password": password})
                 st.session_state.user_aktif = resp.user
-                muat_anggaran_dari_cloud(resp.user.id)  # muat anggaran setelah login
+                # Muat anggaran setelah login (paksa muat ulang)
+                muat_anggaran_dari_cloud(resp.user.id, paksa=True)
                 st.rerun()
             except Exception as e:
                 st.error(f"Login gagal: {e}")
@@ -98,18 +132,17 @@ if st.session_state.user_aktif is None:
                 st.success("Akun berhasil dibuat! Silakan masuk.")
             except Exception as e:
                 st.error(f"Pendaftaran gagal: {e}")
-    st.stop()
+    st.stop()  # Hentikan eksekusi agar tidak lanjut ke dashboard
 
 # ==========================================
-# 4. DASHBOARD UTAMA SETELAH LOGIN
+# 4. DASHBOARD UTAMA (SETELAH LOGIN)
 # ==========================================
 uid = st.session_state.user_aktif.id
 email_user = st.session_state.user_aktif.email
-waktu_sekarang = datetime.now()
 
-# Muat anggaran jika belum (saat pertama masuk session)
-if not st.session_state.anggaran_terkunci:
-    muat_anggaran_dari_cloud(uid)
+# Muat anggaran dari cloud jika belum berhasil, atau jika session kosong
+if not st.session_state.muat_anggaran_sukses or not st.session_state.anggaran_terkunci:
+    muat_anggaran_dari_cloud(uid, paksa=True)
 
 # ---------- SIDEBAR ----------
 st.sidebar.success(f"👤 {email_user}")
@@ -120,67 +153,84 @@ if st.sidebar.button("Logout 🚪"):
         pass
     st.session_state.user_aktif = None
     st.session_state.anggaran_terkunci = {}
+    st.session_state.muat_anggaran_sukses = False
     st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔒 Kunci Anggaran Bulanan")
 
-# Pemilihan bulan & tahun anggaran
+# Pilih bulan & tahun (pakai waktu WIB untuk indeks bulan default)
+waktu_sekarang = waktu_sekarang_wib()
 bln_budget = st.sidebar.selectbox("Bulan Anggaran", list(KAMUS_BULAN.values()),
                                   index=waktu_sekarang.month - 1)
 thn_budget = st.sidebar.selectbox("Tahun Anggaran", [2025, 2026, 2027], index=1)
 key_budget = f"{bln_budget}_{thn_budget}"
 
-# Cek status anggaran
-if key_budget in st.session_state.anggaran_terkunci:
-    budget_aktif = st.session_state.anggaran_terkunci[key_budget]
-    st.sidebar.success(f"🔒 Anggaran {bln_budget} terkunci:\n**Rp {budget_aktif:,.0f}**")
-    if st.sidebar.button("🔓 Reset Anggaran (Hati-hati)"):
-        # Konfirmasi reset
-        with st.sidebar.expander("Konfirmasi Reset"):
-            if st.button("Ya, reset anggaran ini"):
-                del st.session_state.anggaran_terkunci[key_budget]
-                # Hapus juga dari cloud
-                try:
-                    supabase.table("budgets").delete().eq("user_id", uid).eq("bulan_key", key_budget).execute()
-                except:
-                    pass
-                st.rerun()
+# Ambil nominal anggaran dari session (jika ada)
+anggaran_terkunci = st.session_state.anggaran_terkunci.get(key_budget)
+
+if anggaran_terkunci is not None:
+    # Anggaran sudah terkunci
+    st.sidebar.success(f"🔒 Anggaran {bln_budget} {thn_budget}\n**Rp {anggaran_terkunci:,.0f}**")
+    with st.sidebar.expander("⚙️ Opsi Anggaran"):
+        st.write("Anggaran ini sudah dikunci. Anda dapat meresetnya jika perlu mengubah nominal.")
+        if st.button("🔓 Reset Anggaran Ini", key="reset_budget"):
+            # Konfirmasi di dalam expander
+            with st.form("konfirmasi_reset"):
+                st.warning("⚠️ Reset akan menghapus kunci anggaran bulan ini.")
+                konfirmasi = st.text_input("Ketik 'RESET' untuk melanjutkan")
+                if st.form_submit_button("Ya, Reset"):
+                    if konfirmasi.strip().upper() == "RESET":
+                        # Hapus dari session & cloud
+                        if key_budget in st.session_state.anggaran_terkunci:
+                            del st.session_state.anggaran_terkunci[key_budget]
+                        try:
+                            supabase.table("budgets").delete().eq("user_id", uid).eq("bulan_key", key_budget).execute()
+                            st.sidebar.success("✅ Anggaran berhasil direset!")
+                            st.rerun()
+                        except Exception as e:
+                            st.sidebar.error(f"Gagal menghapus di cloud: {e}")
+                    else:
+                        st.sidebar.error("Ketik 'RESET' dengan benar.")
 else:
-    input_budget = st.sidebar.number_input(f"Set Anggaran {bln_budget} (Rp):",
-                                           min_value=10000, value=1000000, step=100000)
-    # Tombol kunci dengan konfirmasi cerdas
-    if st.sidebar.button(f"🔐 KUNCI Anggaran {bln_budget}"):
-        # Cek apakah sudah ada transaksi di bulan ini (peringatan)
-        try:
-            cek_transaksi = supabase.table("transaksi").select("id").eq("user_id", uid) \
-                .gte("waktu_transaksi", f"{thn_budget}-{list(KAMUS_BULAN.keys())[list(KAMUS_BULAN.values()).index(bln_budget)]:02d}-01") \
-                .limit(1).execute()
-            if cek_transaksi.data:
-                st.sidebar.warning("⚠️ Sudah ada transaksi di bulan ini. Mengunci anggaran mungkin tidak akurat jika sudah terlanjur boros.")
-        except:
-            pass
-        st.session_state.anggaran_terkunci[key_budget] = input_budget
-        simpan_anggaran_ke_cloud(uid, key_budget, input_budget)
-        st.rerun()
-    budget_aktif = input_budget  # untuk evaluasi sementara (jika belum terkunci, pakai input ini)
+    # Anggaran belum dikunci, tampilkan form input
+    input_budget = st.sidebar.number_input(f"Set Anggaran {bln_budget} {thn_budget} (Rp):",
+                                           min_value=10000, value=1000000, step=100000,
+                                           help="Masukkan nominal anggaran bulan ini, lalu klik KUNCI.")
+    if st.sidebar.button(f"🔐 KUNCI Anggaran {bln_budget} {thn_budget}"):
+        # Validasi: nominal harus > 0
+        if input_budget <= 0:
+            st.sidebar.error("Nominal anggaran harus lebih dari 0.")
+        else:
+            # Simpan ke session & cloud
+            st.session_state.anggaran_terkunci[key_budget] = input_budget
+            if simpan_anggaran_ke_cloud(uid, key_budget, input_budget):
+                st.sidebar.success(f"✅ Anggaran {bln_budget} {thn_budget} terkunci!")
+                st.rerun()
+            else:
+                # Jika gagal simpan, hapus dari session agar tidak tidak sinkron
+                del st.session_state.anggaran_terkunci[key_budget]
+                st.sidebar.error("Gagal menyimpan, silakan coba lagi.")
 
 # ---------- FORM INPUT TRANSAKSI ----------
 st.sidebar.markdown("---")
 st.sidebar.subheader("✍️ Catat Transaksi")
 
-with st.sidebar.form("form_transaksi", clear_on_submit=True):
+# Gunakan form tanpa clear_on_submit, tapi kita akan reset manual dengan st.rerun()
+with st.sidebar.form("form_transaksi"):
     in_catatan = st.text_input("Nama Transaksi:", placeholder="Contoh: Beli Tissue")
     in_nominal = st.number_input("Nominal (Rp):", min_value=0, value=0, step=1000)
     in_kategori = st.selectbox("Kategori:", ["Makanan", "Transportasi", "Hiburan/Gaya Hidup",
                                              "Kebutuhan Rumah/Kesehatan", "Tagihan Wajib", "Lain-lain"])
     in_sifat = st.radio("Sifat:", ["Wajib", "Sukarela"])
-    in_tanggal = st.date_input("Tanggal", waktu_sekarang.date())
-    in_waktu = st.time_input("Jam & Menit", waktu_sekarang.time())
+    # Gunakan waktu WIB untuk default
+    default_date = waktu_sekarang.date()
+    default_time = waktu_sekarang.time()
+    in_tanggal = st.date_input("Tanggal", value=default_date)
+    in_waktu = st.time_input("Jam & Menit (klik ikon jam ⏰)", value=default_time)
     submitted = st.form_submit_button("💾 Simpan Transaksi")
 
 if submitted:
-    # Validasi ketat
     errors = []
     if not in_catatan.strip():
         errors.append("Nama transaksi tidak boleh kosong.")
@@ -192,20 +242,23 @@ if submitted:
     else:
         try:
             waktu_gabung = datetime.combine(in_tanggal, in_waktu)
+            # Pastikan timezone aware (kita anggap input adalah WIB, simpan sebagai UTC? Lebih baik simpan string ISO dengan offset)
+            # Supabase timestamptz akan menyimpan dengan timezone, kita kirim string ISO lengkap dengan +07:00
+            waktu_iso = TZ.localize(waktu_gabung).isoformat()
             data_insert = {
                 "user_id": uid,
                 "catatan": in_catatan.strip(),
                 "nominal": in_nominal,
                 "kategori": in_kategori,
                 "sifat": in_sifat,
-                "waktu_transaksi": waktu_gabung.isoformat()
+                "waktu_transaksi": waktu_iso
             }
             resp = supabase.table("transaksi").insert(data_insert).execute()
             if resp.data:
                 st.sidebar.success("✅ Transaksi tersimpan!")
                 st.rerun()
             else:
-                st.sidebar.error("Gagal menyimpan data, respons kosong.")
+                st.sidebar.error("Gagal menyimpan, respons kosong.")
         except Exception as e:
             st.sidebar.error(f"Error: {e}")
 
@@ -228,16 +281,18 @@ if not data_mentah:
 # Konversi ke DataFrame & Bersihkan
 df = pd.DataFrame(data_mentah)
 
-# Pastikan kolom nominal numerik, hapus yang invalid
+# Pastikan nominal numerik
 df['nominal'] = pd.to_numeric(df['nominal'], errors='coerce')
 invalid_nominal = df['nominal'].isna().sum()
 if invalid_nominal > 0:
-    st.warning(f"⚠️ Terdapat {invalid_nominal} transaksi dengan nominal tidak valid dan akan diabaikan.")
+    st.warning(f"⚠️ Terdapat {invalid_nominal} transaksi dengan nominal tidak valid, akan diabaikan.")
     df = df.dropna(subset=['nominal'])
 
-# Konversi waktu dengan proteksi
+# Konversi waktu, tangani berbagai format
 try:
-    df['waktu_transaksi'] = pd.to_datetime(df['waktu_transaksi'], errors='coerce')
+    df['waktu_transaksi'] = pd.to_datetime(df['waktu_transaksi'], errors='coerce', utc=True)
+    # Konversi ke timezone WIB untuk tampilan lokal
+    df['waktu_transaksi'] = df['waktu_transaksi'].dt.tz_convert(TZ)
     df = df.dropna(subset=['waktu_transaksi'])
     df['bulan'] = df['waktu_transaksi'].dt.month.map(KAMUS_BULAN)
     df['tahun'] = df['waktu_transaksi'].dt.year.astype(int)
@@ -250,13 +305,14 @@ except Exception as e:
 # ---------- FILTER DASHBOARD ----------
 st.markdown("### 🗓️ Filter Periode")
 c1, c2 = st.columns(2)
+daftar_tahun = sorted(df['tahun'].unique())
 pilihan_bulan = c1.selectbox("Bulan", ["Semua Bulan"] + list(KAMUS_BULAN.values()),
                              index=waktu_sekarang.month if waktu_sekarang.month <= 12 else 0)
-pilihan_tahun = c2.selectbox("Tahun", sorted(df['tahun'].unique()), index=len(sorted(df['tahun'].unique()))-1)
+pilihan_tahun = c2.selectbox("Tahun", daftar_tahun, index=len(daftar_tahun)-1 if daftar_tahun else 0)
 
 if pilihan_bulan == "Semua Bulan":
     df_view = df[df['tahun'] == pilihan_tahun].copy()
-    # Anggaran evaluasi: total dari bulan-bulan yang sudah dikunci pada tahun tersebut
+    # Anggaran: jumlahkan semua anggaran terkunci di tahun tersebut
     budget_evaluasi = sum(
         v for k, v in st.session_state.anggaran_terkunci.items()
         if k.endswith(f"_{pilihan_tahun}")
@@ -288,7 +344,7 @@ if not df_view.empty:
     df_tampil = df_view[["bulan", "catatan", "nominal", "kategori", "sifat", "Jam Catat"]].copy()
     df_tampil.columns = ["Bulan", "Deskripsi", "Nominal (Rp)", "Kategori", "Sifat", "Waktu"]
     st.dataframe(df_tampil, use_container_width=True)
-    # Tombol unduh CSV
+    # Unduh CSV
     csv = df_tampil.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Unduh CSV", csv, f"transaksi_{pilihan_bulan}_{pilihan_tahun}.csv", "text/csv")
 else:
@@ -323,7 +379,7 @@ with g2:
     else:
         st.write("Data kosong.")
 
-# ---------- 🧠 AI AUDITOR CERDAS (DIPERKUAT) ----------
+# ---------- AI AUDITOR ----------
 st.markdown("---")
 st.markdown("### 🧠 Analisis AI Cerdas")
 if not df_view.empty:
@@ -342,7 +398,7 @@ if not df_view.empty:
         else:
             st.info("Belum ada data historis untuk dibandingkan.")
 
-        # 2. Alarm Waktu Rawan (Malam + Dini Hari)
+        # 2. Alarm Waktu Rawan
         st.write("#### ⏰ Deteksi Waktu Rawan")
         malam_boros = df_view[(df_view['jam'] >= 20) | (df_view['jam'] <= 5)]
         if not malam_boros.empty:
@@ -361,7 +417,7 @@ if not df_view.empty:
             else:
                 st.info(f"💡 Porsi pengeluaran sukarela masih terkendali ({persen_sukarela:.1f}% anggaran).")
 
-        # 4. Rekomendasi Strategis
+        # 4. Rekomendasi
         st.write("#### 🎯 Rekomendasi Penghematan")
         top_kategori = df_view.groupby('kategori')['nominal'].sum().idxmax()
         nominal_top = df_view[df_view['kategori'] == top_kategori]['nominal'].sum()
