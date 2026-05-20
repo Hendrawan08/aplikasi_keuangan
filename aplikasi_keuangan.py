@@ -4,6 +4,7 @@ import pandas as pd
 import altair as alt
 from datetime import datetime, time, date, timedelta
 import pytz
+import traceback
 import os
 
 # ==========================================
@@ -105,22 +106,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- HEADER DENGAN TOMBOL LOGOUT CEPAT ----------
-col_header_left, col_header_right = st.columns([0.85, 0.15])
-with col_header_right:
-    # Tombol logout cepat di area utama (mobile friendly)
-    if st.session_state.get("user_aktif") is not None:
-        if st.button("🚪", key="quick_logout", help="Logout cepat"):
-            try:
-                supabase.auth.sign_out()
-            except:
-                pass
-            for key in ['user_aktif', 'anggaran_terkunci', 'target_tabungan',
-                        'muat_anggaran_sukses', 'muat_tabungan_sukses',
-                        'toast_kondisi_ditampilkan']:
-                st.session_state.pop(key, None)
-            st.rerun()
-
 st.markdown("<h1 style='text-align: center; color: #2E7D32;'>📊 DanaPintar AI — Multi-Month Auditor</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #37474F;'>Sistem Pencatatan Presisi Manual dengan Analisis Otak AI Lintas Waktu</p>", unsafe_allow_html=True)
 st.markdown("---")
@@ -137,6 +122,7 @@ except:
     TZ = pytz.FixedOffset(7 * 60)
 
 def waktu_sekarang_wib():
+    """Kembalikan datetime.now() dengan timezone WIB"""
     return datetime.now(TZ)
 
 for var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
@@ -179,10 +165,6 @@ if 'hapus_sukses' not in st.session_state:
     st.session_state.hapus_sukses = False
 if 'toast_kondisi_ditampilkan' not in st.session_state:
     st.session_state.toast_kondisi_ditampilkan = False
-if 'filter_bulan_sebelumnya' not in st.session_state:
-    st.session_state.filter_bulan_sebelumnya = None
-if 'filter_tahun_sebelumnya' not in st.session_state:
-    st.session_state.filter_tahun_sebelumnya = None
 
 KAMUS_BULAN = {
     1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
@@ -269,7 +251,7 @@ if st.session_state.user_aktif is None:
                 st.session_state.user_aktif = resp.user
                 muat_anggaran_dari_cloud(resp.user.id, paksa=True)
                 muat_target_tabungan_dari_cloud(resp.user.id, paksa=True)
-                st.session_state.toast_kondisi_ditampilkan = False
+                st.session_state.toast_kondisi_ditampilkan = False  # reset agar toast muncul lagi setelah login
                 st.rerun()
             except Exception as e:
                 st.error(f"Login gagal: {e}")
@@ -296,10 +278,12 @@ if not st.session_state.muat_tabungan_sukses:
     muat_target_tabungan_dari_cloud(uid, paksa=True)
 
 # ---------- TAMPILKAN TOAST ----------
+# Toast setelah simpan transaksi
 if st.session_state.simpan_sukses:
     st.toast(st.session_state.pesan_toast, icon="✅")
     st.session_state.simpan_sukses = False
 
+# Toast setelah hapus transaksi
 if st.session_state.hapus_sukses:
     st.toast(st.session_state.pesan_toast, icon="🗑️")
     st.session_state.hapus_sukses = False
@@ -307,6 +291,7 @@ if st.session_state.hapus_sukses:
 
 # ---------- SIDEBAR ----------
 with st.sidebar.container():
+    # Card profil dengan background lembut
     st.markdown("""
     <style>
     .profile-card {
@@ -347,6 +332,7 @@ with st.sidebar.container():
         background-color: rgba(255,255,255,0.35) !important;
         border-color: rgba(255,255,255,0.5) !important;
     }
+    /* Responsive: perbesar di mobile */
     @media (max-width: 768px) {
         .profile-card {
             padding: 1.5rem 1rem;
@@ -363,6 +349,7 @@ with st.sidebar.container():
     </style>
     """, unsafe_allow_html=True)
 
+    # Tampilkan card
     st.markdown(f"""
     <div class="profile-card">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -375,17 +362,20 @@ with st.sidebar.container():
     </div>
     """, unsafe_allow_html=True)
 
+    # Tombol logout dengan style khusus
     col_logout = st.columns([1])
     with col_logout[0]:
-        if st.button("🚪 Logout", key="sidebar_logout", use_container_width=True):
+        if st.button("🚪 Logout", key="logout_btn", use_container_width=True):
             try:
                 supabase.auth.sign_out()
             except:
                 pass
-            for key in ['user_aktif', 'anggaran_terkunci', 'target_tabungan',
-                        'muat_anggaran_sukses', 'muat_tabungan_sukses',
-                        'toast_kondisi_ditampilkan']:
-                st.session_state.pop(key, None)
+            st.session_state.user_aktif = None
+            st.session_state.anggaran_terkunci = {}
+            st.session_state.target_tabungan = {}
+            st.session_state.muat_anggaran_sukses = False
+            st.session_state.muat_tabungan_sukses = False
+            st.session_state.toast_kondisi_ditampilkan = False
             st.rerun()
 
 st.sidebar.markdown("---")
@@ -401,25 +391,28 @@ anggaran_terkunci = st.session_state.anggaran_terkunci.get(key_budget)
 
 if anggaran_terkunci is not None:
     st.sidebar.success(f"🔒 Anggaran {bln_budget} {thn_budget}\n**Rp {anggaran_terkunci:,.0f}**")
-    if st.sidebar.checkbox("🔓 Buka Reset Anggaran", key=f"reset_chk_{key_budget}"):
-        with st.sidebar.form(f"form_reset_{key_budget}"):
-            st.warning("⚠️ Reset akan menghapus kunci anggaran bulan ini.")
-            konfirmasi = st.text_input("Ketik 'RESET' untuk melanjutkan", key=f"reset_text_{key_budget}")
-            if st.form_submit_button("Ya, Reset"):
-                if konfirmasi.strip().upper() == "RESET":
-                    if key_budget in st.session_state.anggaran_terkunci:
-                        del st.session_state.anggaran_terkunci[key_budget]
-                    try:
-                        supabase.table("budgets").delete().eq("user_id", uid).eq("bulan_key", key_budget).execute()
-                        st.sidebar.success("✅ Anggaran berhasil direset!")
-                        st.rerun()
-                    except Exception as e:
-                        st.sidebar.error(f"Gagal menghapus di cloud: {e}")
-                else:
-                    st.sidebar.error("Ketik 'RESET' dengan benar.")
+    with st.sidebar.expander("⚙️ Opsi Anggaran"):
+        st.write("Anggaran ini sudah dikunci. Anda dapat meresetnya jika perlu mengubah nominal.")
+        if st.button("🔓 Reset Anggaran Ini", key="reset_budget"):
+            with st.form("konfirmasi_reset"):
+                st.warning("⚠️ Reset akan menghapus kunci anggaran bulan ini.")
+                konfirmasi = st.text_input("Ketik 'RESET' untuk melanjutkan")
+                if st.form_submit_button("Ya, Reset"):
+                    if konfirmasi.strip().upper() == "RESET":
+                        if key_budget in st.session_state.anggaran_terkunci:
+                            del st.session_state.anggaran_terkunci[key_budget]
+                        try:
+                            supabase.table("budgets").delete().eq("user_id", uid).eq("bulan_key", key_budget).execute()
+                            st.sidebar.success("✅ Anggaran berhasil direset!")
+                            st.rerun()
+                        except Exception as e:
+                            st.sidebar.error(f"Gagal menghapus di cloud: {e}")
+                    else:
+                        st.sidebar.error("Ketik 'RESET' dengan benar.")
 else:
     input_budget = st.sidebar.number_input(f"Set Anggaran {bln_budget} {thn_budget} (Rp):",
-                                           min_value=10000, value=1000000, step=100000)
+                                           min_value=10000, value=1000000, step=100000,
+                                           help="Masukkan nominal anggaran bulan ini, lalu klik KUNCI.")
     if st.sidebar.button(f"🔐 KUNCI Anggaran {bln_budget} {thn_budget}"):
         if input_budget <= 0:
             st.sidebar.error("Nominal anggaran harus lebih dari 0.")
@@ -432,14 +425,14 @@ else:
                 del st.session_state.anggaran_terkunci[key_budget]
                 st.sidebar.error("Gagal menyimpan, silakan coba lagi.")
 
-# Target Tabungan
+# NEW FEATURE: Target Tabungan (hanya muncul jika anggaran bulan itu sudah dikunci)
 st.sidebar.markdown("---")
 st.sidebar.subheader("💰 Target Tabungan Bulanan")
 if anggaran_terkunci is not None:
     target_sekarang = st.session_state.target_tabungan.get(key_budget)
     if target_sekarang is not None:
         st.sidebar.success(f"🎯 Target Tabungan {bln_budget}:\n**Rp {target_sekarang:,.0f}**")
-        if st.sidebar.button("🔄 Ubah Target Tabungan", key=f"ubah_target_{key_budget}"):
+        if st.sidebar.button("🔄 Ubah Target Tabungan", key="ubah_target"):
             st.session_state.target_tabungan.pop(key_budget, None)
             try:
                 supabase.table("savings_goals").delete().eq("user_id", uid).eq("bulan_key", key_budget).execute()
@@ -455,7 +448,7 @@ if anggaran_terkunci is not None:
             step=50000,
             help=f"Maksimal Rp {anggaran_terkunci:,.0f} (sesuai anggaran)"
         )
-        if st.sidebar.button("💾 Simpan Target Tabungan", key=f"save_target_{key_budget}"):
+        if st.sidebar.button("💾 Simpan Target Tabungan"):
             if input_target < 0:
                 st.sidebar.error("Target tidak boleh negatif.")
             elif input_target > anggaran_terkunci:
@@ -481,12 +474,15 @@ with st.sidebar.form("form_transaksi"):
     in_kategori = st.selectbox("Kategori:", ["Makanan", "Transportasi", "Hiburan/Gaya Hidup",
                                              "Kebutuhan Rumah/Kesehatan", "Tagihan Wajib", "Lain-lain"])
     in_sifat = st.radio("Sifat:", ["Wajib", "Sukarela"])
+    # Ambil waktu sekarang WIB sebagai default
     sekarang = datetime.now(TZ)
     default_date = sekarang.date()
     default_time = sekarang.time().replace(second=0, microsecond=0)
-
+    
+    # Tampilkan tanggal dengan format DD/MM/YYYY
     in_tanggal = st.date_input("Tanggal", value=default_date, format="DD/MM/YYYY")
-
+    
+    # Input jam
     col_jam, col_menit = st.columns(2)
     with col_jam:
         jam_input = st.number_input("Jam", min_value=0, max_value=23,
@@ -496,8 +492,10 @@ with st.sidebar.form("form_transaksi"):
         menit_input = st.number_input("Menit", min_value=0, max_value=59,
                                       value=st.session_state.menit_input, step=1,
                                       key="input_menit")
+    # Gabungkan menjadi objek time
     in_waktu = time(jam_input, menit_input)
-
+    
+    # Simpan nilai ke session state agar tetap muncul saat rerun
     st.session_state.jam_input = jam_input
     st.session_state.menit_input = menit_input
     submitted = st.form_submit_button("💾 Simpan Transaksi")
@@ -513,11 +511,14 @@ if submitted:
             st.sidebar.error(e)
     else:
         try:
+            # Buat datetime naive dari input tanggal dan waktu
             waktu_gabung = datetime(
                 in_tanggal.year, in_tanggal.month, in_tanggal.day,
                 in_waktu.hour, in_waktu.minute
             )
+            # Lokalisasi ke WIB (Asia/Jakarta)
             waktu_lokal = TZ.localize(waktu_gabung)
+            # Konversi ke UTC untuk disimpan di database (standar Supabase)
             waktu_iso = waktu_lokal.astimezone(pytz.UTC).isoformat()
             data_insert = {
                 "user_id": uid,
@@ -535,7 +536,6 @@ if submitted:
                 sekarang = datetime.now(TZ)
                 st.session_state.jam_input = sekarang.hour
                 st.session_state.menit_input = sekarang.minute
-                st.session_state.toast_kondisi_ditampilkan = False
                 st.sidebar.success("✅ Transaksi tersimpan!")
                 st.rerun()
             else:
@@ -568,17 +568,21 @@ if invalid_nominal > 0:
     df = df.dropna(subset=['nominal'])
 
 try:
-    df['waktu_transaksi'] = pd.to_datetime(df['waktu_transaksi'], utc=True, errors='coerce')
+    # Parse string ISO, beberapa mungkin punya offset (UTC), beberapa mungkin naive (data lama)
+    df['waktu_transaksi'] = pd.to_datetime(df['waktu_transaksi'], errors='coerce')
+    
+    # Jika ada yang tz-naive, anggap sebagai UTC lalu localize
+    if df['waktu_transaksi'].dt.tz is None:
+        df['waktu_transaksi'] = df['waktu_transaksi'].dt.tz_localize('UTC')
+    
+    # Sekarang semua sudah UTC-aware, baru convert ke WIB
     df['waktu_transaksi'] = df['waktu_transaksi'].dt.tz_convert(TZ)
+    
     df = df.dropna(subset=['waktu_transaksi'])
     df['bulan'] = df['waktu_transaksi'].dt.month.map(KAMUS_BULAN)
     df['tahun'] = df['waktu_transaksi'].dt.year.astype(int)
     df['jam'] = df['waktu_transaksi'].dt.hour.fillna(0).astype(int)
     df['menit'] = df['waktu_transaksi'].dt.minute.fillna(0).astype(int)
-    # Tambahkan kolom Tanggal Lengkap untuk seluruh data (diperlukan oleh fitur unduh semua riwayat)
-    df["Tanggal Lengkap"] = df["waktu_transaksi"].apply(
-        lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}"
-    )
 except Exception as e:
     st.error(f"Gagal memproses kolom waktu: {e}")
     st.stop()
@@ -591,12 +595,6 @@ pilihan_bulan = c1.selectbox("Bulan", ["Semua Bulan"] + list(KAMUS_BULAN.values(
                              index=waktu_sekarang.month if waktu_sekarang.month <= 12 else 0)
 pilihan_tahun = c2.selectbox("Tahun", daftar_tahun, index=len(daftar_tahun)-1 if daftar_tahun else 0)
 
-if (st.session_state.filter_bulan_sebelumnya != pilihan_bulan or
-    st.session_state.filter_tahun_sebelumnya != pilihan_tahun):
-    st.session_state.toast_kondisi_ditampilkan = False
-    st.session_state.filter_bulan_sebelumnya = pilihan_bulan
-    st.session_state.filter_tahun_sebelumnya = pilihan_tahun
-
 if pilihan_bulan == "Semua Bulan":
     df_view = df[df['tahun'] == pilihan_tahun].copy()
     budget_evaluasi = sum(
@@ -607,26 +605,18 @@ if pilihan_bulan == "Semua Bulan":
         v for k, v in st.session_state.target_tabungan.items()
         if k.endswith(f"_{pilihan_tahun}")
     )
-    jumlah_hari_dalam_bulan = 30
 else:
     df_view = df[(df['bulan'] == pilihan_bulan) & (df['tahun'] == pilihan_tahun)].copy()
     key_eval = f"{pilihan_bulan}_{pilihan_tahun}"
     budget_evaluasi = st.session_state.anggaran_terkunci.get(key_eval, 0)
     target_evaluasi = st.session_state.target_tabungan.get(key_eval, 0)
-    try:
-        bulan_idx = list(KAMUS_BULAN.values()).index(pilihan_bulan) + 1
-        if bulan_idx == 12:
-            jumlah_hari_dalam_bulan = 31
-        else:
-            jumlah_hari_dalam_bulan = (date(pilihan_tahun, bulan_idx % 12 + 1, 1) - timedelta(days=1)).day
-    except:
-        jumlah_hari_dalam_bulan = 30
 
 total_pengeluaran = df_view['nominal'].sum()
 batas_belanja = budget_evaluasi - target_evaluasi
 sisa_anggaran = budget_evaluasi - total_pengeluaran
+sisa_setelah_tabungan = batas_belanja - total_pengeluaran
 
-# ---------- TOAST KONDISI KEUANGAN ----------
+# ---------- TOAST KONDISI KEUANGAN (HANYA SEKALI SAAT PERTAMA DASHBOARD DIBUKA) ----------
 if not st.session_state.toast_kondisi_ditampilkan and batas_belanja > 0:
     persen = (total_pengeluaran / batas_belanja) * 100
     if persen >= 100:
@@ -657,36 +647,22 @@ else:
     km5.metric("Vs Batas Belanja", "Rp 0", delta="Tidak ada batas")
 km6.metric("Sisa Anggaran Utuh", f"Rp {sisa_anggaran:,.0f}")
 
-# ---------- NOTIFIKASI BATAS HARIAN ----------
-if budget_evaluasi > 0 and pilihan_bulan != "Semua Bulan":
-    st.markdown("#### ⏳ Analisis Harian")
-    hari_ini = datetime.now(TZ).date()
-    pengeluaran_hari_ini = df_view[df_view['waktu_transaksi'].dt.date == hari_ini]['nominal'].sum()
-    hari_sudah_berlalu = (hari_ini - date(pilihan_tahun, list(KAMUS_BULAN.values()).index(pilihan_bulan)+1, 1)).days + 1
-    if hari_sudah_berlalu < 1:
-        hari_sudah_berlalu = 1
-    rata_harian = total_pengeluaran / hari_sudah_berlalu
-    batas_harian = batas_belanja / jumlah_hari_dalam_bulan if jumlah_hari_dalam_bulan > 0 else 0
-
-    col_harian1, col_harian2 = st.columns(2)
-    col_harian1.metric("Pengeluaran Hari Ini", f"Rp {pengeluaran_hari_ini:,.0f}")
-    col_harian2.metric("Batas Harian Ideal", f"Rp {batas_harian:,.0f}",
-                       help=f"Total batas belanja dibagi {jumlah_hari_dalam_bulan} hari")
-    if pengeluaran_hari_ini > batas_harian * 1.3:
-        st.warning(f"⚡ Pengeluaran hari ini melebihi 130% batas harian. Waspada!")
-    elif pengeluaran_hari_ini > 0:
-        st.info("Pengeluaran hari ini masih dalam koridor aman.")
-
-# ---------- TABEL DATA DENGAN FITUR HAPUS ----------
+# ---------- TABEL DATA DENGAN FITUR HAPUS (PERBAIKAN) ----------
 st.markdown("### 📋 Lembar Catatan Keuangan")
 if not df_view.empty:
     # Buat kolom Jam Catat
     df_view["Jam Catat"] = df_view.apply(lambda r: f"{r['jam']:02d}:{r['menit']:02d} WIB", axis=1)
     
-    # df_view sudah memiliki Tanggal Lengkap karena copy dari df
+    # Buat kolom Tanggal Lengkap (format: "20 Mei 2026")
+    df_view["Tanggal Lengkap"] = df_view["waktu_transaksi"].apply(
+        lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}"
+    )
+    
+    # Susun ulang kolom yang akan ditampilkan
     df_tampil = df_view[["Tanggal Lengkap", "bulan", "catatan", "nominal", "kategori", "sifat", "Jam Catat"]].copy()
     df_tampil.columns = ["Tanggal", "Bulan", "Deskripsi", "Nominal (Rp)", "Kategori", "Sifat", "Waktu"]
 
+    # Tabel dengan multi‑select
     selection = st.dataframe(
         df_tampil,
         use_container_width=True,
@@ -696,41 +672,33 @@ if not df_view.empty:
         key="tabel_transaksi"
     )
 
+    # Tombol hapus
     if st.button("🗑️ Hapus Transaksi Terpilih", help="Pilih dulu baris di tabel, lalu klik tombol ini"):
         selected_indices = selection.selection.rows
         if selected_indices:
+            # Validasi indeks agar tidak melebihi jumlah baris saat ini
             valid_indices = [i for i in selected_indices if i < len(df_view)]
             if len(valid_indices) < len(selected_indices):
                 st.warning("⚠️ Sebagian pilihan sudah tidak valid karena data berubah. Hanya yang valid akan dihapus.")
             if valid_indices:
-                with st.expander("🔍 Konfirmasi data yang akan dihapus", expanded=True):
-                    st.dataframe(df_view.iloc[valid_indices][['Tanggal Lengkap','catatan','nominal']], use_container_width=True)
-                if st.button("✅ Ya, hapus yang dipilih", key="confirm_delete"):
-                    ids_to_delete = df_view.iloc[valid_indices]["id"].tolist()
-                    try:
-                        for trans_id in ids_to_delete:
-                            supabase.table("transaksi").delete().eq("id", trans_id).execute()
-                        st.cache_data.clear()
-                        if "tabel_transaksi" in st.session_state:
-                            del st.session_state["tabel_transaksi"]
-                        st.session_state.hapus_sukses = True
-                        st.session_state.pesan_toast = f"🗑️ {len(ids_to_delete)} transaksi berhasil dihapus."
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Gagal menghapus: {e}")
+                ids_to_delete = df_view.iloc[valid_indices]["id"].tolist()
+                try:
+                    for trans_id in ids_to_delete:
+                        supabase.table("transaksi").delete().eq("id", trans_id).execute()
+                    st.cache_data.clear()  # paksa refresh data transaksi
+                    st.session_state.hapus_sukses = True
+                    st.session_state.pesan_toast = f"🗑️ {len(ids_to_delete)} transaksi berhasil dihapus."
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Gagal menghapus: {e}")
+            else:
+                st.warning("Tidak ada transaksi valid untuk dihapus.")
         else:
             st.warning("Pilih minimal satu transaksi terlebih dahulu.")
 
-    # Unduh CSV bulanan
+    # Unduh CSV
     csv = df_tampil.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Unduh CSV", csv, f"transaksi_{pilihan_bulan}_{pilihan_tahun}.csv", "text/csv")
-
-    # Unduh Semua Riwayat (sudah diperbaiki)
-    if not df.empty:
-        df_all = df[["Tanggal Lengkap", "bulan", "catatan", "nominal", "kategori", "sifat"]].copy()
-        df_all.columns = ["Tanggal", "Bulan", "Deskripsi", "Nominal", "Kategori", "Sifat"]
-        csv_all = df_all.to_csv(index=False).encode('utf-8')
-        st.download_button("📦 Unduh Semua Riwayat", csv_all, "riwayat_lengkap.csv", "text/csv")
 else:
     st.info("Tidak ada transaksi pada periode ini.")
 
@@ -742,11 +710,10 @@ with g1:
     st.markdown("**Tren Pengeluaran Bulanan**")
     df_trend = df.groupby(["tahun", "bulan"])["nominal"].sum().reset_index()
     if not df_trend.empty:
-        chart_line = alt.Chart(df_trend).mark_line(point=True).encode(
+        chart_line = alt.Chart(df_trend).mark_line(point=True, color="#2E7D32").encode(
             x=alt.X('bulan:N', sort=list(KAMUS_BULAN.values()), title='Bulan'),
             y=alt.Y('nominal:Q', title='Total (Rp)'),
-            color=alt.Color('tahun:N', title='Tahun'),
-            tooltip=['tahun', 'bulan', 'nominal']
+            tooltip=['bulan', 'nominal']
         ).properties(height=300)
         st.altair_chart(chart_line, use_container_width=True)
     else:
@@ -802,8 +769,6 @@ if not df_view.empty:
                 st.error(f"💸 **Porsi Sukarela Terlalu Besar:** {persen_sukarela:.1f}% dari anggaran habis untuk pengeluaran sukarela. Evaluasi prioritas!")
             else:
                 st.info(f"💡 Porsi pengeluaran sukarela masih terkendali ({persen_sukarela:.1f}% anggaran).")
-        else:
-            st.info("Anggaran belum diatur, tidak bisa mengevaluasi porsi.")
 
         # 4. Evaluasi Target Tabungan
         st.write("#### 🎯 Evaluasi Target Tabungan")
@@ -835,16 +800,13 @@ if not df_view.empty:
 
         # Rekomendasi Umum
         st.write("#### 🎯 Rekomendasi Penghematan Umum")
-        if budget_evaluasi > 0 and not df_view.empty:
-            top_kategori = df_view.groupby('kategori')['nominal'].sum().idxmax()
-            nominal_top = df_view[df_view['kategori'] == top_kategori]['nominal'].sum()
-            target_pangkas = int(nominal_top * 0.2)
-            if target_pangkas > 0:
-                st.info(f"➔ Kurangi 20% dari **{top_kategori}** (sekitar Rp {target_pangkas:,}) untuk penghematan signifikan bulan depan.")
-            if sisa_anggaran < 0:
-                st.info("➔ Karena anggaran sudah tekor, alokasikan dana darurat di kategori 'Wajib' di awal bulan berikutnya.")
-        else:
-            st.info("Atur anggaran terlebih dahulu untuk mendapatkan rekomendasi.")
+        top_kategori = df_view.groupby('kategori')['nominal'].sum().idxmax()
+        nominal_top = df_view[df_view['kategori'] == top_kategori]['nominal'].sum()
+        target_pangkas = int(nominal_top * 0.2)
+        if target_pangkas > 0:
+            st.info(f"➔ Kurangi 20% dari **{top_kategori}** (sekitar Rp {target_pangkas:,}) untuk penghematan signifikan bulan depan.")
+        if budget_evaluasi > 0 and sisa_anggaran < 0:
+            st.info("➔ Karena anggaran sudah tekor, alokasikan dana darurat di kategori 'Wajib' di awal bulan berikutnya.")
 else:
     st.info("Tidak ada data transaksi untuk dianalisis AI.")
 
