@@ -400,12 +400,13 @@ with st.sidebar.form("form_transaksi"):
     # Ambil waktu sekarang WIB sebagai default
     sekarang = datetime.now(TZ)
     default_date = sekarang.date()
-    default_time = sekarang.time().replace(second=0, microsecond=0)  # jam:menit saja
-    in_tanggal = st.date_input(
-        "Tanggal",
-        value=default_date,
-        format="DD MMMM YYYY"   # akan menampilkan "20 May 2026" (bahasa Inggris)
-    )
+    default_time = sekarang.time().replace(second=0, microsecond=0)
+    # Tampilkan tanggal dengan format DD/MM/YYYY
+    in_tanggal = st.date_input("Tanggal", value=default_date, format="DD/MM/YYYY")
+    # Opsional: tampilkan nama bulan di bawah input agar jelas
+    bulan_terpilih = KAMUS_BULAN[in_tanggal.month]
+    st.caption(f"📅 {in_tanggal.day} {bulan_terpilih} {in_tanggal.year}")
+    # Input jam
     in_waktu = st.time_input("Jam & Menit (klik ikon jam ⏰)", value=default_time)
     submitted = st.form_submit_button("💾 Simpan Transaksi")
 
