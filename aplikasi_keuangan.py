@@ -398,8 +398,14 @@ with st.sidebar.form("form_transaksi"):
                                              "Kebutuhan Rumah/Kesehatan", "Tagihan Wajib", "Lain-lain"])
     in_sifat = st.radio("Sifat:", ["Wajib", "Sukarela"])
     # Ambil waktu sekarang WIB sebagai default
-    default_time = waktu_sekarang_wib().time()
-    in_tanggal = st.date_input("Tanggal", value=default_date, format="DD MMMM YYYY")
+    sekarang = datetime.now(TZ)
+    default_date = sekarang.date()
+    default_time = sekarang.time().replace(second=0, microsecond=0)  # jam:menit saja
+    in_tanggal = st.date_input(
+        "Tanggal",
+        value=default_date,
+        format="DD MMMM YYYY"   # akan menampilkan "20 May 2026" (bahasa Inggris)
+    )
     in_waktu = st.time_input("Jam & Menit (klik ikon jam ⏰)", value=default_time)
     submitted = st.form_submit_button("💾 Simpan Transaksi")
 
