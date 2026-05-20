@@ -397,14 +397,9 @@ with st.sidebar.form("form_transaksi"):
     in_kategori = st.selectbox("Kategori:", ["Makanan", "Transportasi", "Hiburan/Gaya Hidup",
                                              "Kebutuhan Rumah/Kesehatan", "Tagihan Wajib", "Lain-lain"])
     in_sifat = st.radio("Sifat:", ["Wajib", "Sukarela"])
-    # Ambil waktu sekarang WIB sebagai default
-    default_time = waktu_sekarang_wib().time()
-    # Tampilkan tanggal dengan format DD/MM/YYYY
+    default_date = waktu_sekarang.date()
+    default_time = waktu_sekarang.time()
     in_tanggal = st.date_input("Tanggal", value=default_date, format="DD/MM/YYYY")
-    # Opsional: tampilkan nama bulan di bawah input agar jelas
-    bulan_terpilih = KAMUS_BULAN[in_tanggal.month]
-    st.caption(f"📅 {in_tanggal.day} {bulan_terpilih} {in_tanggal.year}")
-    # Input jam
     in_waktu = st.time_input("Jam & Menit (klik ikon jam ⏰)", value=default_time)
     submitted = st.form_submit_button("💾 Simpan Transaksi")
 
