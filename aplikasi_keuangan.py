@@ -373,52 +373,6 @@ if anggaran_terkunci is not None:
 else:
     st.sidebar.info("Kunci anggaran terlebih dahulu untuk mengatur target tabungan.")
 
-# ---------- ALOKASI ANGGARAN PER KATEGORI (FITUR 5 - SIDEBAR) ----------
-st.sidebar.markdown("---")
-st.sidebar.subheader("📊 Alokasi Anggaran per Kategori")
-if anggaran_terkunci is not None:
-    try:
-        res_alloc_sidebar = supabase.table("budget_allocations").select("*").eq("user_id", uid).eq("bulan_key", key_budget).execute()
-        current_alloc_sidebar = {row['kategori']: row['persentase'] for row in res_alloc_sidebar.data} if res_alloc_sidebar.data else {}
-    except Exception as e:
-        st.sidebar.error(f"Gagal memuat alokasi: {e}")
-        current_alloc_sidebar = {}
-
-    if not current_alloc_sidebar:
-        st.sidebar.info("Belum ada alokasi. Atur persentase:")
-        with st.sidebar.form("form_alloc_sidebar"):
-            kategoris = ["Makanan", "Transportasi", "Hiburan/Gaya Hidup",
-                         "Kebutuhan Rumah/Kesehatan", "Tagihan Wajib", "Lain-lain"]
-            persen_dict = {}
-            for kat in kategoris:
-                persen_dict[kat] = st.number_input(f"{kat} %", 0, 100, 15 if kat in ["Makanan","Transportasi"] else 10)
-            total_persen = sum(persen_dict.values())
-            if total_persen != 100:
-                st.error(f"Total harus 100%, sekarang {total_persen}%")
-            if st.form_submit_button("Simpan Alokasi"):
-                if total_persen == 100:
-                    try:
-                        supabase.table("budget_allocations").delete().eq("user_id", uid).eq("bulan_key", key_budget).execute()
-                        for kat, pers in persen_dict.items():
-                            if pers > 0:
-                                supabase.table("budget_allocations").insert({
-                                    "user_id": uid, "bulan_key": key_budget,
-                                    "kategori": kat, "persentase": pers
-                                }).execute()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Gagal menyimpan alokasi: {e}")
-    else:
-        st.sidebar.success("Alokasi tersimpan")
-        if st.sidebar.button("🔄 Ubah Alokasi", key=f"ubah_alloc_{key_budget}"):
-            try:
-                supabase.table("budget_allocations").delete().eq("user_id", uid).eq("bulan_key", key_budget).execute()
-                st.rerun()
-            except Exception as e:
-                st.error(f"Gagal mengubah alokasi: {e}")
-else:
-    st.sidebar.info("Kunci anggaran dulu untuk atur alokasi.")
-
 # ---------- FORM INPUT TRANSAKSI ----------
 st.sidebar.markdown("---")
 st.sidebar.subheader("✍️ Catat Transaksi")
@@ -572,17 +526,11 @@ if pilihan_bulan == "Semua Bulan":
     budget_evaluasi = sum(v for k, v in st.session_state.anggaran_terkunci.items() if k.endswith(f"_{pilihan_tahun}"))
     target_evaluasi = sum(v for k, v in st.session_state.target_tabungan.items() if k.endswith(f"_{pilihan_tahun}"))
     jumlah_hari_dalam_bulan = 30
-    current_alloc_dashboard = {}
 else:
     df_view = df[(df['bulan'] == pilihan_bulan) & (df['tahun'] == pilihan_tahun)].copy()
     key_eval = f"{pilihan_bulan}_{pilihan_tahun}"
     budget_evaluasi = st.session_state.anggaran_terkunci.get(key_eval, 0)
     target_evaluasi = st.session_state.target_tabungan.get(key_eval, 0)
-    try:
-        res_alloc_dash = supabase.table("budget_allocations").select("*").eq("user_id", uid).eq("bulan_key", key_eval).execute()
-        current_alloc_dashboard = {row['kategori']: row['persentase'] for row in res_alloc_dash.data} if res_alloc_dash.data else {}
-    except:
-        current_alloc_dashboard = {}
     try:
         bulan_idx = list(KAMUS_BULAN.values()).index(pilihan_bulan) + 1
         if bulan_idx == 12:
@@ -778,30 +726,6 @@ with g2:
         st.altair_chart(chart_pie, use_container_width=True)
     else:
         st.write("Data kosong.")
-
-# ---------- PERBANDINGAN ANGGARAN VS AKTUAL PER KATEGORI (FITUR 5) ----------
-if budget_evaluasi > 0 and current_alloc_dashboard:
-    st.markdown("#### 📊 Anggaran vs Pengeluaran per Kategori")
-    batas_per_kategori = {}
-    for kat, pers in current_alloc_dashboard.items():
-        batas_per_kategori[kat] = (pers / 100) * batas_belanja
-    aktual_per_kategori = df_view.groupby('kategori')['nominal'].sum().to_dict()
-    data_comp = []
-    for kat in current_alloc_dashboard.keys():
-        data_comp.append({
-            "Kategori": kat,
-            "Anggaran": batas_per_kategori.get(kat, 0),
-            "Aktual": aktual_per_kategori.get(kat, 0)
-        })
-    df_comp = pd.DataFrame(data_comp)
-    df_comp_melt = df_comp.melt(id_vars="Kategori", var_name="Jenis", value_name="Nominal")
-    chart_bar = alt.Chart(df_comp_melt).mark_bar().encode(
-        x=alt.X('Kategori:N', title=None),
-        y=alt.Y('Nominal:Q'),
-        color=alt.Color('Jenis:N', scale=alt.Scale(domain=['Anggaran','Aktual'], range=['#2E7D32','#FFA000'])),
-        column=alt.Column('Jenis:N', title=None)
-    ).properties(width=150)
-    st.altair_chart(chart_bar, use_container_width=True)
 
 # ---------- AI AUDITOR ----------
 st.markdown("---")
