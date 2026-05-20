@@ -581,10 +581,17 @@ km6.metric("Sisa Anggaran Utuh", f"Rp {sisa_anggaran:,.0f}")
 # ---------- TABEL DATA DENGAN FITUR HAPUS (PERBAIKAN) ----------
 st.markdown("### 📋 Lembar Catatan Keuangan")
 if not df_view.empty:
+    # Buat kolom Jam Catat
     df_view["Jam Catat"] = df_view.apply(lambda r: f"{r['jam']:02d}:{r['menit']:02d} WIB", axis=1)
-    # Kolom tampilan tanpa ID
-    df_tampil = df_view[["bulan", "catatan", "nominal", "kategori", "sifat", "Jam Catat"]].copy()
-    df_tampil.columns = ["Bulan", "Deskripsi", "Nominal (Rp)", "Kategori", "Sifat", "Waktu"]
+    
+    # Buat kolom Tanggal Lengkap (format: "20 Mei 2026")
+    df_view["Tanggal Lengkap"] = df_view["waktu_transaksi"].apply(
+        lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}"
+    )
+    
+    # Susun ulang kolom yang akan ditampilkan
+    df_tampil = df_view[["Tanggal Lengkap", "bulan", "catatan", "nominal", "kategori", "sifat", "Jam Catat"]].copy()
+    df_tampil.columns = ["Tanggal", "Bulan", "Deskripsi", "Nominal (Rp)", "Kategori", "Sifat", "Waktu"]
 
     # Tabel dengan multi‑select
     selection = st.dataframe(
