@@ -290,19 +290,93 @@ if st.session_state.hapus_sukses:
     st.session_state.pesan_toast = ""
 
 # ---------- SIDEBAR ----------
-st.sidebar.success(f"👤 {email_user}")
-if st.sidebar.button("Logout 🚪"):
-    try:
-        supabase.auth.sign_out()
-    except:
-        pass
-    st.session_state.user_aktif = None
-    st.session_state.anggaran_terkunci = {}
-    st.session_state.target_tabungan = {}
-    st.session_state.muat_anggaran_sukses = False
-    st.session_state.muat_tabungan_sukses = False
-    st.session_state.toast_kondisi_ditampilkan = False
-    st.rerun()
+with st.sidebar.container():
+    # Card profil dengan background lembut
+    st.markdown("""
+    <style>
+    .profile-card {
+        background: linear-gradient(135deg, #2E7D32 0%, #43A047 100%);
+        border-radius: 16px;
+        padding: 1.2rem 1rem;
+        margin-bottom: 0.5rem;
+        color: white;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .profile-card .email {
+        font-size: 0.95rem;
+        font-weight: 500;
+        word-break: break-all;
+        opacity: 0.95;
+        margin-top: 0.3rem;
+    }
+    .profile-card .label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        opacity: 0.7;
+    }
+    .logout-btn {
+        margin-top: 0.6rem;
+    }
+    .logout-btn button {
+        background-color: rgba(255,255,255,0.2) !important;
+        border: 1px solid rgba(255,255,255,0.3) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+        padding: 0.4rem 1rem !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease;
+    }
+    .logout-btn button:hover {
+        background-color: rgba(255,255,255,0.35) !important;
+        border-color: rgba(255,255,255,0.5) !important;
+    }
+    /* Responsive: perbesar di mobile */
+    @media (max-width: 768px) {
+        .profile-card {
+            padding: 1.5rem 1rem;
+        }
+        .profile-card .email {
+            font-size: 1rem;
+        }
+        .logout-btn button {
+            font-size: 1rem !important;
+            padding: 0.6rem 1.2rem !important;
+            width: 100%;
+        }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Tampilkan card
+    st.markdown(f"""
+    <div class="profile-card">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.8rem;">👤</span>
+            <div>
+                <div class="label">Akun Aktif</div>
+                <div class="email">{email_user}</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Tombol logout dengan style khusus
+    col_logout = st.columns([1])
+    with col_logout[0]:
+        if st.button("🚪 Logout", key="logout_btn", use_container_width=True):
+            try:
+                supabase.auth.sign_out()
+            except:
+                pass
+            st.session_state.user_aktif = None
+            st.session_state.anggaran_terkunci = {}
+            st.session_state.target_tabungan = {}
+            st.session_state.muat_anggaran_sukses = False
+            st.session_state.muat_tabungan_sukses = False
+            st.session_state.toast_kondisi_ditampilkan = False
+            st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔒 Kunci Anggaran Bulanan")
