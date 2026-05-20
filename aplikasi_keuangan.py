@@ -153,11 +153,12 @@ if 'target_tabungan' not in st.session_state:
     st.session_state.target_tabungan = {}
 if 'muat_tabungan_sukses' not in st.session_state:
     st.session_state.muat_tabungan_sukses = False
-# Untuk toast
 if 'simpan_sukses' not in st.session_state:
     st.session_state.simpan_sukses = False
 if 'pesan_toast' not in st.session_state:
     st.session_state.pesan_toast = ""
+if 'waktu_input' not in st.session_state:
+    st.session_state.waktu_input = datetime.now(TZ).time().replace(second=0, microsecond=0)
 if 'hapus_sukses' not in st.session_state:
     st.session_state.hapus_sukses = False
 if 'toast_kondisi_ditampilkan' not in st.session_state:
@@ -397,10 +398,20 @@ with st.sidebar.form("form_transaksi"):
     in_kategori = st.selectbox("Kategori:", ["Makanan", "Transportasi", "Hiburan/Gaya Hidup",
                                              "Kebutuhan Rumah/Kesehatan", "Tagihan Wajib", "Lain-lain"])
     in_sifat = st.radio("Sifat:", ["Wajib", "Sukarela"])
-    default_date = waktu_sekarang.date()
-    default_time = waktu_sekarang.time()
+    # Ambil waktu sekarang WIB sebagai default
+    sekarang = datetime.now(TZ)
+    default_date = sekarang.date()
+    default_time = sekarang.time().replace(second=0, microsecond=0)
+    
+    # Tampilkan tanggal dengan format DD/MM/YYYY
     in_tanggal = st.date_input("Tanggal", value=default_date, format="DD/MM/YYYY")
-    in_waktu = st.time_input("Jam & Menit (klik ikon jam ⏰)", value=default_time)
+    
+    # Opsional: tampilkan nama bulan di bawah input agar jelas
+    bulan_terpilih = KAMUS_BULAN[in_tanggal.month]
+    st.caption(f"📅 {in_tanggal.day} {bulan_terpilih} {in_tanggal.year}")
+    
+    # Input jam
+    in_waktu = st.time_input("Jam & Menit (klik ikon jam ⏰)", value=st.session_state.waktu_input)
     submitted = st.form_submit_button("💾 Simpan Transaksi")
 
 if submitted:
@@ -433,10 +444,10 @@ if submitted:
             }
             resp = supabase.table("transaksi").insert(data_insert).execute()
             if resp.data:
-                # Bersihkan cache data transaksi agar data terbaru muncul
                 st.cache_data.clear()
                 st.session_state.simpan_sukses = True
                 st.session_state.pesan_toast = f"✅ Transaksi '{in_catatan.strip()}' berhasil dicatat!"
+                st.session_state.waktu_input = datetime.now(TZ).time().replace(second=0, microsecond=0)
                 st.sidebar.success("✅ Transaksi tersimpan!")
                 st.rerun()
             else:
