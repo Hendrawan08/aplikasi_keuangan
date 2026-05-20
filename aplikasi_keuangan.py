@@ -397,9 +397,10 @@ with st.sidebar.form("form_transaksi"):
     in_kategori = st.selectbox("Kategori:", ["Makanan", "Transportasi", "Hiburan/Gaya Hidup",
                                              "Kebutuhan Rumah/Kesehatan", "Tagihan Wajib", "Lain-lain"])
     in_sifat = st.radio("Sifat:", ["Wajib", "Sukarela"])
-    # Gunakan waktu sekarang WIB sebagai default
-    default_date = waktu_sekarang_wib().date()
-    default_time = waktu_sekarang_wib().time()  # ini aman, tidak ada timezone
+    # Ambil waktu sekarang WIB sebagai default
+    sekarang = datetime.now(TZ)
+    default_date = sekarang.date()
+    default_time = sekarang.time().replace(second=0, microsecond=0)  # agar bersih
     in_tanggal = st.date_input("Tanggal", value=default_date)
     in_waktu = st.time_input("Jam & Menit (klik ikon jam ⏰)", value=default_time)
     submitted = st.form_submit_button("💾 Simpan Transaksi")
@@ -470,9 +471,16 @@ if invalid_nominal > 0:
     df = df.dropna(subset=['nominal'])
 
 try:
-    # Parse string ISO 8601 (sudah mengandung offset UTC), lalu konversi langsung ke WIB
+    # Parse string ISO, beberapa mungkin punya offset (UTC), beberapa mungkin naive (data lama)
     df['waktu_transaksi'] = pd.to_datetime(df['waktu_transaksi'], errors='coerce')
+    
+    # Jika ada yang tz-naive, anggap sebagai UTC lalu localize
+    if df['waktu_transaksi'].dt.tz is None:
+        df['waktu_transaksi'] = df['waktu_transaksi'].dt.tz_localize('UTC')
+    
+    # Sekarang semua sudah UTC-aware, baru convert ke WIB
     df['waktu_transaksi'] = df['waktu_transaksi'].dt.tz_convert(TZ)
+    
     df = df.dropna(subset=['waktu_transaksi'])
     df['bulan'] = df['waktu_transaksi'].dt.month.map(KAMUS_BULAN)
     df['tahun'] = df['waktu_transaksi'].dt.year.astype(int)
