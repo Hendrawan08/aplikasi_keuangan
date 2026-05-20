@@ -5,8 +5,6 @@ import altair as alt
 from datetime import datetime, time, date, timedelta
 import pytz
 import os
-import numpy as np
-from fpdf import FPDF
 
 # ==========================================
 # SETUP HALAMAN UTAMA
@@ -16,38 +14,93 @@ st.set_page_config(page_title="DanaPintar AI Premium", page_icon="📊", layout=
 # ---------- CSS KUSTOM UNTUK MOBILE-FRIENDLY ----------
 st.markdown("""
 <style>
-    html, body, [data-testid="stAppViewContainer"] { font-size: 16px; }
+    /* ========== GLOBAL ========== */
+    html, body, [data-testid="stAppViewContainer"] {
+        font-size: 16px;
+    }
+
+    /* ========== TYPOGRAPHY ========== */
     h1 { font-size: 2.2rem !important; }
     h2 { font-size: 1.8rem !important; }
     h3 { font-size: 1.4rem !important; }
+
+    /* ========== TOMBOL ========== */
     .stButton button, .stFormSubmitButton button {
-        font-size: 1rem !important; padding: 0.6rem 1.2rem !important;
-        border-radius: 8px !important; transition: all 0.2s ease;
+        font-size: 1rem !important;
+        padding: 0.6rem 1.2rem !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease;
     }
-    .stButton button:hover { transform: scale(1.02); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    .stButton button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    /* ========== INPUT ========== */
     input, textarea, select, .stTextInput input, .stNumberInput input,
     .stDateInput input, .stTimeInput input {
-        font-size: 1rem !important; padding: 0.5rem !important; border-radius: 6px !important;
+        font-size: 1rem !important;
+        padding: 0.5rem !important;
+        border-radius: 6px !important;
     }
-    [data-testid="stSidebar"] { background-color: #0f172a; }
-    [data-testid="stMetricValue"] { font-size: 1.8rem !important; }
-    [data-testid="stMetricLabel"] { font-size: 0.9rem !important; }
-    .stDataFrame { font-size: 0.95rem !important; }
+
+    /* ========== SIDEBAR ========== */
+    [data-testid="stSidebar"] {
+        background-color: #0f172a;
+    }
+
+    /* ========== METRIC ========== */
+    [data-testid="stMetricValue"] {
+        font-size: 1.8rem !important;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 0.9rem !important;
+    }
+
+    /* ========== DATAFRAME ========== */
+    .stDataFrame {
+        font-size: 0.95rem !important;
+    }
+
+    /* ========== RESPONSIVE UNTUK MOBILE (max-width 768px) ========== */
     @media (max-width: 768px) {
         h1 { font-size: 1.8rem !important; }
         h2 { font-size: 1.5rem !important; }
         h3 { font-size: 1.3rem !important; }
+
         .stButton button, .stFormSubmitButton button {
-            font-size: 1.1rem !important; padding: 0.8rem 1.5rem !important;
-            min-height: 48px !important; width: 100%; display: block;
+            font-size: 1.1rem !important;
+            padding: 0.8rem 1.5rem !important;
+            min-height: 48px !important;
+            width: 100%;
+            display: block;
         }
+
         input, textarea, select, .stTextInput input, .stNumberInput input,
-        .stDateInput input, .stTimeInput input { font-size: 1.05rem !important; padding: 0.65rem !important; }
-        [data-testid="stMetricValue"] { font-size: 1.6rem !important; }
-        [data-testid="stMetricLabel"] { font-size: 1rem !important; }
-        [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] .stButton button { font-size: 1rem !important; }
-        [data-testid="stHorizontalBlock"] > div { flex: 1 1 100% !important; max-width: 100% !important; }
-        .element-container iframe { max-width: 100% !important; }
+        .stDateInput input, .stTimeInput input {
+            font-size: 1.05rem !important;
+            padding: 0.65rem !important;
+        }
+
+        [data-testid="stMetricValue"] {
+            font-size: 1.6rem !important;
+        }
+        [data-testid="stMetricLabel"] {
+            font-size: 1rem !important;
+        }
+
+        [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] .stButton button {
+            font-size: 1rem !important;
+        }
+
+        [data-testid="stHorizontalBlock"] > div {
+            flex: 1 1 100% !important;
+            max-width: 100% !important;
+        }
+
+        .element-container iframe {
+            max-width: 100% !important;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -55,6 +108,7 @@ st.markdown("""
 # ---------- HEADER DENGAN TOMBOL LOGOUT CEPAT ----------
 col_header_left, col_header_right = st.columns([0.85, 0.15])
 with col_header_right:
+    # Tombol logout cepat di area utama (mobile friendly)
     if st.session_state.get("user_aktif") is not None:
         if st.button("🚪", key="quick_logout", help="Logout cepat"):
             try:
@@ -101,7 +155,7 @@ def init_supabase() -> Client:
 supabase = init_supabase()
 
 # ==========================================
-# SESSION STATE
+# SESSION STATE & MANAJEMEN ANGGARAN + TABUNGAN
 # ==========================================
 if 'user_aktif' not in st.session_state:
     st.session_state.user_aktif = None
@@ -241,22 +295,11 @@ if not st.session_state.muat_anggaran_sukses or not st.session_state.anggaran_te
 if not st.session_state.muat_tabungan_sukses:
     muat_target_tabungan_dari_cloud(uid, paksa=True)
 
-# ---------- LOAD REMINDERS (dengan perlindungan error) ----------
-@st.cache_data(ttl=10)
-def load_reminders(uid):
-    try:
-        res = supabase.table("reminders").select("*").eq("user_id", uid).eq("is_active", True).execute()
-        return res.data if res.data else []
-    except Exception as e:
-        st.warning(f"Gagal memuat pengingat: {e}")
-        return []
-
-reminders = load_reminders(uid)
-
 # ---------- TAMPILKAN TOAST ----------
 if st.session_state.simpan_sukses:
     st.toast(st.session_state.pesan_toast, icon="✅")
     st.session_state.simpan_sukses = False
+
 if st.session_state.hapus_sukses:
     st.toast(st.session_state.pesan_toast, icon="🗑️")
     st.session_state.hapus_sukses = False
@@ -268,13 +311,58 @@ with st.sidebar.container():
     <style>
     .profile-card {
         background: linear-gradient(135deg, #2E7D32 0%, #43A047 100%);
-        border-radius: 16px; padding: 1.2rem 1rem; margin-bottom: 0.5rem;
-        color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border-radius: 16px;
+        padding: 1.2rem 1rem;
+        margin-bottom: 0.5rem;
+        color: white;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
-    .profile-card .email { font-size: 0.95rem; font-weight: 500; word-break: break-all; opacity: 0.95; margin-top: 0.3rem; }
-    .profile-card .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; }
+    .profile-card .email {
+        font-size: 0.95rem;
+        font-weight: 500;
+        word-break: break-all;
+        opacity: 0.95;
+        margin-top: 0.3rem;
+    }
+    .profile-card .label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        opacity: 0.7;
+    }
+    .logout-btn {
+        margin-top: 0.6rem;
+    }
+    .logout-btn button {
+        background-color: rgba(255,255,255,0.2) !important;
+        border: 1px solid rgba(255,255,255,0.3) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        font-size: 0.85rem !important;
+        padding: 0.4rem 1rem !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease;
+    }
+    .logout-btn button:hover {
+        background-color: rgba(255,255,255,0.35) !important;
+        border-color: rgba(255,255,255,0.5) !important;
+    }
+    @media (max-width: 768px) {
+        .profile-card {
+            padding: 1.5rem 1rem;
+        }
+        .profile-card .email {
+            font-size: 1rem;
+        }
+        .logout-btn button {
+            font-size: 1rem !important;
+            padding: 0.6rem 1.2rem !important;
+            width: 100%;
+        }
+    }
     </style>
     """, unsafe_allow_html=True)
+
     st.markdown(f"""
     <div class="profile-card">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -286,23 +374,29 @@ with st.sidebar.container():
         </div>
     </div>
     """, unsafe_allow_html=True)
-    if st.button("🚪 Logout", key="sidebar_logout", use_container_width=True):
-        try:
-            supabase.auth.sign_out()
-        except:
-            pass
-        for key in ['user_aktif', 'anggaran_terkunci', 'target_tabungan',
-                    'muat_anggaran_sukses', 'muat_tabungan_sukses',
-                    'toast_kondisi_ditampilkan']:
-            st.session_state.pop(key, None)
-        st.rerun()
+
+    col_logout = st.columns([1])
+    with col_logout[0]:
+        if st.button("🚪 Logout", key="sidebar_logout", use_container_width=True):
+            try:
+                supabase.auth.sign_out()
+            except:
+                pass
+            for key in ['user_aktif', 'anggaran_terkunci', 'target_tabungan',
+                        'muat_anggaran_sukses', 'muat_tabungan_sukses',
+                        'toast_kondisi_ditampilkan']:
+                st.session_state.pop(key, None)
+            st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔒 Kunci Anggaran Bulanan")
+
 waktu_sekarang = waktu_sekarang_wib()
-bln_budget = st.sidebar.selectbox("Bulan Anggaran", list(KAMUS_BULAN.values()), index=waktu_sekarang.month - 1)
+bln_budget = st.sidebar.selectbox("Bulan Anggaran", list(KAMUS_BULAN.values()),
+                                  index=waktu_sekarang.month - 1)
 thn_budget = st.sidebar.selectbox("Tahun Anggaran", [2025, 2026, 2027], index=1)
 key_budget = f"{bln_budget}_{thn_budget}"
+
 anggaran_terkunci = st.session_state.anggaran_terkunci.get(key_budget)
 
 if anggaran_terkunci is not None:
@@ -324,7 +418,8 @@ if anggaran_terkunci is not None:
                 else:
                     st.sidebar.error("Ketik 'RESET' dengan benar.")
 else:
-    input_budget = st.sidebar.number_input(f"Set Anggaran {bln_budget} {thn_budget} (Rp):", min_value=10000, value=1000000, step=100000)
+    input_budget = st.sidebar.number_input(f"Set Anggaran {bln_budget} {thn_budget} (Rp):",
+                                           min_value=10000, value=1000000, step=100000)
     if st.sidebar.button(f"🔐 KUNCI Anggaran {bln_budget} {thn_budget}"):
         if input_budget <= 0:
             st.sidebar.error("Nominal anggaran harus lebih dari 0.")
@@ -353,8 +448,11 @@ if anggaran_terkunci is not None:
             st.rerun()
     else:
         input_target = st.sidebar.number_input(
-            f"Target Tabungan {bln_budget} (Rp):", min_value=0,
-            max_value=int(anggaran_terkunci), value=0, step=50000,
+            f"Target Tabungan {bln_budget} (Rp):",
+            min_value=0,
+            max_value=int(anggaran_terkunci),
+            value=0,
+            step=50000,
             help=f"Maksimal Rp {anggaran_terkunci:,.0f} (sesuai anggaran)"
         )
         if st.sidebar.button("💾 Simpan Target Tabungan", key=f"save_target_{key_budget}"):
@@ -376,6 +474,7 @@ else:
 # ---------- FORM INPUT TRANSAKSI ----------
 st.sidebar.markdown("---")
 st.sidebar.subheader("✍️ Catat Transaksi")
+
 with st.sidebar.form("form_transaksi"):
     in_catatan = st.text_input("Nama Transaksi:", placeholder="Contoh: Beli Tissue")
     in_nominal = st.number_input("Nominal (Rp):", min_value=0, value=0, step=1000)
@@ -384,13 +483,21 @@ with st.sidebar.form("form_transaksi"):
     in_sifat = st.radio("Sifat:", ["Wajib", "Sukarela"])
     sekarang = datetime.now(TZ)
     default_date = sekarang.date()
+    default_time = sekarang.time().replace(second=0, microsecond=0)
+
     in_tanggal = st.date_input("Tanggal", value=default_date, format="DD/MM/YYYY")
+
     col_jam, col_menit = st.columns(2)
     with col_jam:
-        jam_input = st.number_input("Jam", min_value=0, max_value=23, value=st.session_state.jam_input, step=1, key="input_jam")
+        jam_input = st.number_input("Jam", min_value=0, max_value=23,
+                                    value=st.session_state.jam_input, step=1,
+                                    key="input_jam")
     with col_menit:
-        menit_input = st.number_input("Menit", min_value=0, max_value=59, value=st.session_state.menit_input, step=1, key="input_menit")
+        menit_input = st.number_input("Menit", min_value=0, max_value=59,
+                                      value=st.session_state.menit_input, step=1,
+                                      key="input_menit")
     in_waktu = time(jam_input, menit_input)
+
     st.session_state.jam_input = jam_input
     st.session_state.menit_input = menit_input
     submitted = st.form_submit_button("💾 Simpan Transaksi")
@@ -406,7 +513,10 @@ if submitted:
             st.sidebar.error(e)
     else:
         try:
-            waktu_gabung = datetime(in_tanggal.year, in_tanggal.month, in_tanggal.day, in_waktu.hour, in_waktu.minute)
+            waktu_gabung = datetime(
+                in_tanggal.year, in_tanggal.month, in_tanggal.day,
+                in_waktu.hour, in_waktu.minute
+            )
             waktu_lokal = TZ.localize(waktu_gabung)
             waktu_iso = waktu_lokal.astimezone(pytz.UTC).isoformat()
             data_insert = {
@@ -433,47 +543,6 @@ if submitted:
         except Exception as e:
             st.sidebar.error(f"Error: {e}")
 
-# ---------- PENGINGAT TAGIHAN (FITUR 4 - SIDEBAR) ----------
-st.sidebar.markdown("---")
-st.sidebar.subheader("📌 Pengingat Tagihan")
-if reminders:
-    for rem in reminders:
-        col1, col2 = st.sidebar.columns([0.8, 0.2])
-        col1.write(f"🔹 {rem['nama']} - Rp {rem['nominal']:,} ({rem['tanggal_jatuh_tempo']})")
-        if col2.button("❌", key=f"del_rem_{rem['id']}"):
-            try:
-                supabase.table("reminders").update({"is_active": False}).eq("id", rem["id"]).execute()
-                st.cache_data.clear()
-                st.rerun()
-            except Exception as e:
-                st.sidebar.error(f"Gagal menghapus pengingat: {e}")
-
-with st.sidebar.expander("➕ Tambah Pengingat"):
-    with st.form("form_reminder"):
-        nama = st.text_input("Nama Tagihan")
-        nominal = st.number_input("Nominal", min_value=1000, step=1000)
-        kategori = st.selectbox("Kategori", ["Tagihan Wajib", "Lain-lain"])
-        tgl = st.date_input("Tanggal Jatuh Tempo", value=date.today())
-        if st.form_submit_button("Simpan Pengingat"):
-            if not nama.strip():
-                st.error("Nama tagihan wajib diisi.")
-            elif nominal <= 0:
-                st.error("Nominal harus lebih dari 0.")
-            else:
-                try:
-                    supabase.table("reminders").insert({
-                        "user_id": uid,
-                        "nama": nama.strip(),
-                        "nominal": nominal,
-                        "tanggal_jatuh_tempo": tgl.isoformat(),
-                        "kategori": kategori
-                    }).execute()
-                    st.cache_data.clear()
-                    st.success("Pengingat berhasil ditambahkan!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Gagal menyimpan pengingat: {e}")
-
 # ---------- LOAD & OLAH DATA TRANSAKSI ----------
 @st.cache_data(ttl=5)
 def ambil_data_transaksi(user_id):
@@ -485,11 +554,13 @@ def ambil_data_transaksi(user_id):
         return []
 
 data_mentah = ambil_data_transaksi(uid)
+
 if not data_mentah:
     st.info("📭 Belum ada transaksi. Mulai catat di sidebar kiri.")
     st.stop()
 
 df = pd.DataFrame(data_mentah)
+
 df['nominal'] = pd.to_numeric(df['nominal'], errors='coerce')
 invalid_nominal = df['nominal'].isna().sum()
 if invalid_nominal > 0:
@@ -504,7 +575,10 @@ try:
     df['tahun'] = df['waktu_transaksi'].dt.year.astype(int)
     df['jam'] = df['waktu_transaksi'].dt.hour.fillna(0).astype(int)
     df['menit'] = df['waktu_transaksi'].dt.minute.fillna(0).astype(int)
-    df["Tanggal Lengkap"] = df["waktu_transaksi"].apply(lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}")
+    # Tambahkan kolom Tanggal Lengkap untuk seluruh data (diperlukan oleh fitur unduh semua riwayat)
+    df["Tanggal Lengkap"] = df["waktu_transaksi"].apply(
+        lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}"
+    )
 except Exception as e:
     st.error(f"Gagal memproses kolom waktu: {e}")
     st.stop()
@@ -513,18 +587,26 @@ except Exception as e:
 st.markdown("### 🗓️ Filter Periode")
 c1, c2 = st.columns(2)
 daftar_tahun = sorted(df['tahun'].unique())
-pilihan_bulan = c1.selectbox("Bulan", ["Semua Bulan"] + list(KAMUS_BULAN.values()), index=waktu_sekarang.month if waktu_sekarang.month <= 12 else 0)
+pilihan_bulan = c1.selectbox("Bulan", ["Semua Bulan"] + list(KAMUS_BULAN.values()),
+                             index=waktu_sekarang.month if waktu_sekarang.month <= 12 else 0)
 pilihan_tahun = c2.selectbox("Tahun", daftar_tahun, index=len(daftar_tahun)-1 if daftar_tahun else 0)
 
-if (st.session_state.filter_bulan_sebelumnya != pilihan_bulan or st.session_state.filter_tahun_sebelumnya != pilihan_tahun):
+if (st.session_state.filter_bulan_sebelumnya != pilihan_bulan or
+    st.session_state.filter_tahun_sebelumnya != pilihan_tahun):
     st.session_state.toast_kondisi_ditampilkan = False
     st.session_state.filter_bulan_sebelumnya = pilihan_bulan
     st.session_state.filter_tahun_sebelumnya = pilihan_tahun
 
 if pilihan_bulan == "Semua Bulan":
     df_view = df[df['tahun'] == pilihan_tahun].copy()
-    budget_evaluasi = sum(v for k, v in st.session_state.anggaran_terkunci.items() if k.endswith(f"_{pilihan_tahun}"))
-    target_evaluasi = sum(v for k, v in st.session_state.target_tabungan.items() if k.endswith(f"_{pilihan_tahun}"))
+    budget_evaluasi = sum(
+        v for k, v in st.session_state.anggaran_terkunci.items()
+        if k.endswith(f"_{pilihan_tahun}")
+    )
+    target_evaluasi = sum(
+        v for k, v in st.session_state.target_tabungan.items()
+        if k.endswith(f"_{pilihan_tahun}")
+    )
     jumlah_hari_dalam_bulan = 30
 else:
     df_view = df[(df['bulan'] == pilihan_bulan) & (df['tahun'] == pilihan_tahun)].copy()
@@ -544,13 +626,6 @@ total_pengeluaran = df_view['nominal'].sum()
 batas_belanja = budget_evaluasi - target_evaluasi
 sisa_anggaran = budget_evaluasi - total_pengeluaran
 
-# ---------- TOAST PENGINGAT TAGIHAN JATUH TEMPO ----------
-if reminders:
-    today = datetime.now(TZ).date()
-    due_soon = [r for r in reminders if r.get('tanggal_jatuh_tempo') and (date.fromisoformat(r['tanggal_jatuh_tempo']) - today).days <= 3 and (date.fromisoformat(r['tanggal_jatuh_tempo']) - today).days >= 0]
-    for d in due_soon:
-        st.toast(f"📅 Tagihan '{d['nama']}' jatuh tempo {d['tanggal_jatuh_tempo']} (Rp {d['nominal']:,})", icon="⏰")
-
 # ---------- TOAST KONDISI KEUANGAN ----------
 if not st.session_state.toast_kondisi_ditampilkan and batas_belanja > 0:
     persen = (total_pengeluaran / batas_belanja) * 100
@@ -567,46 +642,20 @@ st.markdown("### 💹 Ringkasan Keuangan")
 km1, km2, km3 = st.columns(3)
 km1.metric("Anggaran", f"Rp {budget_evaluasi:,.0f}")
 km2.metric("Target Tabungan", f"Rp {target_evaluasi:,.0f}")
-km3.metric("Batas Belanja Maks", f"Rp {batas_belanja:,.0f}", help="Anggaran dikurangi target tabungan")
+km3.metric("Batas Belanja Maks", f"Rp {batas_belanja:,.0f}",
+           help="Anggaran dikurangi target tabungan")
+
 km4, km5, km6 = st.columns(3)
 km4.metric("Total Pengeluaran", f"Rp {total_pengeluaran:,.0f}")
 if batas_belanja > 0:
     sisa_dari_batas = batas_belanja - total_pengeluaran
     delta_text = f"{'Sisa' if sisa_dari_batas >=0 else 'Defisit'} tabungan"
-    km5.metric("Vs Batas Belanja", f"Rp {abs(sisa_dari_batas):,.0f}", delta=delta_text, delta_color="normal" if sisa_dari_batas>=0 else "inverse")
+    km5.metric("Vs Batas Belanja", f"Rp {abs(sisa_dari_batas):,.0f}",
+               delta=delta_text,
+               delta_color="normal" if sisa_dari_batas>=0 else "inverse")
 else:
     km5.metric("Vs Batas Belanja", "Rp 0", delta="Tidak ada batas")
 km6.metric("Sisa Anggaran Utuh", f"Rp {sisa_anggaran:,.0f}")
-
-# ---------- PREDIKSI BULAN DEPAN (FITUR 1) ----------
-if budget_evaluasi > 0 and pilihan_bulan != "Semua Bulan" and len(df_view) > 0:
-    st.markdown("#### 🔮 Prediksi Pengeluaran Bulan Depan")
-    try:
-        bulan_idx = list(KAMUS_BULAN.values()).index(pilihan_bulan) + 1
-        tahun_ini = pilihan_tahun
-        periods = []
-        for i in range(1, 4):
-            m = bulan_idx - i
-            y = tahun_ini
-            if m <= 0:
-                m += 12
-                y -= 1
-            periods.append((y, m))
-        df_hist = df[(df['tahun'].isin([p[0] for p in periods])) & (df['bulan'].isin([KAMUS_BULAN[p[1]] for p in periods]))]
-        if len(df_hist) >= 2:
-            df_hist_agg = df_hist.groupby(['tahun', 'bulan'])['nominal'].sum().reset_index()
-            df_hist_agg['bulan_num'] = df_hist_agg.apply(lambda r: (r['tahun']-2000)*12 + list(KAMUS_BULAN.values()).index(r['bulan']) + 1, axis=1)
-            next_month_num = (tahun_ini-2000)*12 + bulan_idx + 1
-            x = df_hist_agg['bulan_num'].values
-            y = df_hist_agg['nominal'].values
-            coeffs = np.polyfit(x, y, 1)
-            pred = np.polyval(coeffs, next_month_num)
-            pred = max(0, pred)
-            st.info(f"🧠 Prediksi total pengeluaran bulan depan: **Rp {pred:,.0f}** (± deviasi berdasarkan tren)")
-        else:
-            st.info("Data historis belum cukup (minimal 2 bulan) untuk prediksi.")
-    except Exception as e:
-        st.info("Prediksi belum tersedia.")
 
 # ---------- NOTIFIKASI BATAS HARIAN ----------
 if budget_evaluasi > 0 and pilihan_bulan != "Semua Bulan":
@@ -618,25 +667,41 @@ if budget_evaluasi > 0 and pilihan_bulan != "Semua Bulan":
         hari_sudah_berlalu = 1
     rata_harian = total_pengeluaran / hari_sudah_berlalu
     batas_harian = batas_belanja / jumlah_hari_dalam_bulan if jumlah_hari_dalam_bulan > 0 else 0
+
     col_harian1, col_harian2 = st.columns(2)
     col_harian1.metric("Pengeluaran Hari Ini", f"Rp {pengeluaran_hari_ini:,.0f}")
-    col_harian2.metric("Batas Harian Ideal", f"Rp {batas_harian:,.0f}", help=f"Total batas belanja dibagi {jumlah_hari_dalam_bulan} hari")
+    col_harian2.metric("Batas Harian Ideal", f"Rp {batas_harian:,.0f}",
+                       help=f"Total batas belanja dibagi {jumlah_hari_dalam_bulan} hari")
     if pengeluaran_hari_ini > batas_harian * 1.3:
         st.warning(f"⚡ Pengeluaran hari ini melebihi 130% batas harian. Waspada!")
     elif pengeluaran_hari_ini > 0:
         st.info("Pengeluaran hari ini masih dalam koridor aman.")
 
-# ---------- TABEL DATA ----------
+# ---------- TABEL DATA DENGAN FITUR HAPUS ----------
 st.markdown("### 📋 Lembar Catatan Keuangan")
 if not df_view.empty:
+    # Buat kolom Jam Catat
     df_view["Jam Catat"] = df_view.apply(lambda r: f"{r['jam']:02d}:{r['menit']:02d} WIB", axis=1)
+    
+    # df_view sudah memiliki Tanggal Lengkap karena copy dari df
     df_tampil = df_view[["Tanggal Lengkap", "bulan", "catatan", "nominal", "kategori", "sifat", "Jam Catat"]].copy()
     df_tampil.columns = ["Tanggal", "Bulan", "Deskripsi", "Nominal (Rp)", "Kategori", "Sifat", "Waktu"]
-    selection = st.dataframe(df_tampil, use_container_width=True, hide_index=True, selection_mode="multi-row", on_select="rerun", key="tabel_transaksi")
-    if st.button("🗑️ Hapus Transaksi Terpilih"):
+
+    selection = st.dataframe(
+        df_tampil,
+        use_container_width=True,
+        hide_index=True,
+        selection_mode="multi-row",
+        on_select="rerun",
+        key="tabel_transaksi"
+    )
+
+    if st.button("🗑️ Hapus Transaksi Terpilih", help="Pilih dulu baris di tabel, lalu klik tombol ini"):
         selected_indices = selection.selection.rows
         if selected_indices:
             valid_indices = [i for i in selected_indices if i < len(df_view)]
+            if len(valid_indices) < len(selected_indices):
+                st.warning("⚠️ Sebagian pilihan sudah tidak valid karena data berubah. Hanya yang valid akan dihapus.")
             if valid_indices:
                 with st.expander("🔍 Konfirmasi data yang akan dihapus", expanded=True):
                     st.dataframe(df_view.iloc[valid_indices][['Tanggal Lengkap','catatan','nominal']], use_container_width=True)
@@ -655,42 +720,12 @@ if not df_view.empty:
                         st.error(f"Gagal menghapus: {e}")
         else:
             st.warning("Pilih minimal satu transaksi terlebih dahulu.")
-    col_down1, col_down2 = st.columns(2)
-    with col_down1:
-        csv = df_tampil.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Unduh CSV", csv, f"transaksi_{pilihan_bulan}_{pilihan_tahun}.csv", "text/csv")
-    with col_down2:
-        if st.button("📄 Unduh Laporan PDF"):
-            try:
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_font("Helvetica", "B", 16)
-                pdf.cell(0, 10, f"Laporan Keuangan - {pilihan_bulan} {pilihan_tahun}", ln=True, align="C")
-                pdf.ln(5)
-                pdf.set_font("Helvetica", "", 12)
-                pdf.cell(0, 8, f"Anggaran: Rp {budget_evaluasi:,.0f}", ln=True)
-                pdf.cell(0, 8, f"Target Tabungan: Rp {target_evaluasi:,.0f}", ln=True)
-                pdf.cell(0, 8, f"Total Pengeluaran: Rp {total_pengeluaran:,.0f}", ln=True)
-                pdf.cell(0, 8, f"Sisa Anggaran: Rp {sisa_anggaran:,.0f}", ln=True)
-                pdf.ln(5)
-                pdf.set_font("Helvetica", "B", 10)
-                col_widths = [40, 50, 30, 40, 30]
-                headers = ["Tanggal", "Deskripsi", "Nominal", "Kategori", "Sifat"]
-                for i, h in enumerate(headers):
-                    pdf.cell(col_widths[i], 8, h, border=1)
-                pdf.ln()
-                pdf.set_font("Helvetica", "", 9)
-                for _, row in df_tampil.iterrows():
-                    pdf.cell(col_widths[0], 7, str(row["Tanggal"]), border=1)
-                    pdf.cell(col_widths[1], 7, str(row["Deskripsi"])[:30], border=1)
-                    pdf.cell(col_widths[2], 7, f"Rp {row['Nominal (Rp)']:,.0f}", border=1)
-                    pdf.cell(col_widths[3], 7, str(row["Kategori"]), border=1)
-                    pdf.cell(col_widths[4], 7, str(row["Sifat"]), border=1)
-                    pdf.ln()
-                pdf_bytes = pdf.output(dest='S').encode('latin-1')
-                st.download_button(label="⬇️ Klik untuk Unduh PDF", data=pdf_bytes, file_name="laporan_keuangan.pdf", mime="application/pdf")
-            except Exception as e:
-                st.error(f"Gagal membuat PDF: {e}")
+
+    # Unduh CSV bulanan
+    csv = df_tampil.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Unduh CSV", csv, f"transaksi_{pilihan_bulan}_{pilihan_tahun}.csv", "text/csv")
+
+    # Unduh Semua Riwayat (sudah diperbaiki)
     if not df.empty:
         df_all = df[["Tanggal Lengkap", "bulan", "catatan", "nominal", "kategori", "sifat"]].copy()
         df_all.columns = ["Tanggal", "Bulan", "Deskripsi", "Nominal", "Kategori", "Sifat"]
@@ -702,6 +737,7 @@ else:
 # ---------- VISUALISASI ----------
 st.markdown("### 📊 Visualisasi")
 g1, g2 = st.columns(2)
+
 with g1:
     st.markdown("**Tren Pengeluaran Bulanan**")
     df_trend = df.groupby(["tahun", "bulan"])["nominal"].sum().reset_index()
@@ -715,6 +751,7 @@ with g1:
         st.altair_chart(chart_line, use_container_width=True)
     else:
         st.write("Data tidak cukup.")
+
 with g2:
     st.markdown("**Porsi Kategori**")
     if not df_view.empty:
@@ -732,6 +769,7 @@ st.markdown("---")
 st.markdown("### 🧠 Analisis AI Cerdas + Target Tabungan")
 if not df_view.empty:
     with st.expander("🔍 Buka Laporan AI", expanded=True):
+        # 1. Perbandingan Historis
         df_lain = df[~((df['bulan'] == pilihan_bulan) & (df['tahun'] == pilihan_tahun))]
         if not df_lain.empty:
             rata_lalu = df_lain.groupby(["tahun", "bulan"])["nominal"].sum().mean()
@@ -744,48 +782,77 @@ if not df_view.empty:
                 st.success(f"📉 **Tren Membaik:** Anda lebih hemat **Rp {selisih:,.0f}** dibanding rata-rata historis.")
         else:
             st.info("Belum ada data historis untuk dibandingkan.")
+
+        # 2. Alarm Waktu Rawan
         st.write("#### ⏰ Deteksi Waktu Rawan")
         malam_boros = df_view[(df_view['jam'] >= 20) | (df_view['jam'] <= 5)]
         if not malam_boros.empty:
             total_malam = malam_boros['nominal'].sum()
-            st.warning(f"🌙 **Belanja Malam/Dini Hari:** Terdeteksi **Rp {total_malam:,.0f}** transaksi di jam 20:00–05:00.")
+            st.warning(f"🌙 **Belanja Malam/Dini Hari:** Terdeteksi **Rp {total_malam:,.0f}** transaksi di jam 20:00–05:00. Waspadai impulsive buying saat lelah atau begadang.")
         else:
             st.success("✅ Tidak ada transaksi mencurigakan di jam rawan.")
+
+        # 3. Analisis Kewajiban vs Sukarela
         st.write("#### ⚖️ Porsi Pengeluaran")
         wajib = df_view[df_view['sifat'] == 'Wajib']['nominal'].sum()
         sukarela = df_view[df_view['sifat'] == 'Sukarela']['nominal'].sum()
         if budget_evaluasi > 0:
             persen_sukarela = (sukarela / budget_evaluasi) * 100
             if persen_sukarela > 50:
-                st.error(f"💸 **Porsi Sukarela Terlalu Besar:** {persen_sukarela:.1f}% dari anggaran habis untuk pengeluaran sukarela.")
+                st.error(f"💸 **Porsi Sukarela Terlalu Besar:** {persen_sukarela:.1f}% dari anggaran habis untuk pengeluaran sukarela. Evaluasi prioritas!")
             else:
                 st.info(f"💡 Porsi pengeluaran sukarela masih terkendali ({persen_sukarela:.1f}% anggaran).")
         else:
             st.info("Anggaran belum diatur, tidak bisa mengevaluasi porsi.")
+
+        # 4. Evaluasi Target Tabungan
         st.write("#### 🎯 Evaluasi Target Tabungan")
         if target_evaluasi > 0:
             if total_pengeluaran <= batas_belanja:
                 lebih = batas_belanja - total_pengeluaran
-                st.success(f"✅ **Target Tercapai!** Pengeluaran masih di bawah batas, tabungan aman.")
+                st.success(f"✅ **Target Tercapai!** Pengeluaran Anda masih di bawah batas belanja (setelah tabungan). Anda bisa menambah tabungan hingga **Rp {lebih:,.0f}**.")
             else:
                 kekurangan = total_pengeluaran - batas_belanja
-                st.error(f"🚨 **Target Tabungan Terancam!** Pengeluaran melebihi batas sebesar **Rp {kekurangan:,.0f}**.")
+                st.error(f"🚨 **Target Tabungan Terancam!** Pengeluaran melebihi batas sebesar **Rp {kekurangan:,.0f}**. Target tabungan Rp {target_evaluasi:,.0f} tidak akan tercapai jika tidak dikurangi.")
+                df_sukarela = df_view[df_view['sifat'] == 'Sukarela']
+                if not df_sukarela.empty:
+                    kat_pengeluaran = df_sukarela.groupby('kategori')['nominal'].sum().sort_values(ascending=False)
+                    st.write("**💡 Rekomendasi Penghematan untuk Capai Target:**")
+                    sisa_potong = kekurangan
+                    for kat, total in kat_pengeluaran.items():
+                        if sisa_potong <= 0:
+                            break
+                        potong = min(total, sisa_potong)
+                        if potong > 0:
+                            st.info(f"➖ Kurangi **{kat}** sebesar **Rp {potong:,.0f}**")
+                            sisa_potong -= potong
+                    if sisa_potong > 0:
+                        st.warning(f"⚠️ Setelah memotong semua kategori sukarela, masih kurang Rp {sisa_potong:,.0f}. Anda perlu mengurangi pengeluaran wajib atau menaikkan anggaran bulan depan.")
+                else:
+                    st.warning("Tidak ada pengeluaran sukarela yang bisa dipangkas. Anda harus mengurangi pengeluaran wajib atau merevisi target.")
         else:
-            st.info("📌 Anda belum menetapkan target tabungan untuk bulan ini.")
+            st.info("📌 Anda belum menetapkan target tabungan untuk bulan ini. Tetapkan di sidebar untuk mendapatkan rekomendasi otomatis.")
+
+        # Rekomendasi Umum
         st.write("#### 🎯 Rekomendasi Penghematan Umum")
         if budget_evaluasi > 0 and not df_view.empty:
             top_kategori = df_view.groupby('kategori')['nominal'].sum().idxmax()
             nominal_top = df_view[df_view['kategori'] == top_kategori]['nominal'].sum()
             target_pangkas = int(nominal_top * 0.2)
             if target_pangkas > 0:
-                st.info(f"➔ Kurangi 20% dari **{top_kategori}** (sekitar Rp {target_pangkas:,}) untuk penghematan.")
+                st.info(f"➔ Kurangi 20% dari **{top_kategori}** (sekitar Rp {target_pangkas:,}) untuk penghematan signifikan bulan depan.")
             if sisa_anggaran < 0:
                 st.info("➔ Karena anggaran sudah tekor, alokasikan dana darurat di kategori 'Wajib' di awal bulan berikutnya.")
         else:
-            st.info("Atur anggaran terlebih dahulu.")
+            st.info("Atur anggaran terlebih dahulu untuk mendapatkan rekomendasi.")
 else:
     st.info("Tidak ada data transaksi untuk dianalisis AI.")
 
-# ---------- FOOTER ----------
+# ---------- FOOTER / COPYRIGHT ----------
 st.markdown("---")
-st.markdown("<p style='text-align: center; color: #2E7D32; font-size: 14px;'>🛠️ Dibangun dengan ❤️ oleh <strong>Hendrawan Lotanto</strong> — © 2026 DanaPintar AI</p>", unsafe_allow_html=True)
+st.markdown(
+    "<p style='text-align: center; color: #2E7D32; font-size: 14px;'>"
+    "🛠️ Dibangun dengan ❤️ oleh <strong>Hendrawan Lotanto</strong> — © 2026 DanaPintar AI"
+    "</p>",
+    unsafe_allow_html=True
+)
