@@ -398,8 +398,6 @@ with st.sidebar.form("form_transaksi"):
                                              "Kebutuhan Rumah/Kesehatan", "Tagihan Wajib", "Lain-lain"])
     in_sifat = st.radio("Sifat:", ["Wajib", "Sukarela"])
     # Ambil waktu sekarang WIB sebagai default
-    sekarang = datetime.now(TZ)
-    default_date = sekarang.date()
     default_time = waktu_sekarang_wib().time()
     in_tanggal = st.date_input("Tanggal", value=default_date, format="DD MMMM YYYY")
     in_waktu = st.time_input("Jam & Menit (klik ikon jam ⏰)", value=default_time)
