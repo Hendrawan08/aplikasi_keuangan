@@ -3,3 +3,5 @@ pandas
 altair
 streamlit
 pytz
+fpdf2
+numpy
