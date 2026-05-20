@@ -398,9 +398,7 @@ with st.sidebar.form("form_transaksi"):
                                              "Kebutuhan Rumah/Kesehatan", "Tagihan Wajib", "Lain-lain"])
     in_sifat = st.radio("Sifat:", ["Wajib", "Sukarela"])
     # Ambil waktu sekarang WIB sebagai default
-    sekarang = datetime.now(TZ)
-    default_date = sekarang.date()
-    default_time = sekarang.time().replace(second=0, microsecond=0)
+    default_time = waktu_sekarang_wib().time()
     # Tampilkan tanggal dengan format DD/MM/YYYY
     in_tanggal = st.date_input("Tanggal", value=default_date, format="DD/MM/YYYY")
     # Opsional: tampilkan nama bulan di bawah input agar jelas
