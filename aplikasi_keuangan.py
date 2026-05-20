@@ -415,9 +415,15 @@ if submitted:
             st.sidebar.error(e)
     else:
         try:
-            waktu_gabung = datetime.combine(in_tanggal, in_waktu)
-            # Lokalisasi ke WIB
-            waktu_iso = TZ.localize(waktu_gabung).isoformat()
+            # Buat datetime naive dari input tanggal dan waktu
+            waktu_gabung = datetime(
+                in_tanggal.year, in_tanggal.month, in_tanggal.day,
+                in_waktu.hour, in_waktu.minute
+            )
+            # Lokalisasi ke WIB (Asia/Jakarta)
+            waktu_lokal = TZ.localize(waktu_gabung)
+            # Konversi ke UTC untuk disimpan di database (standar Supabase)
+            waktu_iso = waktu_lokal.astimezone(pytz.UTC).isoformat()
             data_insert = {
                 "user_id": uid,
                 "catatan": in_catatan.strip(),
@@ -464,7 +470,8 @@ if invalid_nominal > 0:
     df = df.dropna(subset=['nominal'])
 
 try:
-    df['waktu_transaksi'] = pd.to_datetime(df['waktu_transaksi'], errors='coerce', utc=True)
+    # Parse string ISO 8601 (sudah mengandung offset UTC), lalu konversi langsung ke WIB
+    df['waktu_transaksi'] = pd.to_datetime(df['waktu_transaksi'], errors='coerce')
     df['waktu_transaksi'] = df['waktu_transaksi'].dt.tz_convert(TZ)
     df = df.dropna(subset=['waktu_transaksi'])
     df['bulan'] = df['waktu_transaksi'].dt.month.map(KAMUS_BULAN)
