@@ -5,6 +5,9 @@ import altair as alt
 from datetime import datetime, time, date, timedelta
 import pytz
 import os
+import numpy as np
+from fpdf import FPDF
+import io
 
 # ==========================================
 # SETUP HALAMAN UTAMA
@@ -108,7 +111,6 @@ st.markdown("""
 # ---------- HEADER DENGAN TOMBOL LOGOUT CEPAT ----------
 col_header_left, col_header_right = st.columns([0.85, 0.15])
 with col_header_right:
-    # Tombol logout cepat di area utama (mobile friendly)
     if st.session_state.get("user_aktif") is not None:
         if st.button("🚪", key="quick_logout", help="Logout cepat"):
             try:
@@ -295,6 +297,14 @@ if not st.session_state.muat_anggaran_sukses or not st.session_state.anggaran_te
 if not st.session_state.muat_tabungan_sukses:
     muat_target_tabungan_dari_cloud(uid, paksa=True)
 
+# ---------- LOAD REMINDERS UNTUK TOAST & SIDEBAR ----------
+@st.cache_data(ttl=10)
+def load_reminders(uid):
+    res = supabase.table("reminders").select("*").eq("user_id", uid).eq("is_active", True).execute()
+    return res.data if res.data else []
+
+reminders = load_reminders(uid)
+
 # ---------- TAMPILKAN TOAST ----------
 if st.session_state.simpan_sukses:
     st.toast(st.session_state.pesan_toast, icon="✅")
@@ -471,6 +481,43 @@ if anggaran_terkunci is not None:
 else:
     st.sidebar.info("Kunci anggaran terlebih dahulu untuk mengatur target tabungan.")
 
+# ---------- ALOKASI ANGGARAN PER KATEGORI (FITUR 5 - SIDEBAR) ----------
+st.sidebar.markdown("---")
+st.sidebar.subheader("📊 Alokasi Anggaran per Kategori")
+if anggaran_terkunci is not None:
+    res_alloc_sidebar = supabase.table("budget_allocations").select("*").eq("user_id", uid).eq("bulan_key", key_budget).execute()
+    current_alloc_sidebar = {row['kategori']: row['persentase'] for row in res_alloc_sidebar.data} if res_alloc_sidebar.data else {}
+    if not current_alloc_sidebar:
+        st.sidebar.info("Belum ada alokasi. Atur persentase:")
+        with st.sidebar.form("form_alloc_sidebar"):
+            kategoris = ["Makanan", "Transportasi", "Hiburan/Gaya Hidup",
+                         "Kebutuhan Rumah/Kesehatan", "Tagihan Wajib", "Lain-lain"]
+            persen_dict = {}
+            for kat in kategoris:
+                persen_dict[kat] = st.number_input(f"{kat} %", 0, 100, 15 if kat in ["Makanan","Transportasi"] else 10)
+            total_persen = sum(persen_dict.values())
+            if total_persen != 100:
+                st.error(f"Total harus 100%, sekarang {total_persen}%")
+            if st.form_submit_button("Simpan Alokasi"):
+                if total_persen == 100:
+                    supabase.table("budget_allocations").delete().eq("user_id", uid).eq("bulan_key", key_budget).execute()
+                    for kat, pers in persen_dict.items():
+                        if pers > 0:
+                            supabase.table("budget_allocations").insert({
+                                "user_id": uid,
+                                "bulan_key": key_budget,
+                                "kategori": kat,
+                                "persentase": pers
+                            }).execute()
+                    st.rerun()
+    else:
+        st.sidebar.success("Alokasi tersimpan")
+        if st.sidebar.button("🔄 Ubah Alokasi", key=f"ubah_alloc_{key_budget}"):
+            supabase.table("budget_allocations").delete().eq("user_id", uid).eq("bulan_key", key_budget).execute()
+            st.rerun()
+else:
+    st.sidebar.info("Kunci anggaran dulu untuk atur alokasi.")
+
 # ---------- FORM INPUT TRANSAKSI ----------
 st.sidebar.markdown("---")
 st.sidebar.subheader("✍️ Catat Transaksi")
@@ -543,6 +590,35 @@ if submitted:
         except Exception as e:
             st.sidebar.error(f"Error: {e}")
 
+# ---------- PENGINGAT TAGIHAN (FITUR 4 - SIDEBAR) ----------
+st.sidebar.markdown("---")
+st.sidebar.subheader("📌 Pengingat Tagihan")
+if reminders:
+    for rem in reminders:
+        col1, col2 = st.sidebar.columns([0.8, 0.2])
+        col1.write(f"🔹 {rem['nama']} - Rp {rem['nominal']:,} ({rem['tanggal_jatuh_tempo']})")
+        if col2.button("❌", key=f"del_rem_{rem['id']}"):
+            supabase.table("reminders").update({"is_active": False}).eq("id", rem["id"]).execute()
+            st.cache_data.clear()
+            st.rerun()
+
+with st.sidebar.expander("➕ Tambah Pengingat"):
+    with st.form("form_reminder"):
+        nama = st.text_input("Nama Tagihan")
+        nominal = st.number_input("Nominal", min_value=1000, step=1000)
+        kategori = st.selectbox("Kategori", ["Tagihan Wajib", "Lain-lain"])
+        tgl = st.date_input("Tanggal Jatuh Tempo")
+        if st.form_submit_button("Simpan Pengingat"):
+            supabase.table("reminders").insert({
+                "user_id": uid,
+                "nama": nama,
+                "nominal": nominal,
+                "tanggal_jatuh_tempo": tgl.isoformat(),
+                "kategori": kategori
+            }).execute()
+            st.cache_data.clear()
+            st.rerun()
+
 # ---------- LOAD & OLAH DATA TRANSAKSI ----------
 @st.cache_data(ttl=5)
 def ambil_data_transaksi(user_id):
@@ -575,7 +651,6 @@ try:
     df['tahun'] = df['waktu_transaksi'].dt.year.astype(int)
     df['jam'] = df['waktu_transaksi'].dt.hour.fillna(0).astype(int)
     df['menit'] = df['waktu_transaksi'].dt.minute.fillna(0).astype(int)
-    # Tambahkan kolom Tanggal Lengkap untuk seluruh data (diperlukan oleh fitur unduh semua riwayat)
     df["Tanggal Lengkap"] = df["waktu_transaksi"].apply(
         lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}"
     )
@@ -608,11 +683,15 @@ if pilihan_bulan == "Semua Bulan":
         if k.endswith(f"_{pilihan_tahun}")
     )
     jumlah_hari_dalam_bulan = 30
+    current_alloc_dashboard = {}
 else:
     df_view = df[(df['bulan'] == pilihan_bulan) & (df['tahun'] == pilihan_tahun)].copy()
     key_eval = f"{pilihan_bulan}_{pilihan_tahun}"
     budget_evaluasi = st.session_state.anggaran_terkunci.get(key_eval, 0)
     target_evaluasi = st.session_state.target_tabungan.get(key_eval, 0)
+    # Ambil alokasi untuk bulan ini
+    res_alloc_dash = supabase.table("budget_allocations").select("*").eq("user_id", uid).eq("bulan_key", key_eval).execute()
+    current_alloc_dashboard = {row['kategori']: row['persentase'] for row in res_alloc_dash.data} if res_alloc_dash.data else {}
     try:
         bulan_idx = list(KAMUS_BULAN.values()).index(pilihan_bulan) + 1
         if bulan_idx == 12:
@@ -625,6 +704,13 @@ else:
 total_pengeluaran = df_view['nominal'].sum()
 batas_belanja = budget_evaluasi - target_evaluasi
 sisa_anggaran = budget_evaluasi - total_pengeluaran
+
+# ---------- TOAST PENGINGAT TAGIHAN JATUH TEMPO (FITUR 4 - DASHBOARD) ----------
+if reminders:
+    today = datetime.now(TZ).date()
+    due_soon = [r for r in reminders if r.get('tanggal_jatuh_tempo') and (date.fromisoformat(r['tanggal_jatuh_tempo']) - today).days <= 3 and (date.fromisoformat(r['tanggal_jatuh_tempo']) - today).days >= 0]
+    for d in due_soon:
+        st.toast(f"📅 Tagihan '{d['nama']}' jatuh tempo {d['tanggal_jatuh_tempo']} (Rp {d['nominal']:,})", icon="⏰")
 
 # ---------- TOAST KONDISI KEUANGAN ----------
 if not st.session_state.toast_kondisi_ditampilkan and batas_belanja > 0:
@@ -657,6 +743,36 @@ else:
     km5.metric("Vs Batas Belanja", "Rp 0", delta="Tidak ada batas")
 km6.metric("Sisa Anggaran Utuh", f"Rp {sisa_anggaran:,.0f}")
 
+# ---------- PREDIKSI BULAN DEPAN (FITUR 1) ----------
+if budget_evaluasi > 0 and pilihan_bulan != "Semua Bulan" and len(df_view) > 0:
+    st.markdown("#### 🔮 Prediksi Pengeluaran Bulan Depan")
+    try:
+        bulan_idx = list(KAMUS_BULAN.values()).index(pilihan_bulan) + 1
+        tahun_ini = pilihan_tahun
+        periods = []
+        for i in range(1, 4):
+            m = bulan_idx - i
+            y = tahun_ini
+            if m <= 0:
+                m += 12
+                y -= 1
+            periods.append((y, m))
+        df_hist = df[(df['tahun'].isin([p[0] for p in periods])) & (df['bulan'].isin([KAMUS_BULAN[p[1]] for p in periods]))]
+        if len(df_hist) >= 2:
+            df_hist_agg = df_hist.groupby(['tahun', 'bulan'])['nominal'].sum().reset_index()
+            df_hist_agg['bulan_num'] = df_hist_agg.apply(lambda r: (r['tahun']-2000)*12 + list(KAMUS_BULAN.values()).index(r['bulan']) + 1, axis=1)
+            next_month_num = (tahun_ini-2000)*12 + bulan_idx + 1
+            x = df_hist_agg['bulan_num'].values
+            y = df_hist_agg['nominal'].values
+            coeffs = np.polyfit(x, y, 1)
+            pred = np.polyval(coeffs, next_month_num)
+            pred = max(0, pred)
+            st.info(f"🧠 Prediksi total pengeluaran bulan depan: **Rp {pred:,.0f}** (± deviasi berdasarkan tren)")
+        else:
+            st.info("Data historis belum cukup (minimal 2 bulan) untuk prediksi.")
+    except Exception as e:
+        st.info("Prediksi belum tersedia.")
+
 # ---------- NOTIFIKASI BATAS HARIAN ----------
 if budget_evaluasi > 0 and pilihan_bulan != "Semua Bulan":
     st.markdown("#### ⏳ Analisis Harian")
@@ -680,10 +796,7 @@ if budget_evaluasi > 0 and pilihan_bulan != "Semua Bulan":
 # ---------- TABEL DATA DENGAN FITUR HAPUS ----------
 st.markdown("### 📋 Lembar Catatan Keuangan")
 if not df_view.empty:
-    # Buat kolom Jam Catat
     df_view["Jam Catat"] = df_view.apply(lambda r: f"{r['jam']:02d}:{r['menit']:02d} WIB", axis=1)
-    
-    # df_view sudah memiliki Tanggal Lengkap karena copy dari df
     df_tampil = df_view[["Tanggal Lengkap", "bulan", "catatan", "nominal", "kategori", "sifat", "Jam Catat"]].copy()
     df_tampil.columns = ["Tanggal", "Bulan", "Deskripsi", "Nominal (Rp)", "Kategori", "Sifat", "Waktu"]
 
@@ -721,11 +834,52 @@ if not df_view.empty:
         else:
             st.warning("Pilih minimal satu transaksi terlebih dahulu.")
 
-    # Unduh CSV bulanan
-    csv = df_tampil.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Unduh CSV", csv, f"transaksi_{pilihan_bulan}_{pilihan_tahun}.csv", "text/csv")
+    # Tombol unduh CSV dan PDF berdampingan
+    col_down1, col_down2 = st.columns(2)
+    with col_down1:
+        csv = df_tampil.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Unduh CSV", csv, f"transaksi_{pilihan_bulan}_{pilihan_tahun}.csv", "text/csv")
+    with col_down2:
+        # ---------- FITUR 3: LAPORAN PDF ----------
+        if st.button("📄 Unduh Laporan PDF"):
+            try:
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_font("Helvetica", "B", 16)
+                pdf.cell(0, 10, f"Laporan Keuangan - {pilihan_bulan} {pilihan_tahun}", ln=True, align="C")
+                pdf.ln(5)
+                pdf.set_font("Helvetica", "", 12)
+                pdf.cell(0, 8, f"Anggaran: Rp {budget_evaluasi:,.0f}", ln=True)
+                pdf.cell(0, 8, f"Target Tabungan: Rp {target_evaluasi:,.0f}", ln=True)
+                pdf.cell(0, 8, f"Total Pengeluaran: Rp {total_pengeluaran:,.0f}", ln=True)
+                pdf.cell(0, 8, f"Sisa Anggaran: Rp {sisa_anggaran:,.0f}", ln=True)
+                pdf.ln(5)
+                pdf.set_font("Helvetica", "B", 10)
+                col_widths = [40, 50, 30, 40, 30]
+                headers = ["Tanggal", "Deskripsi", "Nominal", "Kategori", "Sifat"]
+                for i, h in enumerate(headers):
+                    pdf.cell(col_widths[i], 8, h, border=1)
+                pdf.ln()
+                pdf.set_font("Helvetica", "", 9)
+                for _, row in df_tampil.iterrows():
+                    pdf.cell(col_widths[0], 7, str(row["Tanggal"]), border=1)
+                    pdf.cell(col_widths[1], 7, str(row["Deskripsi"])[:30], border=1)
+                    pdf.cell(col_widths[2], 7, f"Rp {row['Nominal (Rp)']:,.0f}", border=1)
+                    pdf.cell(col_widths[3], 7, str(row["Kategori"]), border=1)
+                    pdf.cell(col_widths[4], 7, str(row["Sifat"]), border=1)
+                    pdf.ln()
+                # Simpan ke BytesIO agar bisa diunduh
+                pdf_bytes = pdf.output(dest='S').encode('latin-1')
+                st.download_button(
+                    label="⬇️ Klik untuk Unduh PDF",
+                    data=pdf_bytes,
+                    file_name="laporan_keuangan.pdf",
+                    mime="application/pdf"
+                )
+            except Exception as e:
+                st.error(f"Gagal membuat PDF: {e}")
 
-    # Unduh Semua Riwayat (sudah diperbaiki)
+    # Unduh semua riwayat
     if not df.empty:
         df_all = df[["Tanggal Lengkap", "bulan", "catatan", "nominal", "kategori", "sifat"]].copy()
         df_all.columns = ["Tanggal", "Bulan", "Deskripsi", "Nominal", "Kategori", "Sifat"]
@@ -763,6 +917,30 @@ with g2:
         st.altair_chart(chart_pie, use_container_width=True)
     else:
         st.write("Data kosong.")
+
+# ---------- PERBANDINGAN ANGGARAN VS AKTUAL PER KATEGORI (FITUR 5 - DASHBOARD) ----------
+if budget_evaluasi > 0 and current_alloc_dashboard:
+    st.markdown("#### 📊 Anggaran vs Pengeluaran per Kategori")
+    batas_per_kategori = {}
+    for kat, pers in current_alloc_dashboard.items():
+        batas_per_kategori[kat] = (pers / 100) * batas_belanja
+    aktual_per_kategori = df_view.groupby('kategori')['nominal'].sum().to_dict()
+    data_comp = []
+    for kat in current_alloc_dashboard.keys():
+        data_comp.append({
+            "Kategori": kat,
+            "Anggaran": batas_per_kategori.get(kat, 0),
+            "Aktual": aktual_per_kategori.get(kat, 0)
+        })
+    df_comp = pd.DataFrame(data_comp)
+    df_comp_melt = df_comp.melt(id_vars="Kategori", var_name="Jenis", value_name="Nominal")
+    chart_bar = alt.Chart(df_comp_melt).mark_bar().encode(
+        x=alt.X('Kategori:N', title=None),
+        y=alt.Y('Nominal:Q'),
+        color=alt.Color('Jenis:N', scale=alt.Scale(domain=['Anggaran','Aktual'], range=['#2E7D32','#FFA000'])),
+        column=alt.Column('Jenis:N', title=None)
+    ).properties(width=150)
+    st.altair_chart(chart_bar, use_container_width=True)
 
 # ---------- AI AUDITOR ----------
 st.markdown("---")
