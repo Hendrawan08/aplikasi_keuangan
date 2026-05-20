@@ -400,8 +400,8 @@ with st.sidebar.form("form_transaksi"):
     # Ambil waktu sekarang WIB sebagai default
     sekarang = datetime.now(TZ)
     default_date = sekarang.date()
-    default_time = sekarang.time().replace(second=0, microsecond=0)  # agar bersih
-    in_tanggal = st.date_input("Tanggal", value=default_date)
+    default_time = waktu_sekarang_wib().time()
+    in_tanggal = st.date_input("Tanggal", value=default_date, format="DD MMMM YYYY")
     in_waktu = st.time_input("Jam & Menit (klik ikon jam ⏰)", value=default_time)
     submitted = st.form_submit_button("💾 Simpan Transaksi")
 
