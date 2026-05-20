@@ -4,7 +4,6 @@ import pandas as pd
 import altair as alt
 from datetime import datetime, time, date, timedelta
 import pytz
-import traceback
 import os
 
 # ==========================================
@@ -211,7 +210,6 @@ def muat_anggaran_dari_cloud(uid, paksa=False):
 
 def simpan_anggaran_ke_cloud(uid, bulan_key, nominal):
     try:
-        # Gunakan delete + insert (upsert manual)
         supabase.table("budgets").delete().eq("user_id", uid).eq("bulan_key", bulan_key).execute()
         supabase.table("budgets").insert({
             "user_id": uid,
@@ -377,7 +375,6 @@ with st.sidebar.container():
     </div>
     """, unsafe_allow_html=True)
 
-    # Tombol logout di sidebar (tetap ada untuk kenyamanan)
     col_logout = st.columns([1])
     with col_logout[0]:
         if st.button("🚪 Logout", key="sidebar_logout", use_container_width=True):
@@ -404,7 +401,6 @@ anggaran_terkunci = st.session_state.anggaran_terkunci.get(key_budget)
 
 if anggaran_terkunci is not None:
     st.sidebar.success(f"🔒 Anggaran {bln_budget} {thn_budget}\n**Rp {anggaran_terkunci:,.0f}**")
-    # Gunakan checkbox untuk menampilkan form reset (perbaikan bug)
     if st.sidebar.checkbox("🔓 Buka Reset Anggaran", key=f"reset_chk_{key_budget}"):
         with st.sidebar.form(f"form_reset_{key_budget}"):
             st.warning("⚠️ Reset akan menghapus kunci anggaran bulan ini.")
@@ -539,7 +535,6 @@ if submitted:
                 sekarang = datetime.now(TZ)
                 st.session_state.jam_input = sekarang.hour
                 st.session_state.menit_input = sekarang.minute
-                # Reset status toast kondisi agar muncul lagi setelah transaksi baru
                 st.session_state.toast_kondisi_ditampilkan = False
                 st.sidebar.success("✅ Transaksi tersimpan!")
                 st.rerun()
@@ -573,15 +568,17 @@ if invalid_nominal > 0:
     df = df.dropna(subset=['nominal'])
 
 try:
-    # PERBAIKAN KRITIS: gunakan utc=True agar semua string dianggap UTC / aware
     df['waktu_transaksi'] = pd.to_datetime(df['waktu_transaksi'], utc=True, errors='coerce')
-    # Konversi ke WIB
     df['waktu_transaksi'] = df['waktu_transaksi'].dt.tz_convert(TZ)
     df = df.dropna(subset=['waktu_transaksi'])
     df['bulan'] = df['waktu_transaksi'].dt.month.map(KAMUS_BULAN)
     df['tahun'] = df['waktu_transaksi'].dt.year.astype(int)
     df['jam'] = df['waktu_transaksi'].dt.hour.fillna(0).astype(int)
     df['menit'] = df['waktu_transaksi'].dt.minute.fillna(0).astype(int)
+    # Tambahkan kolom Tanggal Lengkap untuk seluruh data (diperlukan oleh fitur unduh semua riwayat)
+    df["Tanggal Lengkap"] = df["waktu_transaksi"].apply(
+        lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}"
+    )
 except Exception as e:
     st.error(f"Gagal memproses kolom waktu: {e}")
     st.stop()
@@ -594,7 +591,6 @@ pilihan_bulan = c1.selectbox("Bulan", ["Semua Bulan"] + list(KAMUS_BULAN.values(
                              index=waktu_sekarang.month if waktu_sekarang.month <= 12 else 0)
 pilihan_tahun = c2.selectbox("Tahun", daftar_tahun, index=len(daftar_tahun)-1 if daftar_tahun else 0)
 
-# Reset toast kondisi jika filter berubah
 if (st.session_state.filter_bulan_sebelumnya != pilihan_bulan or
     st.session_state.filter_tahun_sebelumnya != pilihan_tahun):
     st.session_state.toast_kondisi_ditampilkan = False
@@ -611,13 +607,12 @@ if pilihan_bulan == "Semua Bulan":
         v for k, v in st.session_state.target_tabungan.items()
         if k.endswith(f"_{pilihan_tahun}")
     )
-    jumlah_hari_dalam_bulan = 30  # rata-rata
+    jumlah_hari_dalam_bulan = 30
 else:
     df_view = df[(df['bulan'] == pilihan_bulan) & (df['tahun'] == pilihan_tahun)].copy()
     key_eval = f"{pilihan_bulan}_{pilihan_tahun}"
     budget_evaluasi = st.session_state.anggaran_terkunci.get(key_eval, 0)
     target_evaluasi = st.session_state.target_tabungan.get(key_eval, 0)
-    # Hitung jumlah hari dalam bulan ini (untuk notifikasi harian)
     try:
         bulan_idx = list(KAMUS_BULAN.values()).index(pilihan_bulan) + 1
         if bulan_idx == 12:
@@ -630,7 +625,6 @@ else:
 total_pengeluaran = df_view['nominal'].sum()
 batas_belanja = budget_evaluasi - target_evaluasi
 sisa_anggaran = budget_evaluasi - total_pengeluaran
-sisa_setelah_tabungan = batas_belanja - total_pengeluaran
 
 # ---------- TOAST KONDISI KEUANGAN ----------
 if not st.session_state.toast_kondisi_ditampilkan and batas_belanja > 0:
@@ -667,7 +661,6 @@ km6.metric("Sisa Anggaran Utuh", f"Rp {sisa_anggaran:,.0f}")
 if budget_evaluasi > 0 and pilihan_bulan != "Semua Bulan":
     st.markdown("#### ⏳ Analisis Harian")
     hari_ini = datetime.now(TZ).date()
-    # Pengeluaran hari ini
     pengeluaran_hari_ini = df_view[df_view['waktu_transaksi'].dt.date == hari_ini]['nominal'].sum()
     hari_sudah_berlalu = (hari_ini - date(pilihan_tahun, list(KAMUS_BULAN.values()).index(pilihan_bulan)+1, 1)).days + 1
     if hari_sudah_berlalu < 1:
@@ -684,13 +677,13 @@ if budget_evaluasi > 0 and pilihan_bulan != "Semua Bulan":
     elif pengeluaran_hari_ini > 0:
         st.info("Pengeluaran hari ini masih dalam koridor aman.")
 
-# ---------- TABEL DATA DENGAN FITUR HAPUS (PERBAIKAN) ----------
+# ---------- TABEL DATA DENGAN FITUR HAPUS ----------
 st.markdown("### 📋 Lembar Catatan Keuangan")
 if not df_view.empty:
+    # Buat kolom Jam Catat
     df_view["Jam Catat"] = df_view.apply(lambda r: f"{r['jam']:02d}:{r['menit']:02d} WIB", axis=1)
-    df_view["Tanggal Lengkap"] = df_view["waktu_transaksi"].apply(
-        lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}"
-    )
+    
+    # df_view sudah memiliki Tanggal Lengkap karena copy dari df
     df_tampil = df_view[["Tanggal Lengkap", "bulan", "catatan", "nominal", "kategori", "sifat", "Jam Catat"]].copy()
     df_tampil.columns = ["Tanggal", "Bulan", "Deskripsi", "Nominal (Rp)", "Kategori", "Sifat", "Waktu"]
 
@@ -703,7 +696,6 @@ if not df_view.empty:
         key="tabel_transaksi"
     )
 
-    # Tombol hapus dengan konfirmasi singkat
     if st.button("🗑️ Hapus Transaksi Terpilih", help="Pilih dulu baris di tabel, lalu klik tombol ini"):
         selected_indices = selection.selection.rows
         if selected_indices:
@@ -711,7 +703,6 @@ if not df_view.empty:
             if len(valid_indices) < len(selected_indices):
                 st.warning("⚠️ Sebagian pilihan sudah tidak valid karena data berubah. Hanya yang valid akan dihapus.")
             if valid_indices:
-                # Tampilkan pratinjau data yang akan dihapus
                 with st.expander("🔍 Konfirmasi data yang akan dihapus", expanded=True):
                     st.dataframe(df_view.iloc[valid_indices][['Tanggal Lengkap','catatan','nominal']], use_container_width=True)
                 if st.button("✅ Ya, hapus yang dipilih", key="confirm_delete"):
@@ -720,7 +711,6 @@ if not df_view.empty:
                         for trans_id in ids_to_delete:
                             supabase.table("transaksi").delete().eq("id", trans_id).execute()
                         st.cache_data.clear()
-                        # Hapus state seleksi tabel untuk mencegah error indeks
                         if "tabel_transaksi" in st.session_state:
                             del st.session_state["tabel_transaksi"]
                         st.session_state.hapus_sukses = True
@@ -731,15 +721,16 @@ if not df_view.empty:
         else:
             st.warning("Pilih minimal satu transaksi terlebih dahulu.")
 
-    # Unduh CSV
+    # Unduh CSV bulanan
     csv = df_tampil.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Unduh CSV", csv, f"transaksi_{pilihan_bulan}_{pilihan_tahun}.csv", "text/csv")
 
-    # Tambahan: Unduh SEMUA data (backup lengkap)
-    df_all = df[["Tanggal Lengkap","bulan","catatan","nominal","kategori","sifat"]].copy()
-    df_all.columns = ["Tanggal","Bulan","Deskripsi","Nominal","Kategori","Sifat"]
-    csv_all = df_all.to_csv(index=False).encode('utf-8')
-    st.download_button("📦 Unduh Semua Riwayat", csv_all, "riwayat_lengkap.csv", "text/csv")
+    # Unduh Semua Riwayat (sudah diperbaiki)
+    if not df.empty:
+        df_all = df[["Tanggal Lengkap", "bulan", "catatan", "nominal", "kategori", "sifat"]].copy()
+        df_all.columns = ["Tanggal", "Bulan", "Deskripsi", "Nominal", "Kategori", "Sifat"]
+        csv_all = df_all.to_csv(index=False).encode('utf-8')
+        st.download_button("📦 Unduh Semua Riwayat", csv_all, "riwayat_lengkap.csv", "text/csv")
 else:
     st.info("Tidak ada transaksi pada periode ini.")
 
@@ -751,7 +742,6 @@ with g1:
     st.markdown("**Tren Pengeluaran Bulanan**")
     df_trend = df.groupby(["tahun", "bulan"])["nominal"].sum().reset_index()
     if not df_trend.empty:
-        # PERBAIKAN: Pisahkan garis per tahun dengan warna
         chart_line = alt.Chart(df_trend).mark_line(point=True).encode(
             x=alt.X('bulan:N', sort=list(KAMUS_BULAN.values()), title='Bulan'),
             y=alt.Y('nominal:Q', title='Total (Rp)'),
