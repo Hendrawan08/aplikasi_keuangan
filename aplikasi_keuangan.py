@@ -157,8 +157,10 @@ if 'simpan_sukses' not in st.session_state:
     st.session_state.simpan_sukses = False
 if 'pesan_toast' not in st.session_state:
     st.session_state.pesan_toast = ""
-if 'waktu_input' not in st.session_state:
-    st.session_state.waktu_input = datetime.now(TZ).time().replace(second=0, microsecond=0)
+if 'jam_input' not in st.session_state:
+    st.session_state.jam_input = datetime.now(TZ).hour
+if 'menit_input' not in st.session_state:
+    st.session_state.menit_input = datetime.now(TZ).minute
 if 'hapus_sukses' not in st.session_state:
     st.session_state.hapus_sukses = False
 if 'toast_kondisi_ditampilkan' not in st.session_state:
@@ -411,7 +413,22 @@ with st.sidebar.form("form_transaksi"):
     st.caption(f"📅 {in_tanggal.day} {bulan_terpilih} {in_tanggal.year}")
     
     # Input jam
-    in_waktu = st.time_input("Jam & Menit (klik ikon jam ⏰)", value=st.session_state.waktu_input)
+    # Input jam dan menit terpisah (Opsi 1)
+    col_jam, col_menit = st.columns(2)
+    with col_jam:
+        jam_input = st.number_input("Jam", min_value=0, max_value=23,
+                                    value=st.session_state.jam_input, step=1,
+                                    key="input_jam")
+    with col_menit:
+        menit_input = st.number_input("Menit", min_value=0, max_value=59,
+                                      value=st.session_state.menit_input, step=1,
+                                      key="input_menit")
+    # Gabungkan menjadi objek time
+    in_waktu = time(jam_input, menit_input)
+    
+    # Simpan nilai ke session state agar tetap muncul saat rerun
+    st.session_state.jam_input = jam_input
+    st.session_state.menit_input = menit_input
     submitted = st.form_submit_button("💾 Simpan Transaksi")
 
 if submitted:
@@ -447,7 +464,9 @@ if submitted:
                 st.cache_data.clear()
                 st.session_state.simpan_sukses = True
                 st.session_state.pesan_toast = f"✅ Transaksi '{in_catatan.strip()}' berhasil dicatat!"
-                st.session_state.waktu_input = datetime.now(TZ).time().replace(second=0, microsecond=0)
+                sekarang = datetime.now(TZ)
+                st.session_state.jam_input = sekarang.hour
+                st.session_state.menit_input = sekarang.minute
                 st.sidebar.success("✅ Transaksi tersimpan!")
                 st.rerun()
             else:
