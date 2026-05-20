@@ -12,120 +12,93 @@ import os
 # ==========================================
 st.set_page_config(page_title="DanaPintar AI Premium", page_icon="📊", layout="centered")
 
-# ---------- CSS KUSTOM UNTUK MOBILE-FRIENDLY & PREMIUM DARK THEME ----------
+# ---------- CSS KUSTOM UNTUK MOBILE-FRIENDLY ----------
 st.markdown("""
 <style>
-    /* ========== GLOBAL & THEME ALIGNMENT ========== */
+    /* ========== GLOBAL ========== */
     html, body, [data-testid="stAppViewContainer"] {
         font-size: 16px;
-        background-color: #0e1117; /* Menjaga konsistensi background utama */
     }
-    
+
     /* ========== TYPOGRAPHY ========== */
-    h1 { font-size: 2.2rem !important; font-weight: 700 !important; }
-    h2 { font-size: 1.8rem !important; font-weight: 600 !important; }
-    h3 { font-size: 1.4rem !important; font-weight: 500 !important; }
-    
-    /* ========== TOMBOL (BUTTONS) ========== */
+    h1 { font-size: 2.2rem !important; }
+    h2 { font-size: 1.8rem !important; }
+    h3 { font-size: 1.4rem !important; }
+
+    /* ========== TOMBOL ========== */
     .stButton button, .stFormSubmitButton button {
         font-size: 1rem !important;
         padding: 0.6rem 1.2rem !important;
         border-radius: 8px !important;
-        background-color: #1e293b !important; /* Warna tombol gelap elegan */
-        color: #f8fafc !important;
-        border: 1px solid #334155 !important;
-        transition: all 0.2s ease-in-out;
-        width: auto;
+        transition: all 0.2s ease;
     }
-    .stButton button:hover, .stFormSubmitButton button:hover {
-        transform: translateY(-1px);
-        background-color: #334155 !important;
-        border-color: #475569 !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-    .stButton button:active, .stFormSubmitButton button:active {
-        transform: translateY(1px);
+    .stButton button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
 
-    /* ========== INPUT FIELDS ========== */
+    /* ========== INPUT ========== */
     input, textarea, select, .stTextInput input, .stNumberInput input,
-    .stDateInput input, .stTimeInput input, [data-testid="stSelectbox"] div {
+    .stDateInput input, .stTimeInput input {
         font-size: 1rem !important;
         padding: 0.5rem !important;
         border-radius: 6px !important;
-        background-color: #1e293b !important; /* Menyelaraskan box input */
-        color: #ffffff !important;
     }
-    
-    /* ========== SIDEBAR (PERBAIKAN TOTAL) ========== */
+
+    /* ========== SIDEBAR ========== */
     [data-testid="stSidebar"] {
-        background-color: #0f172a !important; /* Midnight Blue Premium */
-        border-right: 1px solid #1e293b !important; /* Batas tipis yang elegan */
+        background-color: #0f172a;
     }
-    /* Memastikan semua teks & label di dalam sidebar berwarna terang dan kontras */
-    [data-testid="stSidebar"] .stMarkdown, 
-    [data-testid="stSidebar"] label, 
-    [data-testid="stSidebar"] p {
-        color: #f1f5f9 !important;
-    }
-    /* Perbaikan posisi emoji & text melayang di sidebar agar sejajar (vertically aligned) */
-    [data-testid="stSidebar"] .stMarkdown p {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        margin-bottom: 0.5rem !important;
-    }
-    
-    /* ========== METRIC COHESION ========== */
+
+    /* ========== METRIC ========== */
     [data-testid="stMetricValue"] {
         font-size: 1.8rem !important;
-        font-weight: 700 !important;
     }
     [data-testid="stMetricLabel"] {
         font-size: 0.9rem !important;
-        color: #94a3b8 !important; /* Abu-abu redup profesional */
     }
-    
+
     /* ========== DATAFRAME ========== */
     .stDataFrame {
         font-size: 0.95rem !important;
-        border-radius: 8px !important;
     }
-    
+
     /* ========== RESPONSIVE UNTUK MOBILE (max-width 768px) ========== */
     @media (max-width: 768px) {
         h1 { font-size: 1.8rem !important; }
         h2 { font-size: 1.5rem !important; }
         h3 { font-size: 1.3rem !important; }
-        
-        /* Tombol Full-Width di Mobile untuk UX yang lebih baik */
+
         .stButton button, .stFormSubmitButton button {
-            font-size: 1.05rem !important;
-            padding: 0.75rem 1.2rem !important;
+            font-size: 1.1rem !important;
+            padding: 0.8rem 1.5rem !important;
             min-height: 48px !important;
-            width: 100% !important;
-            display: block !important;
+            width: 100%;
+            display: block;
         }
-        
+
         input, textarea, select, .stTextInput input, .stNumberInput input,
         .stDateInput input, .stTimeInput input {
             font-size: 1.05rem !important;
             padding: 0.65rem !important;
         }
-        
-        [data-testid="stMetricValue"] { font-size: 1.6rem !important; }
-        [data-testid="stMetricLabel"] { font-size: 1rem !important; }
-        
-        /* Mengatur layout kolom horizontal bertumpuk vertikal di mobile secara rapi */
-        [data-testid="stHorizontalBlock"] {
-            flex-direction: column !important;
-            gap: 1rem !important;
+
+        [data-testid="stMetricValue"] {
+            font-size: 1.6rem !important;
         }
+        [data-testid="stMetricLabel"] {
+            font-size: 1rem !important;
+        }
+
+        [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] .stButton button {
+            font-size: 1rem !important;
+        }
+
         [data-testid="stHorizontalBlock"] > div {
             flex: 1 1 100% !important;
             max-width: 100% !important;
         }
-        
+
         .element-container iframe {
             max-width: 100% !important;
         }
