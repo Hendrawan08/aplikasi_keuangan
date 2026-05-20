@@ -47,7 +47,7 @@ st.markdown("""
 
     /* ========== SIDEBAR ========== */
     [data-testid="stSidebar"] {
-        background-color: #0f172a;
+        background-color: #f8fafc;
     }
 
     /* ========== METRIC ========== */
@@ -90,18 +90,15 @@ st.markdown("""
             font-size: 1rem !important;
         }
 
-        /* Sidebar: biarkan default Streamlit, tetapi perbesar isi */
         [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] .stButton button {
             font-size: 1rem !important;
         }
 
-        /* Kolom metrik: paksa tetap dalam satu kolom vertikal (sudah otomatis, tapi perkuat) */
         [data-testid="stHorizontalBlock"] > div {
             flex: 1 1 100% !important;
             max-width: 100% !important;
         }
 
-        /* Grafik: pastikan tidak overflow */
         .element-container iframe {
             max-width: 100% !important;
         }
@@ -155,6 +152,11 @@ if 'target_tabungan' not in st.session_state:
     st.session_state.target_tabungan = {}
 if 'muat_tabungan_sukses' not in st.session_state:
     st.session_state.muat_tabungan_sukses = False
+# Untuk toast setelah simpan transaksi
+if 'simpan_sukses' not in st.session_state:
+    st.session_state.simpan_sukses = False
+if 'pesan_toast' not in st.session_state:
+    st.session_state.pesan_toast = ""
 
 KAMUS_BULAN = {
     1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
@@ -265,6 +267,12 @@ if not st.session_state.muat_anggaran_sukses or not st.session_state.anggaran_te
     muat_anggaran_dari_cloud(uid, paksa=True)
 if not st.session_state.muat_tabungan_sukses:
     muat_target_tabungan_dari_cloud(uid, paksa=True)
+
+# ---------- TAMPILKAN TOAST JIKA ADA PESAN DARI SIDEBAR (SIMPAN TRANSAKSI) ----------
+if st.session_state.simpan_sukses:
+    st.toast(st.session_state.pesan_toast, icon="✅")
+    st.session_state.simpan_sukses = False
+    st.session_state.pesan_toast = ""
 
 # ---------- SIDEBAR ----------
 st.sidebar.success(f"👤 {email_user}")
@@ -405,6 +413,9 @@ if submitted:
             }
             resp = supabase.table("transaksi").insert(data_insert).execute()
             if resp.data:
+                # Set flag untuk toast di area utama
+                st.session_state.simpan_sukses = True
+                st.session_state.pesan_toast = f"✅ Transaksi '{in_catatan.strip()}' berhasil dicatat!"
                 st.sidebar.success("✅ Transaksi tersimpan!")
                 st.rerun()
             else:
@@ -477,6 +488,16 @@ batas_belanja = budget_evaluasi - target_evaluasi
 sisa_anggaran = budget_evaluasi - total_pengeluaran
 sisa_setelah_tabungan = batas_belanja - total_pengeluaran
 
+# ---------- TOAST KONDISI KEUANGAN ----------
+if batas_belanja > 0:
+    persen = (total_pengeluaran / batas_belanja) * 100
+    if persen >= 100:
+        st.toast("🚨 Target tabungan terancam! Pengeluaran melebihi batas.", icon="⚠️")
+    elif persen >= 80:
+        st.toast(f"🟠 Hati-hati! Pengeluaran sudah {persen:.0f}% dari batas belanja.", icon="📊")
+    else:
+        st.toast(f"🟢 Pengeluaran masih aman ({persen:.0f}%). Tabungan terlindungi.", icon="✅")
+
 # ---------- METRIK UTAMA (DIPERBARUI) ----------
 st.markdown("### 💹 Ringkasan Keuangan")
 km1, km2, km3 = st.columns(3)
@@ -497,13 +518,41 @@ else:
     km5.metric("Vs Batas Belanja", "Rp 0", delta="Tidak ada batas")
 km6.metric("Sisa Anggaran Utuh", f"Rp {sisa_anggaran:,.0f}")
 
-# ---------- TABEL DATA ----------
+# ---------- TABEL DATA DENGAN FITUR HAPUS ----------
 st.markdown("### 📋 Lembar Catatan Keuangan")
 if not df_view.empty:
     df_view["Jam Catat"] = df_view.apply(lambda r: f"{r['jam']:02d}:{r['menit']:02d} WIB", axis=1)
+    # Simpan indeks asli agar sinkron dengan df_view
     df_tampil = df_view[["bulan", "catatan", "nominal", "kategori", "sifat", "Jam Catat"]].copy()
     df_tampil.columns = ["Bulan", "Deskripsi", "Nominal (Rp)", "Kategori", "Sifat", "Waktu"]
-    st.dataframe(df_tampil, use_container_width=True)
+
+    # Tampilkan tabel dengan kemampuan multi-select
+    selection = st.dataframe(
+        df_tampil,
+        use_container_width=True,
+        hide_index=True,
+        selection_mode="multi-row",
+        on_select="rerun",
+        key="tabel_transaksi"
+    )
+
+    # Tombol hapus transaksi terpilih
+    if st.button("🗑️ Hapus Transaksi Terpilih", help="Pilih dulu baris di tabel, lalu klik tombol ini"):
+        selected_indices = selection.selection.rows  # daftar indeks integer
+        if selected_indices:
+            # Ambil ID asli dari df_view berdasarkan indeks yang dipilih
+            ids_to_delete = df_view.iloc[selected_indices]["id"].tolist()
+            try:
+                for trans_id in ids_to_delete:
+                    supabase.table("transaksi").delete().eq("id", trans_id).execute()
+                st.success(f"{len(ids_to_delete)} transaksi berhasil dihapus.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Gagal menghapus: {e}")
+        else:
+            st.warning("Pilih minimal satu transaksi terlebih dahulu.")
+
+    # Tombol unduh CSV tetap ada
     csv = df_tampil.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Unduh CSV", csv, f"transaksi_{pilihan_bulan}_{pilihan_tahun}.csv", "text/csv")
 else:
@@ -577,7 +626,7 @@ if not df_view.empty:
             else:
                 st.info(f"💡 Porsi pengeluaran sukarela masih terkendali ({persen_sukarela:.1f}% anggaran).")
 
-        # NEW FEATURE: Rekomendasi Target Tabungan
+        # 4. Evaluasi Target Tabungan
         st.write("#### 🎯 Evaluasi Target Tabungan")
         if target_evaluasi > 0:
             if total_pengeluaran <= batas_belanja:
