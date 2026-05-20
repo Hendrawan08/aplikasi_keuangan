@@ -12,93 +12,120 @@ import os
 # ==========================================
 st.set_page_config(page_title="DanaPintar AI Premium", page_icon="📊", layout="centered")
 
-# ---------- CSS KUSTOM UNTUK MOBILE-FRIENDLY ----------
+# ---------- CSS KUSTOM UNTUK MOBILE-FRIENDLY & PREMIUM DARK THEME ----------
 st.markdown("""
 <style>
-    /* ========== GLOBAL ========== */
+    /* ========== GLOBAL & THEME ALIGNMENT ========== */
     html, body, [data-testid="stAppViewContainer"] {
         font-size: 16px;
+        background-color: #0e1117; /* Menjaga konsistensi background utama */
     }
-
+    
     /* ========== TYPOGRAPHY ========== */
-    h1 { font-size: 2.2rem !important; }
-    h2 { font-size: 1.8rem !important; }
-    h3 { font-size: 1.4rem !important; }
-
-    /* ========== TOMBOL ========== */
+    h1 { font-size: 2.2rem !important; font-weight: 700 !important; }
+    h2 { font-size: 1.8rem !important; font-weight: 600 !important; }
+    h3 { font-size: 1.4rem !important; font-weight: 500 !important; }
+    
+    /* ========== TOMBOL (BUTTONS) ========== */
     .stButton button, .stFormSubmitButton button {
         font-size: 1rem !important;
         padding: 0.6rem 1.2rem !important;
         border-radius: 8px !important;
-        transition: all 0.2s ease;
+        background-color: #1e293b !important; /* Warna tombol gelap elegan */
+        color: #f8fafc !important;
+        border: 1px solid #334155 !important;
+        transition: all 0.2s ease-in-out;
+        width: auto;
     }
-    .stButton button:hover {
-        transform: scale(1.02);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    .stButton button:hover, .stFormSubmitButton button:hover {
+        transform: translateY(-1px);
+        background-color: #334155 !important;
+        border-color: #475569 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .stButton button:active, .stFormSubmitButton button:active {
+        transform: translateY(1px);
     }
 
-    /* ========== INPUT ========== */
+    /* ========== INPUT FIELDS ========== */
     input, textarea, select, .stTextInput input, .stNumberInput input,
-    .stDateInput input, .stTimeInput input {
+    .stDateInput input, .stTimeInput input, [data-testid="stSelectbox"] div {
         font-size: 1rem !important;
         padding: 0.5rem !important;
         border-radius: 6px !important;
+        background-color: #1e293b !important; /* Menyelaraskan box input */
+        color: #ffffff !important;
     }
-
-    /* ========== SIDEBAR ========== */
+    
+    /* ========== SIDEBAR (PERBAIKAN TOTAL) ========== */
     [data-testid="stSidebar"] {
-        background-color: #0f172a;
+        background-color: #0f172a !important; /* Midnight Blue Premium */
+        border-right: 1px solid #1e293b !important; /* Batas tipis yang elegan */
     }
-
-    /* ========== METRIC ========== */
+    /* Memastikan semua teks & label di dalam sidebar berwarna terang dan kontras */
+    [data-testid="stSidebar"] .stMarkdown, 
+    [data-testid="stSidebar"] label, 
+    [data-testid="stSidebar"] p {
+        color: #f1f5f9 !important;
+    }
+    /* Perbaikan posisi emoji & text melayang di sidebar agar sejajar (vertically aligned) */
+    [data-testid="stSidebar"] .stMarkdown p {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    /* ========== METRIC COHESION ========== */
     [data-testid="stMetricValue"] {
         font-size: 1.8rem !important;
+        font-weight: 700 !important;
     }
     [data-testid="stMetricLabel"] {
         font-size: 0.9rem !important;
+        color: #94a3b8 !important; /* Abu-abu redup profesional */
     }
-
+    
     /* ========== DATAFRAME ========== */
     .stDataFrame {
         font-size: 0.95rem !important;
+        border-radius: 8px !important;
     }
-
+    
     /* ========== RESPONSIVE UNTUK MOBILE (max-width 768px) ========== */
     @media (max-width: 768px) {
         h1 { font-size: 1.8rem !important; }
         h2 { font-size: 1.5rem !important; }
         h3 { font-size: 1.3rem !important; }
-
+        
+        /* Tombol Full-Width di Mobile untuk UX yang lebih baik */
         .stButton button, .stFormSubmitButton button {
-            font-size: 1.1rem !important;
-            padding: 0.8rem 1.5rem !important;
+            font-size: 1.05rem !important;
+            padding: 0.75rem 1.2rem !important;
             min-height: 48px !important;
-            width: 100%;
-            display: block;
+            width: 100% !important;
+            display: block !important;
         }
-
+        
         input, textarea, select, .stTextInput input, .stNumberInput input,
         .stDateInput input, .stTimeInput input {
             font-size: 1.05rem !important;
             padding: 0.65rem !important;
         }
-
-        [data-testid="stMetricValue"] {
-            font-size: 1.6rem !important;
+        
+        [data-testid="stMetricValue"] { font-size: 1.6rem !important; }
+        [data-testid="stMetricLabel"] { font-size: 1rem !important; }
+        
+        /* Mengatur layout kolom horizontal bertumpuk vertikal di mobile secara rapi */
+        [data-testid="stHorizontalBlock"] {
+            flex-direction: column !important;
+            gap: 1rem !important;
         }
-        [data-testid="stMetricLabel"] {
-            font-size: 1rem !important;
-        }
-
-        [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] .stButton button {
-            font-size: 1rem !important;
-        }
-
         [data-testid="stHorizontalBlock"] > div {
             flex: 1 1 100% !important;
             max-width: 100% !important;
         }
-
+        
         .element-container iframe {
             max-width: 100% !important;
         }
@@ -122,6 +149,7 @@ except:
     TZ = pytz.FixedOffset(7 * 60)
 
 def waktu_sekarang_wib():
+    """Kembalikan datetime.now() dengan timezone WIB"""
     return datetime.now(TZ)
 
 for var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
@@ -152,11 +180,15 @@ if 'target_tabungan' not in st.session_state:
     st.session_state.target_tabungan = {}
 if 'muat_tabungan_sukses' not in st.session_state:
     st.session_state.muat_tabungan_sukses = False
-# Untuk toast setelah simpan transaksi
+# Untuk toast
 if 'simpan_sukses' not in st.session_state:
     st.session_state.simpan_sukses = False
 if 'pesan_toast' not in st.session_state:
     st.session_state.pesan_toast = ""
+if 'hapus_sukses' not in st.session_state:
+    st.session_state.hapus_sukses = False
+if 'toast_kondisi_ditampilkan' not in st.session_state:
+    st.session_state.toast_kondisi_ditampilkan = False
 
 KAMUS_BULAN = {
     1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
@@ -243,6 +275,7 @@ if st.session_state.user_aktif is None:
                 st.session_state.user_aktif = resp.user
                 muat_anggaran_dari_cloud(resp.user.id, paksa=True)
                 muat_target_tabungan_dari_cloud(resp.user.id, paksa=True)
+                st.session_state.toast_kondisi_ditampilkan = False  # reset agar toast muncul lagi setelah login
                 st.rerun()
             except Exception as e:
                 st.error(f"Login gagal: {e}")
@@ -268,10 +301,16 @@ if not st.session_state.muat_anggaran_sukses or not st.session_state.anggaran_te
 if not st.session_state.muat_tabungan_sukses:
     muat_target_tabungan_dari_cloud(uid, paksa=True)
 
-# ---------- TAMPILKAN TOAST JIKA ADA PESAN DARI SIDEBAR (SIMPAN TRANSAKSI) ----------
+# ---------- TAMPILKAN TOAST ----------
+# Toast setelah simpan transaksi
 if st.session_state.simpan_sukses:
     st.toast(st.session_state.pesan_toast, icon="✅")
     st.session_state.simpan_sukses = False
+
+# Toast setelah hapus transaksi
+if st.session_state.hapus_sukses:
+    st.toast(st.session_state.pesan_toast, icon="🗑️")
+    st.session_state.hapus_sukses = False
     st.session_state.pesan_toast = ""
 
 # ---------- SIDEBAR ----------
@@ -286,6 +325,7 @@ if st.sidebar.button("Logout 🚪"):
     st.session_state.target_tabungan = {}
     st.session_state.muat_anggaran_sukses = False
     st.session_state.muat_tabungan_sukses = False
+    st.session_state.toast_kondisi_ditampilkan = False
     st.rerun()
 
 st.sidebar.markdown("---")
@@ -384,8 +424,9 @@ with st.sidebar.form("form_transaksi"):
     in_kategori = st.selectbox("Kategori:", ["Makanan", "Transportasi", "Hiburan/Gaya Hidup",
                                              "Kebutuhan Rumah/Kesehatan", "Tagihan Wajib", "Lain-lain"])
     in_sifat = st.radio("Sifat:", ["Wajib", "Sukarela"])
-    default_date = waktu_sekarang.date()
-    default_time = waktu_sekarang.time()
+    # Gunakan waktu sekarang WIB sebagai default
+    default_date = waktu_sekarang_wib().date()
+    default_time = waktu_sekarang_wib().time()  # ini aman, tidak ada timezone
     in_tanggal = st.date_input("Tanggal", value=default_date)
     in_waktu = st.time_input("Jam & Menit (klik ikon jam ⏰)", value=default_time)
     submitted = st.form_submit_button("💾 Simpan Transaksi")
@@ -402,6 +443,7 @@ if submitted:
     else:
         try:
             waktu_gabung = datetime.combine(in_tanggal, in_waktu)
+            # Lokalisasi ke WIB
             waktu_iso = TZ.localize(waktu_gabung).isoformat()
             data_insert = {
                 "user_id": uid,
@@ -413,7 +455,8 @@ if submitted:
             }
             resp = supabase.table("transaksi").insert(data_insert).execute()
             if resp.data:
-                # Set flag untuk toast di area utama
+                # Bersihkan cache data transaksi agar data terbaru muncul
+                st.cache_data.clear()
                 st.session_state.simpan_sukses = True
                 st.session_state.pesan_toast = f"✅ Transaksi '{in_catatan.strip()}' berhasil dicatat!"
                 st.sidebar.success("✅ Transaksi tersimpan!")
@@ -488,8 +531,8 @@ batas_belanja = budget_evaluasi - target_evaluasi
 sisa_anggaran = budget_evaluasi - total_pengeluaran
 sisa_setelah_tabungan = batas_belanja - total_pengeluaran
 
-# ---------- TOAST KONDISI KEUANGAN ----------
-if batas_belanja > 0:
+# ---------- TOAST KONDISI KEUANGAN (HANYA SEKALI SAAT PERTAMA DASHBOARD DIBUKA) ----------
+if not st.session_state.toast_kondisi_ditampilkan and batas_belanja > 0:
     persen = (total_pengeluaran / batas_belanja) * 100
     if persen >= 100:
         st.toast("🚨 Target tabungan terancam! Pengeluaran melebihi batas.", icon="⚠️")
@@ -497,8 +540,9 @@ if batas_belanja > 0:
         st.toast(f"🟠 Hati-hati! Pengeluaran sudah {persen:.0f}% dari batas belanja.", icon="📊")
     else:
         st.toast(f"🟢 Pengeluaran masih aman ({persen:.0f}%). Tabungan terlindungi.", icon="✅")
+    st.session_state.toast_kondisi_ditampilkan = True
 
-# ---------- METRIK UTAMA (DIPERBARUI) ----------
+# ---------- METRIK UTAMA ----------
 st.markdown("### 💹 Ringkasan Keuangan")
 km1, km2, km3 = st.columns(3)
 km1.metric("Anggaran", f"Rp {budget_evaluasi:,.0f}")
@@ -518,11 +562,11 @@ else:
     km5.metric("Vs Batas Belanja", "Rp 0", delta="Tidak ada batas")
 km6.metric("Sisa Anggaran Utuh", f"Rp {sisa_anggaran:,.0f}")
 
-# ---------- TABEL DATA DENGAN FITUR HAPUS ----------
+# ---------- TABEL DATA DENGAN FITUR HAPUS (PERBAIKAN) ----------
 st.markdown("### 📋 Lembar Catatan Keuangan")
 if not df_view.empty:
     df_view["Jam Catat"] = df_view.apply(lambda r: f"{r['jam']:02d}:{r['menit']:02d} WIB", axis=1)
-    # Tampilkan tabel tanpa kolom ID, tapi df_view tetap utuh
+    # Kolom tampilan tanpa ID
     df_tampil = df_view[["bulan", "catatan", "nominal", "kategori", "sifat", "Jam Catat"]].copy()
     df_tampil.columns = ["Bulan", "Deskripsi", "Nominal (Rp)", "Kategori", "Sifat", "Waktu"]
 
@@ -536,30 +580,31 @@ if not df_view.empty:
         key="tabel_transaksi"
     )
 
-    # Tombol hapus dengan validasi indeks
+    # Tombol hapus
     if st.button("🗑️ Hapus Transaksi Terpilih", help="Pilih dulu baris di tabel, lalu klik tombol ini"):
-        selected_indices = selection.selection.rows  # indeks baris terpilih (0‑based)
+        selected_indices = selection.selection.rows
         if selected_indices:
-            # Saring indeks yang masih valid (mencegah error akibat perubahan data)
+            # Validasi indeks agar tidak melebihi jumlah baris saat ini
             valid_indices = [i for i in selected_indices if i < len(df_view)]
             if len(valid_indices) < len(selected_indices):
                 st.warning("⚠️ Sebagian pilihan sudah tidak valid karena data berubah. Hanya yang valid akan dihapus.")
-
             if valid_indices:
                 ids_to_delete = df_view.iloc[valid_indices]["id"].tolist()
                 try:
                     for trans_id in ids_to_delete:
                         supabase.table("transaksi").delete().eq("id", trans_id).execute()
-                    st.success(f"✅ {len(ids_to_delete)} transaksi berhasil dihapus.")
+                    st.cache_data.clear()  # paksa refresh data transaksi
+                    st.session_state.hapus_sukses = True
+                    st.session_state.pesan_toast = f"🗑️ {len(ids_to_delete)} transaksi berhasil dihapus."
                     st.rerun()
                 except Exception as e:
                     st.error(f"Gagal menghapus: {e}")
             else:
-                st.warning("Tidak ada transaksi valid untuk dihapus. Silakan pilih kembali.")
+                st.warning("Tidak ada transaksi valid untuk dihapus.")
         else:
             st.warning("Pilih minimal satu transaksi terlebih dahulu.")
 
-    # Tombol unduh CSV
+    # Unduh CSV
     csv = df_tampil.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Unduh CSV", csv, f"transaksi_{pilihan_bulan}_{pilihan_tahun}.csv", "text/csv")
 else:
@@ -594,7 +639,7 @@ with g2:
     else:
         st.write("Data kosong.")
 
-# ---------- AI AUDITOR (DIPERKUAT DENGAN REKOMENDASI TABUNGAN) ----------
+# ---------- AI AUDITOR ----------
 st.markdown("---")
 st.markdown("### 🧠 Analisis AI Cerdas + Target Tabungan")
 if not df_view.empty:
