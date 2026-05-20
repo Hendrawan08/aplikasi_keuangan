@@ -522,11 +522,11 @@ km6.metric("Sisa Anggaran Utuh", f"Rp {sisa_anggaran:,.0f}")
 st.markdown("### 📋 Lembar Catatan Keuangan")
 if not df_view.empty:
     df_view["Jam Catat"] = df_view.apply(lambda r: f"{r['jam']:02d}:{r['menit']:02d} WIB", axis=1)
-    # Simpan indeks asli agar sinkron dengan df_view
+    # Tampilkan tabel tanpa kolom ID, tapi df_view tetap utuh
     df_tampil = df_view[["bulan", "catatan", "nominal", "kategori", "sifat", "Jam Catat"]].copy()
     df_tampil.columns = ["Bulan", "Deskripsi", "Nominal (Rp)", "Kategori", "Sifat", "Waktu"]
 
-    # Tampilkan tabel dengan kemampuan multi-select
+    # Tabel dengan multi‑select
     selection = st.dataframe(
         df_tampil,
         use_container_width=True,
@@ -536,23 +536,30 @@ if not df_view.empty:
         key="tabel_transaksi"
     )
 
-    # Tombol hapus transaksi terpilih
+    # Tombol hapus dengan validasi indeks
     if st.button("🗑️ Hapus Transaksi Terpilih", help="Pilih dulu baris di tabel, lalu klik tombol ini"):
-        selected_indices = selection.selection.rows  # daftar indeks integer
+        selected_indices = selection.selection.rows  # indeks baris terpilih (0‑based)
         if selected_indices:
-            # Ambil ID asli dari df_view berdasarkan indeks yang dipilih
-            ids_to_delete = df_view.iloc[selected_indices]["id"].tolist()
-            try:
-                for trans_id in ids_to_delete:
-                    supabase.table("transaksi").delete().eq("id", trans_id).execute()
-                st.success(f"{len(ids_to_delete)} transaksi berhasil dihapus.")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Gagal menghapus: {e}")
+            # Saring indeks yang masih valid (mencegah error akibat perubahan data)
+            valid_indices = [i for i in selected_indices if i < len(df_view)]
+            if len(valid_indices) < len(selected_indices):
+                st.warning("⚠️ Sebagian pilihan sudah tidak valid karena data berubah. Hanya yang valid akan dihapus.")
+
+            if valid_indices:
+                ids_to_delete = df_view.iloc[valid_indices]["id"].tolist()
+                try:
+                    for trans_id in ids_to_delete:
+                        supabase.table("transaksi").delete().eq("id", trans_id).execute()
+                    st.success(f"✅ {len(ids_to_delete)} transaksi berhasil dihapus.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Gagal menghapus: {e}")
+            else:
+                st.warning("Tidak ada transaksi valid untuk dihapus. Silakan pilih kembali.")
         else:
             st.warning("Pilih minimal satu transaksi terlebih dahulu.")
 
-    # Tombol unduh CSV tetap ada
+    # Tombol unduh CSV
     csv = df_tampil.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Unduh CSV", csv, f"transaksi_{pilihan_bulan}_{pilihan_tahun}.csv", "text/csv")
 else:
