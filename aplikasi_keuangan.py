@@ -5,11 +5,110 @@ import altair as alt
 from datetime import datetime, time, date, timedelta
 import pytz
 import traceback
+import os
 
 # ==========================================
 # SETUP HALAMAN UTAMA
 # ==========================================
-st.set_page_config(page_title="DanaPintar AI Premium", page_icon="📊", layout="wide")
+st.set_page_config(page_title="DanaPintar AI Premium", page_icon="📊", layout="centered")
+
+# ---------- CSS KUSTOM UNTUK MOBILE-FRIENDLY ----------
+st.markdown("""
+<style>
+    /* ========== GLOBAL ========== */
+    html, body, [data-testid="stAppViewContainer"] {
+        font-size: 16px;
+    }
+
+    /* ========== TYPOGRAPHY ========== */
+    h1 { font-size: 2.2rem !important; }
+    h2 { font-size: 1.8rem !important; }
+    h3 { font-size: 1.4rem !important; }
+
+    /* ========== TOMBOL ========== */
+    .stButton button, .stFormSubmitButton button {
+        font-size: 1rem !important;
+        padding: 0.6rem 1.2rem !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease;
+    }
+    .stButton button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    /* ========== INPUT ========== */
+    input, textarea, select, .stTextInput input, .stNumberInput input,
+    .stDateInput input, .stTimeInput input {
+        font-size: 1rem !important;
+        padding: 0.5rem !important;
+        border-radius: 6px !important;
+    }
+
+    /* ========== SIDEBAR ========== */
+    [data-testid="stSidebar"] {
+        background-color: #f8fafc;
+    }
+
+    /* ========== METRIC ========== */
+    [data-testid="stMetricValue"] {
+        font-size: 1.8rem !important;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 0.9rem !important;
+    }
+
+    /* ========== DATAFRAME ========== */
+    .stDataFrame {
+        font-size: 0.95rem !important;
+    }
+
+    /* ========== RESPONSIVE UNTUK MOBILE (max-width 768px) ========== */
+    @media (max-width: 768px) {
+        h1 { font-size: 1.8rem !important; }
+        h2 { font-size: 1.5rem !important; }
+        h3 { font-size: 1.3rem !important; }
+
+        .stButton button, .stFormSubmitButton button {
+            font-size: 1.1rem !important;
+            padding: 0.8rem 1.5rem !important;
+            min-height: 48px !important;
+            width: 100%;
+            display: block;
+        }
+
+        input, textarea, select, .stTextInput input, .stNumberInput input,
+        .stDateInput input, .stTimeInput input {
+            font-size: 1.05rem !important;
+            padding: 0.65rem !important;
+        }
+
+        [data-testid="stMetricValue"] {
+            font-size: 1.6rem !important;
+        }
+        [data-testid="stMetricLabel"] {
+            font-size: 1rem !important;
+        }
+
+        /* Sidebar: biarkan default Streamlit, tetapi perbesar isi */
+        [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] .stButton button {
+            font-size: 1rem !important;
+        }
+
+        /* Kolom metrik: paksa tetap dalam satu kolom vertikal (sudah otomatis, tapi perkuat) */
+        [data-testid="stHorizontalBlock"] > div {
+            flex: 1 1 100% !important;
+            max-width: 100% !important;
+        }
+
+        /* Grafik: pastikan tidak overflow */
+        .element-container iframe {
+            max-width: 100% !important;
+        }
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.markdown("<h1 style='text-align: center; color: #2E7D32;'>📊 DanaPintar AI — Multi-Month Auditor</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #37474F;'>Sistem Pencatatan Presisi Manual dengan Analisis Otak AI Lintas Waktu</p>", unsafe_allow_html=True)
 st.markdown("---")
@@ -28,7 +127,6 @@ except:
 def waktu_sekarang_wib():
     return datetime.now(TZ)
 
-import os
 for var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
     os.environ.pop(var, None)
 
@@ -53,7 +151,6 @@ if 'anggaran_terkunci' not in st.session_state:
     st.session_state.anggaran_terkunci = {}
 if 'muat_anggaran_sukses' not in st.session_state:
     st.session_state.muat_anggaran_sukses = False
-# NEW FEATURE: state untuk target tabungan
 if 'target_tabungan' not in st.session_state:
     st.session_state.target_tabungan = {}
 if 'muat_tabungan_sukses' not in st.session_state:
@@ -97,7 +194,6 @@ def simpan_anggaran_ke_cloud(uid, bulan_key, nominal):
         st.error(f"Gagal menyimpan anggaran: {e}")
         return False
 
-# NEW FEATURE: fungsi muat & simpan target tabungan
 def muat_target_tabungan_dari_cloud(uid, paksa=False):
     if not paksa and st.session_state.muat_tabungan_sukses:
         return
@@ -132,7 +228,7 @@ def simpan_target_tabungan_ke_cloud(uid, bulan_key, target):
         return False
 
 # ==========================================
-# 3. GERBANG AUTH
+# GERBANG AUTH
 # ==========================================
 if st.session_state.user_aktif is None:
     tab_login, tab_daftar = st.tabs(["🔑 Masuk", "📝 Daftar"])
@@ -144,7 +240,7 @@ if st.session_state.user_aktif is None:
                 resp = supabase.auth.sign_in_with_password({"email": email, "password": password})
                 st.session_state.user_aktif = resp.user
                 muat_anggaran_dari_cloud(resp.user.id, paksa=True)
-                muat_target_tabungan_dari_cloud(resp.user.id, paksa=True)  # NEW
+                muat_target_tabungan_dari_cloud(resp.user.id, paksa=True)
                 st.rerun()
             except Exception as e:
                 st.error(f"Login gagal: {e}")
@@ -160,14 +256,14 @@ if st.session_state.user_aktif is None:
     st.stop()
 
 # ==========================================
-# 4. DASHBOARD UTAMA
+# DASHBOARD UTAMA
 # ==========================================
 uid = st.session_state.user_aktif.id
 email_user = st.session_state.user_aktif.email
 
 if not st.session_state.muat_anggaran_sukses or not st.session_state.anggaran_terkunci:
     muat_anggaran_dari_cloud(uid, paksa=True)
-if not st.session_state.muat_tabungan_sukses:  # NEW
+if not st.session_state.muat_tabungan_sukses:
     muat_target_tabungan_dari_cloud(uid, paksa=True)
 
 # ---------- SIDEBAR ----------
@@ -179,9 +275,9 @@ if st.sidebar.button("Logout 🚪"):
         pass
     st.session_state.user_aktif = None
     st.session_state.anggaran_terkunci = {}
-    st.session_state.target_tabungan = {}  # NEW
+    st.session_state.target_tabungan = {}
     st.session_state.muat_anggaran_sukses = False
-    st.session_state.muat_tabungan_sukses = False  # NEW
+    st.session_state.muat_tabungan_sukses = False
     st.rerun()
 
 st.sidebar.markdown("---")
@@ -246,7 +342,6 @@ if anggaran_terkunci is not None:
                 pass
             st.rerun()
     else:
-        # Input target tabungan baru
         input_target = st.sidebar.number_input(
             f"Target Tabungan {bln_budget} (Rp):",
             min_value=0,
@@ -375,10 +470,9 @@ else:
     df_view = df[(df['bulan'] == pilihan_bulan) & (df['tahun'] == pilihan_tahun)].copy()
     key_eval = f"{pilihan_bulan}_{pilihan_tahun}"
     budget_evaluasi = st.session_state.anggaran_terkunci.get(key_eval, 0)
-    target_evaluasi = st.session_state.target_tabungan.get(key_eval, 0)  # NEW
+    target_evaluasi = st.session_state.target_tabungan.get(key_eval, 0)
 
 total_pengeluaran = df_view['nominal'].sum()
-# Batas aman belanja = anggaran - target tabungan
 batas_belanja = budget_evaluasi - target_evaluasi
 sisa_anggaran = budget_evaluasi - total_pengeluaran
 sisa_setelah_tabungan = batas_belanja - total_pengeluaran
@@ -449,7 +543,7 @@ st.markdown("---")
 st.markdown("### 🧠 Analisis AI Cerdas + Target Tabungan")
 if not df_view.empty:
     with st.expander("🔍 Buka Laporan AI", expanded=True):
-        # 1. Perbandingan Historis (tetap)
+        # 1. Perbandingan Historis
         df_lain = df[~((df['bulan'] == pilihan_bulan) & (df['tahun'] == pilihan_tahun))]
         if not df_lain.empty:
             rata_lalu = df_lain.groupby(["tahun", "bulan"])["nominal"].sum().mean()
@@ -463,7 +557,7 @@ if not df_view.empty:
         else:
             st.info("Belum ada data historis untuk dibandingkan.")
 
-        # 2. Alarm Waktu Rawan (tetap)
+        # 2. Alarm Waktu Rawan
         st.write("#### ⏰ Deteksi Waktu Rawan")
         malam_boros = df_view[(df_view['jam'] >= 20) | (df_view['jam'] <= 5)]
         if not malam_boros.empty:
@@ -472,7 +566,7 @@ if not df_view.empty:
         else:
             st.success("✅ Tidak ada transaksi mencurigakan di jam rawan.")
 
-        # 3. Analisis Kewajiban vs Sukarela (tetap)
+        # 3. Analisis Kewajiban vs Sukarela
         st.write("#### ⚖️ Porsi Pengeluaran")
         wajib = df_view[df_view['sifat'] == 'Wajib']['nominal'].sum()
         sukarela = df_view[df_view['sifat'] == 'Sukarela']['nominal'].sum()
@@ -487,16 +581,13 @@ if not df_view.empty:
         st.write("#### 🎯 Evaluasi Target Tabungan")
         if target_evaluasi > 0:
             if total_pengeluaran <= batas_belanja:
-                # Target tercapai atau bahkan berlebih
                 lebih = batas_belanja - total_pengeluaran
                 st.success(f"✅ **Target Tercapai!** Pengeluaran Anda masih di bawah batas belanja (setelah tabungan). Anda bisa menambah tabungan hingga **Rp {lebih:,.0f}**.")
             else:
                 kekurangan = total_pengeluaran - batas_belanja
                 st.error(f"🚨 **Target Tabungan Terancam!** Pengeluaran melebihi batas sebesar **Rp {kekurangan:,.0f}**. Target tabungan Rp {target_evaluasi:,.0f} tidak akan tercapai jika tidak dikurangi.")
-                # Rekomendasi: kategori mana yang bisa dipangkas
                 df_sukarela = df_view[df_view['sifat'] == 'Sukarela']
                 if not df_sukarela.empty:
-                    # Urutkan kategori sukarela berdasarkan total pengeluaran
                     kat_pengeluaran = df_sukarela.groupby('kategori')['nominal'].sum().sort_values(ascending=False)
                     st.write("**💡 Rekomendasi Penghematan untuk Capai Target:**")
                     sisa_potong = kekurangan
@@ -514,7 +605,7 @@ if not df_view.empty:
         else:
             st.info("📌 Anda belum menetapkan target tabungan untuk bulan ini. Tetapkan di sidebar untuk mendapatkan rekomendasi otomatis.")
 
-        # Rekomendasi Umum (tetap, tapi disesuaikan)
+        # Rekomendasi Umum
         st.write("#### 🎯 Rekomendasi Penghematan Umum")
         top_kategori = df_view.groupby('kategori')['nominal'].sum().idxmax()
         nominal_top = df_view[df_view['kategori'] == top_kategori]['nominal'].sum()
