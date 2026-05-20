@@ -482,12 +482,7 @@ with st.sidebar.form("form_transaksi"):
     # Tampilkan tanggal dengan format DD/MM/YYYY
     in_tanggal = st.date_input("Tanggal", value=default_date, format="DD/MM/YYYY")
     
-    # Opsional: tampilkan nama bulan di bawah input agar jelas
-    bulan_terpilih = KAMUS_BULAN[in_tanggal.month]
-    st.caption(f"📅 {in_tanggal.day} {bulan_terpilih} {in_tanggal.year}")
-    
     # Input jam
-    # Input jam dan menit terpisah (Opsi 1)
     col_jam, col_menit = st.columns(2)
     with col_jam:
         jam_input = st.number_input("Jam", min_value=0, max_value=23,
