@@ -47,7 +47,7 @@ st.markdown("""
 
     /* ========== SIDEBAR ========== */
     [data-testid="stSidebar"] {
-        background-color: #f8fafc;
+        background-color: #0f172a;
     }
 
     /* ========== METRIC ========== */
