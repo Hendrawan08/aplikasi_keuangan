@@ -525,3 +525,12 @@ if not df_view.empty:
             st.info("➔ Karena anggaran sudah tekor, alokasikan dana darurat di kategori 'Wajib' di awal bulan berikutnya.")
 else:
     st.info("Tidak ada data transaksi untuk dianalisis AI.")
+
+# ---------- FOOTER / COPYRIGHT ----------
+st.markdown("---")
+st.markdown(
+    "<p style='text-align: center; color: #2E7D32; font-size: 14px;'>"
+    "🛠️ Dibangun dengan ❤️ oleh <strong>Hendrawan Lotanto</strong> — © 2026 DanaPintar AI"
+    "</p>",
+    unsafe_allow_html=True
+)
