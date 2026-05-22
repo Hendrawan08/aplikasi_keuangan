@@ -6,3 +6,4 @@ pytz
 fpdf2
 numpy
 anthropic
+google-generativeai
