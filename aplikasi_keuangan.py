@@ -957,8 +957,8 @@ with st.sidebar:
                 key="foto_upload"
             )
             if _file_up is not None:
-                if _file_up.size > 2 * 1024 * 1024:
-                    st.error("❌ Ukuran file melebihi 2MB.")
+                if _file_up.size > 5 * 1024 * 1024:
+                    st.error("❌ Ukuran file melebihi 5MB.")
                 else:
                     if st.button("☁️ Upload Foto", key="btn_upload_foto"):
                         with st.spinner("Mengupload foto..."):
