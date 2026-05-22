@@ -1,46 +1,37 @@
 # ============================================================
-# DanaPintar AI Premium — Full Version
+# DanaPintar AI Premium — v3.0.0
 # Author : Hendrawan Lotanto
-# Version: 2.0.0
 # ============================================================
 #
-# SETUP SUPABASE — Jalankan SQL ini di Supabase SQL Editor
-# sebelum menjalankan aplikasi:
+# SQL BARU — Jalankan di Supabase SQL Editor:
 #
-# -- Tabel Pemasukan (BARU)
-# CREATE TABLE pemasukan (
-#     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-#     user_id UUID REFERENCES auth.users(id),
-#     sumber TEXT NOT NULL,
-#     nominal NUMERIC NOT NULL,
-#     kategori TEXT,
-#     waktu_pemasukan TIMESTAMPTZ,
-#     created_at TIMESTAMPTZ DEFAULT NOW()
-# );
-# ALTER TABLE pemasukan ENABLE ROW LEVEL SECURITY;
-# CREATE POLICY "Users can CRUD own pemasukan" ON pemasukan
-#     USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+# -- RLS semua tabel (universal, anti type mismatch)
+# -- Sudah dijalankan sebelumnya via chat.
 #
-# -- Tabel Recurring Templates (BARU)
-# CREATE TABLE recurring_templates (
-#     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-#     user_id UUID REFERENCES auth.users(id),
-#     catatan TEXT NOT NULL,
-#     nominal NUMERIC NOT NULL,
-#     kategori TEXT,
-#     sifat TEXT,
-#     frekuensi TEXT,
-#     created_at TIMESTAMPTZ DEFAULT NOW()
-# );
-# ALTER TABLE recurring_templates ENABLE ROW LEVEL SECURITY;
-# CREATE POLICY "Users can CRUD own recurring" ON recurring_templates
-#     USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+# -- Policies Multi-Wallet
+# ALTER TABLE wallets ENABLE ROW LEVEL SECURITY;
+# CREATE POLICY "w_sel" ON wallets FOR SELECT USING (auth.uid()::text=user_id::text);
+# CREATE POLICY "w_ins" ON wallets FOR INSERT WITH CHECK (auth.uid()::text=user_id::text);
+# CREATE POLICY "w_upd" ON wallets FOR UPDATE USING (auth.uid()::text=user_id::text);
+# CREATE POLICY "w_del" ON wallets FOR DELETE USING (auth.uid()::text=user_id::text);
 #
-# SETUP SECRETS — Buat file .streamlit/secrets.toml:
-# [secrets]
-# SUPABASE_URL = "https://xxx.supabase.co"
+# -- Policies Budget Kategori
+# ALTER TABLE budget_kategori ENABLE ROW LEVEL SECURITY;
+# CREATE POLICY "bk_sel" ON budget_kategori FOR SELECT USING (auth.uid()::text=user_id::text);
+# CREATE POLICY "bk_ins" ON budget_kategori FOR INSERT WITH CHECK (auth.uid()::text=user_id::text);
+# CREATE POLICY "bk_del" ON budget_kategori FOR DELETE USING (auth.uid()::text=user_id::text);
+#
+# -- Policies Hutang Piutang
+# ALTER TABLE hutang_piutang ENABLE ROW LEVEL SECURITY;
+# CREATE POLICY "hp_sel" ON hutang_piutang FOR SELECT USING (auth.uid()::text=user_id::text);
+# CREATE POLICY "hp_ins" ON hutang_piutang FOR INSERT WITH CHECK (auth.uid()::text=user_id::text);
+# CREATE POLICY "hp_upd" ON hutang_piutang FOR UPDATE USING (auth.uid()::text=user_id::text);
+# CREATE POLICY "hp_del" ON hutang_piutang FOR DELETE USING (auth.uid()::text=user_id::text);
+#
+# SECRETS — .streamlit/secrets.toml:
+# SUPABASE_URL = "https://..."
 # SUPABASE_KEY = "eyJ..."
-# ANTHROPIC_API_KEY = "sk-ant-..."
+# GEMINI_API_KEY = "AIzaSy..."
 # ============================================================
 
 import streamlit as st
@@ -48,10 +39,8 @@ from supabase import create_client, Client
 import pandas as pd
 import altair as alt
 from datetime import datetime, time, date, timedelta
-import pytz
-import os
+import pytz, os
 
-# --- Dependensi opsional ---
 try:
     from fpdf import FPDF
     PDF_AVAILABLE = True
@@ -78,113 +67,195 @@ st.set_page_config(
 # KONSTANTA
 # ============================================================
 KAMUS_BULAN = {
-    1: "Januari", 2: "Februari", 3: "Maret", 4: "April",
-    5: "Mei", 6: "Juni", 7: "Juli", 8: "Agustus",
-    9: "September", 10: "Oktober", 11: "November", 12: "Desember"
+    1:"Januari",2:"Februari",3:"Maret",4:"April",
+    5:"Mei",6:"Juni",7:"Juli",8:"Agustus",
+    9:"September",10:"Oktober",11:"November",12:"Desember"
 }
-
 KATEGORI_PENGELUARAN = [
-    "Makanan", "Transportasi", "Hiburan/Gaya Hidup",
-    "Kebutuhan Rumah/Kesehatan", "Tagihan Wajib", "Lain-lain"
+    "Makanan","Transportasi","Hiburan/Gaya Hidup",
+    "Kebutuhan Rumah/Kesehatan","Tagihan Wajib","Lain-lain"
 ]
 KATEGORI_PEMASUKAN = [
-    "Gaji", "Freelance", "Bisnis", "Investasi",
-    "Hadiah/Bonus", "Passive Income", "Lain-lain"
+    "Gaji","Freelance","Bisnis","Investasi",
+    "Hadiah/Bonus","Passive Income","Lain-lain"
 ]
-FREKUENSI_BERULANG = ["Bulanan", "Mingguan", "2 Mingguan"]
+FREKUENSI_BERULANG = ["Bulanan","Mingguan","2 Mingguan"]
+TIPE_WALLET       = ["💵 Cash","🏦 Bank","📱 E-Wallet","📈 Investasi","💳 Kartu Kredit"]
+ANGGARAN_MIN      = 10_000
+ANGGARAN_DEFAULT  = 1_000_000
 
-ANGGARAN_MIN     = 10_000
-ANGGARAN_DEFAULT = 1_000_000
+CHANGELOG = [
+    {
+        "versi": "3.0.0", "tanggal": "Mei 2026",
+        "fitur": [
+            "✏️ Edit transaksi langsung dari tabel",
+            "🗑️ Konfirmasi hapus sebelum data dihapus",
+            "🔔 Notifikasi in-app cerdas saat login",
+            "🔍 Search & filter transaksi (kata kunci, kategori, sifat, tanggal)",
+            "🎉 Onboarding wizard untuk user baru",
+            "📋 Halaman Changelog (halaman ini)",
+            "📂 Budget per kategori — alokasi anggaran per pos pengeluaran",
+            "💸 Pelacakan Hutang & Piutang",
+            "👛 Multi-Wallet — kelola Cash, Bank, E-Wallet, dll",
+            "🌙 Dark Mode — toggle tema gelap/terang",
+            "📱 UX Mobile lebih responsif",
+        ],
+        "perbaikan": [
+            "Guard negatif pada batas_belanja",
+            "Label kolom unik pada dashboard komparatif",
+            "Fix RLS policy type mismatch (UUID vs TEXT)",
+        ]
+    },
+    {
+        "versi": "2.0.0", "tanggal": "April 2026",
+        "fitur": [
+            "💵 Income Tracking — catat pemasukan",
+            "🔄 Recurring Templates — transaksi berulang otomatis",
+            "🤖 DanaBot — AI Chat keuangan (Google Gemini)",
+            "🏅 Financial Health Score (0–100)",
+            "📄 Export laporan PDF bulanan",
+            "🏆 Gamifikasi & badge pencapaian",
+            "↔️ Dashboard komparatif 2 bulan",
+            "👤 Profil lengkap — foto, nama, bio, lokasi",
+        ],
+        "perbaikan": [
+            "API key dipindah ke st.secrets",
+            "Fix security: user_id validation pada semua delete",
+        ]
+    },
+    {
+        "versi": "1.0.0", "tanggal": "Maret 2026",
+        "fitur": [
+            "📊 Dashboard utama keuangan",
+            "✍️ Catat pengeluaran manual",
+            "🔒 Kunci anggaran bulanan",
+            "💰 Target tabungan",
+            "📈 Visualisasi tren & kategori",
+            "🧠 AI Auditor rule-based",
+            "🔑 Auth — login & registrasi",
+        ],
+        "perbaikan": []
+    },
+]
 
 
 # ============================================================
-# CSS KUSTOM
+# CSS — LIGHT & DARK MODE
 # ============================================================
-st.markdown("""
-<style>
-    html, body, [data-testid="stAppViewContainer"] { font-size: 16px; }
-    h1 { font-size: 2.2rem !important; }
-    h2 { font-size: 1.8rem !important; }
-    h3 { font-size: 1.4rem !important; }
+def inject_css(dark: bool = False):
+    if dark:
+        bg      = "#0f172a"
+        bg2     = "#1e293b"
+        bg3     = "#334155"
+        text    = "#e2e8f0"
+        text2   = "#94a3b8"
+        accent  = "#4ade80"
+        border  = "#475569"
+        sidebar = "#0a0f1e"
+        card_bg = "#1e293b"
+    else:
+        bg      = "#ffffff"
+        bg2     = "#f8fafc"
+        bg3     = "#f1f5f9"
+        text    = "#1e293b"
+        text2   = "#64748b"
+        accent  = "#2E7D32"
+        border  = "#e2e8f0"
+        sidebar = "#0f172a"
+        card_bg = "#ffffff"
 
-    .stButton button, .stFormSubmitButton button {
-        font-size: 1rem !important;
-        padding: 0.6rem 1.2rem !important;
-        border-radius: 8px !important;
-        transition: all 0.2s ease;
-    }
-    .stButton button:hover {
-        transform: scale(1.02);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    }
-
+    st.markdown(f"""
+    <style>
+    html, body, [data-testid="stAppViewContainer"] {{
+        background-color: {bg} !important;
+        color: {text} !important;
+        font-size: 16px;
+    }}
+    [data-testid="stSidebar"] {{
+        background-color: {sidebar} !important;
+    }}
+    [data-testid="stSidebar"] * {{ color: #e2e8f0 !important; }}
+    h1 {{ font-size:2.2rem !important; color:{accent} !important; }}
+    h2 {{ font-size:1.8rem !important; }}
+    h3 {{ font-size:1.4rem !important; }}
+    h4 {{ color:{accent} !important; }}
+    p, li, span, label {{ color:{text} !important; }}
+    .stMarkdown p {{ color:{text} !important; }}
+    [data-testid="stMetricValue"] {{
+        font-size:1.6rem !important; color:{accent} !important;
+    }}
+    [data-testid="stMetricLabel"] {{ font-size:0.9rem !important; }}
+    .stDataFrame {{ font-size:0.95rem !important; }}
+    .stButton button, .stFormSubmitButton button {{
+        font-size:1rem !important; padding:0.6rem 1.2rem !important;
+        border-radius:8px !important; transition:all 0.2s ease;
+        background-color:{bg3} !important; color:{text} !important;
+        border:1px solid {border} !important;
+    }}
+    .stButton button:hover {{
+        transform:scale(1.02); box-shadow:0 2px 8px rgba(0,0,0,0.15);
+        border-color:{accent} !important;
+    }}
     input, textarea, select,
     .stTextInput input, .stNumberInput input,
-    .stDateInput input, .stTimeInput input {
-        font-size: 1rem !important;
-        padding: 0.5rem !important;
-        border-radius: 6px !important;
-    }
-
-    [data-testid="stSidebar"] { background-color: #0f172a; }
-
-    [data-testid="stMetricValue"] { font-size: 1.8rem !important; }
-    [data-testid="stMetricLabel"] { font-size: 0.9rem !important; }
-
-    .stDataFrame { font-size: 0.95rem !important; }
-
-    .profile-card {
-        background: linear-gradient(135deg, #2E7D32 0%, #43A047 100%);
-        border-radius: 16px; padding: 1.2rem 1rem; margin-bottom: 0.5rem;
-        color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    .profile-card .email {
-        font-size: 0.95rem; font-weight: 500; word-break: break-all;
-    }
-    .profile-card .label {
-        font-size: 0.75rem; text-transform: uppercase;
-        letter-spacing: 0.5px; opacity: 0.7;
-    }
-
-    @media (max-width: 768px) {
-        h1 { font-size: 1.8rem !important; }
-        h2 { font-size: 1.5rem !important; }
-        h3 { font-size: 1.3rem !important; }
-        .stButton button, .stFormSubmitButton button {
-            font-size: 1.1rem !important; padding: 0.8rem 1.5rem !important;
-            min-height: 48px !important; width: 100%; display: block;
-        }
-        input, textarea, select,
-        .stTextInput input, .stNumberInput input,
-        .stDateInput input, .stTimeInput input {
-            font-size: 1.05rem !important; padding: 0.65rem !important;
-        }
-        [data-testid="stMetricValue"] { font-size: 1.6rem !important; }
-        [data-testid="stMetricLabel"] { font-size: 1rem !important; }
-        [data-testid="stHorizontalBlock"] > div {
-            flex: 1 1 100% !important; max-width: 100% !important;
-        }
-    }
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown(
-    "<h1 style='text-align:center;color:#2E7D32;'>📊 DanaPintar AI — Premium</h1>",
-    unsafe_allow_html=True
-)
-st.markdown(
-    "<p style='text-align:center;color:#37474F;'>"
-    "Sistem Keuangan Cerdas · AI Chat · Target Tabungan · Analitik Lintas Waktu"
-    "</p>",
-    unsafe_allow_html=True
-)
-st.markdown("---")
-
+    .stDateInput input, .stTimeInput input {{
+        font-size:1rem !important; padding:0.5rem !important;
+        border-radius:6px !important;
+        background-color:{bg2} !important; color:{text} !important;
+        border:1px solid {border} !important;
+    }}
+    .stSelectbox div[data-baseweb="select"] {{
+        background-color:{bg2} !important; color:{text} !important;
+    }}
+    [data-testid="stExpander"] {{
+        background-color:{bg2} !important;
+        border:1px solid {border} !important; border-radius:8px !important;
+    }}
+    .stTabs [data-baseweb="tab-list"] {{
+        background-color:{bg2} !important;
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        color:{text2} !important;
+    }}
+    .stTabs [aria-selected="true"] {{
+        color:{accent} !important;
+    }}
+    .pro-card {{
+        background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #388E3C 100%);
+        border-radius:20px; padding:1.2rem 1rem 1rem; margin-bottom:0.6rem;
+        color:white; box-shadow:0 8px 24px rgba(0,0,0,0.2);
+        border:1px solid rgba(255,255,255,0.1);
+    }}
+    .pro-card .nama {{ font-size:1rem; font-weight:700; margin-top:0.5rem; }}
+    .pro-card .email-kecil {{ font-size:0.72rem; opacity:0.7; word-break:break-all; }}
+    .pro-card .bio {{
+        font-size:0.8rem; opacity:0.85; margin-top:0.5rem; font-style:italic;
+        border-top:1px solid rgba(255,255,255,0.15); padding-top:0.5rem;
+    }}
+    .pro-card .meta {{ font-size:0.72rem; opacity:0.65; margin-top:0.4rem; }}
+    .badge-member {{
+        display:inline-block; background:rgba(255,255,255,0.2);
+        border-radius:20px; padding:2px 8px; font-size:0.7rem; font-weight:600;
+    }}
+    @media (max-width:768px) {{
+        h1 {{ font-size:1.6rem !important; }}
+        h2 {{ font-size:1.4rem !important; }}
+        .stButton button, .stFormSubmitButton button {{
+            font-size:1rem !important; min-height:44px !important;
+            width:100%; display:block;
+        }}
+        [data-testid="stMetricValue"] {{ font-size:1.3rem !important; }}
+        [data-testid="stHorizontalBlock"]>div {{
+            flex:1 1 100% !important; max-width:100% !important;
+        }}
+        .stTabs [data-baseweb="tab"] {{ font-size:0.8rem !important; padding:0.4rem !important; }}
+    }}
+    </style>
+    """, unsafe_allow_html=True)
 
 # ============================================================
-# INISIALISASI SECRETS & KONEKSI
+# SECRETS & KONEKSI
 # ============================================================
-# [PERBAIKAN KEAMANAN] Baca dari st.secrets, fallback ke hardcode dengan peringatan
 try:
     SUPABASE_URL = st.secrets["SUPABASE_URL"]
     SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -194,11 +265,6 @@ except (KeyError, FileNotFoundError):
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
         ".eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxteXZkZHF3bW1wc3JwaWd6eWdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNzQ0NjQsImV4cCI6MjA5NDc1MDQ2NH0"
         ".Cv41r1Mo6fR164y3g8OX-zP_Cmj0NiR9zyRzkmYJi9I"
-    )
-    st.warning(
-        "⚠️ **Keamanan:** API key masih hardcoded. "
-        "Pindahkan ke `.streamlit/secrets.toml` sebelum deploy ke production.",
-        icon="🔐"
     )
 
 try:
@@ -213,596 +279,537 @@ try:
 except Exception:
     TZ = pytz.FixedOffset(7 * 60)
 
-for _var in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"]:
-    os.environ.pop(_var, None)
-
+for _v in ["HTTP_PROXY","HTTPS_PROXY","http_proxy","https_proxy"]:
+    os.environ.pop(_v, None)
 
 @st.cache_resource
 def init_supabase() -> Client:
     try:
-        client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        client.auth.get_session()
-        return client
+        c = create_client(SUPABASE_URL, SUPABASE_KEY)
+        c.auth.get_session()
+        return c
     except Exception as e:
         st.error(f"❌ Gagal tersambung ke database: {e}")
         st.stop()
 
-
 supabase = init_supabase()
 
-
 # ============================================================
-# SESSION STATE DEFAULTS
+# SESSION STATE
 # ============================================================
-_defaults = {
+_DEF = {
     "user_aktif": None,
+    "dark_mode": False,
     "anggaran_terkunci": {},
     "muat_anggaran_sukses": False,
     "target_tabungan": {},
     "muat_tabungan_sukses": False,
-    "simpan_sukses": False,
-    "pesan_toast": "",
-    "jam_input": datetime.now(TZ).hour,
-    "menit_input": datetime.now(TZ).minute,
-    "hapus_sukses": False,
-    "toast_kondisi_ditampilkan": False,
-    "chat_history": [],
     "profil": {},
     "muat_profil_sukses": False,
     "edit_profil_mode": False,
+    "wallets": [],
+    "muat_wallets_sukses": False,
+    "budget_kategori": {},
+    "muat_bk_sukses": False,
+    "simpan_sukses": False,
+    "pesan_toast": "",
+    "hapus_sukses": False,
+    "hapus_konfirmasi_ids": [],
+    "hapus_konfirmasi_tipe": "",
+    "edit_tx_id": None,
+    "edit_tx_data": {},
+    "jam_input": datetime.now(TZ).hour,
+    "menit_input": datetime.now(TZ).minute,
+    "toast_kondisi_ditampilkan": False,
+    "chat_history": [],
+    "onboarding_selesai": False,
+    "onboarding_step": 0,
 }
-for _k, _v in _defaults.items():
+for _k, _v in _DEF.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
-
 # ============================================================
-# HELPER FUNCTIONS
+# HELPERS
 # ============================================================
-def waktu_sekarang_wib() -> datetime:
+def wib() -> datetime:
     return datetime.now(TZ)
 
+def rp(n: float) -> str:
+    return f"Rp {n:,.0f}"
 
-def format_rupiah(nominal: float) -> str:
-    return f"Rp {nominal:,.0f}"
-
-
-def parse_df_waktu(df: pd.DataFrame, col: str = "waktu_transaksi") -> pd.DataFrame:
-    """Parse, localize ke WIB, tambah kolom bulan/tahun/tanggal/jam/menit."""
+def parse_waktu(df: pd.DataFrame, col: str) -> pd.DataFrame:
     df[col] = pd.to_datetime(df[col], errors="coerce")
     if df[col].dt.tz is None:
         df[col] = df[col].dt.tz_localize("UTC")
     df[col] = df[col].dt.tz_convert(TZ)
     df = df.dropna(subset=[col])
-    df["bulan"]  = df[col].dt.month.map(KAMUS_BULAN)
-    df["tahun"]  = df[col].dt.year.astype(int)
+    df["bulan"]   = df[col].dt.month.map(KAMUS_BULAN)
+    df["tahun"]   = df[col].dt.year.astype(int)
     df["tanggal"] = df[col].dt.day.astype(int)
-    df["jam"]    = df[col].dt.hour.astype(int)
-    df["menit"]  = df[col].dt.minute.astype(int)
+    df["jam"]     = df[col].dt.hour.astype(int)
+    df["menit"]   = df[col].dt.minute.astype(int)
     return df
 
+def inisial(nama: str, email: str) -> str:
+    t = nama.strip() if nama and nama.strip() else email
+    b = t.split()
+    return (b[0][0]+b[1][0]).upper() if len(b)>=2 else t[:2].upper()
 
 # ============================================================
-# DB FUNCTIONS — PROFIL PENGGUNA
+# DB — PROFIL
 # ============================================================
-def muat_profil_dari_cloud(uid: str, paksa: bool = False) -> None:
-    """Muat data profil user dari tabel profiles."""
-    if not paksa and st.session_state.muat_profil_sukses:
-        return
+def muat_profil(uid, paksa=False):
+    if not paksa and st.session_state.muat_profil_sukses: return
     try:
-        res = supabase.table("profiles").select("*").eq("id", uid).execute()
-        if res.data:
-            st.session_state.profil = res.data[0]
-        else:
-            st.session_state.profil = {}
+        r = supabase.table("profiles").select("*").eq("id", uid).execute()
+        st.session_state.profil = r.data[0] if r.data else {}
         st.session_state.muat_profil_sukses = True
-    except Exception as e:
+    except Exception:
         st.session_state.profil = {}
-        st.session_state.muat_profil_sukses = True  # tetap lanjut meski gagal
+        st.session_state.muat_profil_sukses = True
 
-
-def simpan_profil_ke_cloud(uid: str, data: dict) -> bool:
-    """Upsert data profil ke Supabase."""
+def simpan_profil(uid, data):
     try:
-        data["id"]         = uid
-        data["updated_at"] = waktu_sekarang_wib().isoformat()
+        data["id"] = uid
+        data["updated_at"] = wib().isoformat()
         supabase.table("profiles").upsert(data).execute()
         return True
     except Exception as e:
-        st.error(f"Gagal menyimpan profil: {e}")
-        return False
+        st.error(f"Gagal simpan profil: {e}"); return False
 
-
-def upload_foto_profil(uid: str, file_bytes: bytes, mime: str) -> str | None:
-    """Upload foto ke Supabase Storage, return public URL atau None."""
+def upload_foto(uid, fbytes, mime):
     try:
-        ext      = "jpg" if "jpeg" in mime else mime.split("/")[-1]
-        path     = f"{uid}/avatar.{ext}"
-        bucket   = supabase.storage.from_("profile-photos")
-
-        # Hapus foto lama jika ada
-        try:
-            bucket.remove([path])
-        except Exception:
-            pass
-
-        bucket.upload(
-            path=path,
-            file=file_bytes,
-            file_options={"content-type": mime, "upsert": "true"}
-        )
-        url = bucket.get_public_url(path)
-        # Tambah cache-buster agar browser reload foto baru
-        url = f"{url}?t={int(datetime.now().timestamp())}"
-        return url
+        ext  = "jpg" if "jpeg" in mime else mime.split("/")[-1]
+        path = f"{uid}/avatar.{ext}"
+        b    = supabase.storage.from_("profile-photos")
+        try: b.remove([path])
+        except Exception: pass
+        b.upload(path=path, file=fbytes, file_options={"content-type": mime,"upsert":"true"})
+        return f"{b.get_public_url(path)}?t={int(datetime.now().timestamp())}"
     except Exception as e:
-        st.error(f"Gagal upload foto: {e}")
-        return None
+        st.error(f"Gagal upload foto: {e}"); return None
 
-
-def hapus_foto_profil(uid: str) -> bool:
-    """Hapus foto profil dari Storage dan set foto_url ke None."""
+def hapus_foto(uid):
     try:
-        for ext in ["jpg", "jpeg", "png", "webp"]:
-            try:
-                supabase.storage.from_("profile-photos").remove([f"{uid}/avatar.{ext}"])
-            except Exception:
-                pass
-        supabase.table("profiles").upsert({
-            "id": uid, "foto_url": None,
-            "updated_at": waktu_sekarang_wib().isoformat()
-        }).execute()
+        for ext in ["jpg","jpeg","png","webp"]:
+            try: supabase.storage.from_("profile-photos").remove([f"{uid}/avatar.{ext}"])
+            except Exception: pass
+        supabase.table("profiles").upsert({"id":uid,"foto_url":None,"updated_at":wib().isoformat()}).execute()
         return True
     except Exception as e:
-        st.error(f"Gagal menghapus foto: {e}")
-        return False
-
-
-def inisial_dari_nama(nama: str, email: str) -> str:
-    """Ambil 1–2 inisial dari nama atau email."""
-    teks = nama.strip() if nama and nama.strip() else email
-    bagian = teks.split()
-    if len(bagian) >= 2:
-        return (bagian[0][0] + bagian[1][0]).upper()
-    return teks[:2].upper() if teks else "??"
-
+        st.error(f"Gagal hapus foto: {e}"); return False
 
 # ============================================================
-# DB FUNCTIONS — ANGGARAN
+# DB — ANGGARAN & TABUNGAN
 # ============================================================
-def muat_anggaran_dari_cloud(uid: str, paksa: bool = False) -> None:
-    if not paksa and st.session_state.muat_anggaran_sukses:
-        return
+def muat_anggaran(uid, paksa=False):
+    if not paksa and st.session_state.muat_anggaran_sukses: return
     try:
-        res = supabase.table("budgets").select("*").eq("user_id", uid).execute()
-        baru = {row["bulan_key"]: row["nominal"] for row in (res.data or [])}
-        st.session_state.anggaran_terkunci = baru
+        r = supabase.table("budgets").select("*").eq("user_id", uid).execute()
+        st.session_state.anggaran_terkunci = {row["bulan_key"]:row["nominal"] for row in (r.data or [])}
         st.session_state.muat_anggaran_sukses = True
-    except Exception as e:
-        st.error(f"Gagal memuat anggaran: {e}")
+    except Exception as e: st.error(f"Gagal muat anggaran: {e}")
 
-
-def simpan_anggaran_ke_cloud(uid: str, bulan_key: str, nominal: float) -> bool:
+def simpan_anggaran(uid, bk, nominal):
     try:
-        supabase.table("budgets").delete()\
-            .eq("user_id", uid).eq("bulan_key", bulan_key).execute()
-        supabase.table("budgets").insert({
-            "user_id": uid, "bulan_key": bulan_key, "nominal": nominal,
-            "updated_at": waktu_sekarang_wib().isoformat()
-        }).execute()
+        supabase.table("budgets").delete().eq("user_id",uid).eq("bulan_key",bk).execute()
+        supabase.table("budgets").insert({"user_id":uid,"bulan_key":bk,"nominal":nominal,"updated_at":wib().isoformat()}).execute()
         return True
     except Exception as e:
-        st.error(f"Gagal menyimpan anggaran: {e}")
-        return False
+        st.error(f"Gagal simpan anggaran: {e}"); return False
 
-
-# ============================================================
-# DB FUNCTIONS — TARGET TABUNGAN
-# ============================================================
-def muat_target_tabungan_dari_cloud(uid: str, paksa: bool = False) -> None:
-    if not paksa and st.session_state.muat_tabungan_sukses:
-        return
+def muat_tabungan(uid, paksa=False):
+    if not paksa and st.session_state.muat_tabungan_sukses: return
     try:
-        res = supabase.table("savings_goals").select("*").eq("user_id", uid).execute()
-        baru = {row["bulan_key"]: row["target_nominal"] for row in (res.data or [])}
-        st.session_state.target_tabungan = baru
+        r = supabase.table("savings_goals").select("*").eq("user_id", uid).execute()
+        st.session_state.target_tabungan = {row["bulan_key"]:row["target_nominal"] for row in (r.data or [])}
         st.session_state.muat_tabungan_sukses = True
-    except Exception as e:
-        st.error(f"Gagal memuat target tabungan: {e}")
+    except Exception as e: st.error(f"Gagal muat tabungan: {e}")
 
-
-def simpan_target_tabungan_ke_cloud(uid: str, bulan_key: str, target: float) -> bool:
+def simpan_tabungan(uid, bk, target):
     try:
-        supabase.table("savings_goals").delete()\
-            .eq("user_id", uid).eq("bulan_key", bulan_key).execute()
-        supabase.table("savings_goals").insert({
-            "user_id": uid, "bulan_key": bulan_key, "target_nominal": target,
-            "updated_at": waktu_sekarang_wib().isoformat()
+        supabase.table("savings_goals").delete().eq("user_id",uid).eq("bulan_key",bk).execute()
+        supabase.table("savings_goals").insert({"user_id":uid,"bulan_key":bk,"target_nominal":target,"updated_at":wib().isoformat()}).execute()
+        return True
+    except Exception as e:
+        st.error(f"Gagal simpan target: {e}"); return False
+
+# ============================================================
+# DB — BUDGET KATEGORI
+# ============================================================
+def muat_bk(uid, paksa=False):
+    if not paksa and st.session_state.muat_bk_sukses: return
+    try:
+        r = supabase.table("budget_kategori").select("*").eq("user_id", uid).execute()
+        baru = {}
+        for row in (r.data or []):
+            baru.setdefault(row["bulan_key"], {})[row["kategori"]] = row["nominal"]
+        st.session_state.budget_kategori = baru
+        st.session_state.muat_bk_sukses  = True
+    except Exception: st.session_state.muat_bk_sukses = True
+
+def simpan_bk(uid, bk, kat, nominal):
+    try:
+        supabase.table("budget_kategori").delete().eq("user_id",uid).eq("bulan_key",bk).eq("kategori",kat).execute()
+        if nominal > 0:
+            supabase.table("budget_kategori").insert({"user_id":uid,"bulan_key":bk,"kategori":kat,"nominal":nominal}).execute()
+        return True
+    except Exception as e:
+        st.error(f"Gagal simpan budget kategori: {e}"); return False
+
+# ============================================================
+# DB — WALLETS
+# ============================================================
+def muat_wallets(uid, paksa=False):
+    if not paksa and st.session_state.muat_wallets_sukses: return
+    try:
+        r = supabase.table("wallets").select("*").eq("user_id", uid).execute()
+        st.session_state.wallets = r.data or []
+        st.session_state.muat_wallets_sukses = True
+    except Exception: st.session_state.muat_wallets_sukses = True
+
+def simpan_wallet(uid, nama, tipe, saldo_awal, warna="#2E7D32"):
+    try:
+        supabase.table("wallets").insert({
+            "user_id":uid,"nama":nama,"tipe":tipe,
+            "saldo_awal":saldo_awal,"warna":warna
         }).execute()
         return True
     except Exception as e:
-        st.error(f"Gagal menyimpan target tabungan: {e}")
-        return False
+        st.error(f"Gagal simpan wallet: {e}"); return False
 
+def hapus_wallet(uid, wid):
+    try:
+        supabase.table("wallets").delete().eq("id",wid).eq("user_id",uid).execute()
+        return True
+    except Exception as e:
+        st.error(f"Gagal hapus wallet: {e}"); return False
 
 # ============================================================
-# DB FUNCTIONS — TRANSAKSI
+# DB — TRANSAKSI
 # ============================================================
 @st.cache_data(ttl=5)
-def ambil_data_transaksi(user_id: str):
+def ambil_transaksi(uid):
     try:
-        res = supabase.table("transaksi").select("*").eq("user_id", user_id)\
-            .order("waktu_transaksi", desc=False).execute()
-        return res.data or []
+        r = supabase.table("transaksi").select("*").eq("user_id",uid).order("waktu_transaksi",desc=False).execute()
+        return r.data or []
     except Exception as e:
-        st.error(f"Gagal mengambil transaksi: {e}")
-        return []
+        st.error(f"Gagal ambil transaksi: {e}"); return []
 
-
-# ============================================================
-# DB FUNCTIONS — PEMASUKAN
-# ============================================================
 @st.cache_data(ttl=5)
-def ambil_data_pemasukan(user_id: str):
+def ambil_pemasukan(uid):
     try:
-        res = supabase.table("pemasukan").select("*").eq("user_id", user_id)\
-            .order("waktu_pemasukan", desc=False).execute()
-        return res.data or []
+        r = supabase.table("pemasukan").select("*").eq("user_id",uid).order("waktu_pemasukan",desc=False).execute()
+        return r.data or []
     except Exception as e:
-        st.error(f"Gagal mengambil pemasukan: {e}")
+        st.error(f"Gagal ambil pemasukan: {e}"); return []
+
+@st.cache_data(ttl=5)
+def ambil_hutang(uid):
+    try:
+        r = supabase.table("hutang_piutang").select("*").eq("user_id",uid).order("tanggal",desc=False).execute()
+        return r.data or []
+    except Exception as e:
         return []
 
-
-# ============================================================
-# DB FUNCTIONS — RECURRING TEMPLATES
-# ============================================================
 @st.cache_data(ttl=30)
-def ambil_recurring(user_id: str):
+def ambil_recurring(uid):
     try:
-        res = supabase.table("recurring_templates").select("*")\
-            .eq("user_id", user_id).execute()
-        return res.data or []
-    except Exception:
-        return []
-
+        r = supabase.table("recurring_templates").select("*").eq("user_id",uid).execute()
+        return r.data or []
+    except Exception: return []
 
 # ============================================================
 # FINANCIAL HEALTH SCORE
 # ============================================================
-def hitung_health_score(
-    total_pengeluaran: float,
-    budget_evaluasi: float,
-    target_evaluasi: float,
-    sukarela: float,
-    df_view: pd.DataFrame,
-    df_all: pd.DataFrame,
-) -> tuple:
-    """
-    Hitung skor kesehatan keuangan 0–100.
-    Return: (skor_int, detail_dict)
-    """
-    skor   = 0
-    detail = {}
-
-    # 1. Rasio Tabungan (40 poin)
-    if budget_evaluasi > 0 and target_evaluasi > 0:
-        batas = max(0, budget_evaluasi - target_evaluasi)
-        if total_pengeluaran <= batas:
-            s_tab = 40
-        else:
-            kelebihan_ratio = (total_pengeluaran - batas) / budget_evaluasi
-            s_tab = max(0, 40 - int(kelebihan_ratio * 80))
-    elif budget_evaluasi > 0:
-        ratio = total_pengeluaran / budget_evaluasi
-        s_tab = max(0, int((1 - ratio) * 40))
-    else:
-        s_tab = 20
-    skor += s_tab
-    detail["Rasio Tabungan"] = s_tab
-
-    # 2. Konsistensi Pencatatan (20 poin)
+def health_score(total_pglr, budget, target, sukarela, df_view, df_all):
+    s, d = 0, {}
+    # Rasio Tabungan (40)
+    if budget > 0 and target > 0:
+        batas = max(0, budget-target)
+        s1 = 40 if total_pglr<=batas else max(0, 40-int(((total_pglr-batas)/budget)*80))
+    elif budget > 0:
+        s1 = max(0, int((1-total_pglr/budget)*40))
+    else: s1 = 20
+    s+=s1; d["Rasio Tabungan"]=s1
+    # Konsistensi (20)
     if not df_view.empty and "waktu_transaksi" in df_view.columns:
-        hari_unik = df_view["waktu_transaksi"].dt.date.nunique()
-        konsistensi = min(1.0, hari_unik / 15)
-        s_kons = int(konsistensi * 20)
-    else:
-        s_kons = 0
-    skor += s_kons
-    detail["Konsistensi Catat"] = s_kons
-
-    # 3. Porsi Sukarela Terkendali (20 poin)
-    if budget_evaluasi > 0 and not df_view.empty:
-        ratio_suka = sukarela / budget_evaluasi
-        if ratio_suka <= 0.30:
-            s_suka = 20
-        elif ratio_suka <= 0.50:
-            s_suka = 12
-        else:
-            s_suka = max(0, int((1 - ratio_suka) * 20))
-    else:
-        s_suka = 10
-    skor += s_suka
-    detail["Porsi Sukarela"] = s_suka
-
-    # 4. Tren Membaik (20 poin)
-    s_tren = 10
-    if (
-        not df_all.empty
-        and not df_view.empty
-        and "bulan" in df_view.columns
-        and "tahun" in df_view.columns
-    ):
+        s2 = int(min(1.0, df_view["waktu_transaksi"].dt.date.nunique()/15)*20)
+    else: s2=0
+    s+=s2; d["Konsistensi Catat"]=s2
+    # Porsi Sukarela (20)
+    if budget > 0 and not df_view.empty:
+        r = sukarela/budget
+        s3 = 20 if r<=0.3 else (12 if r<=0.5 else max(0,int((1-r)*20)))
+    else: s3=10
+    s+=s3; d["Porsi Sukarela"]=s3
+    # Tren (20)
+    s4=10
+    if not df_all.empty and not df_view.empty and "bulan" in df_view.columns:
         try:
-            cur_bln = df_view["bulan"].iloc[0]
-            cur_thn = int(df_view["tahun"].iloc[0])
-            df_prev = df_all[
-                ~((df_all["bulan"] == cur_bln) & (df_all["tahun"] == cur_thn))
-            ]
-            if not df_prev.empty:
-                rata_lalu = df_prev.groupby(["tahun", "bulan"])["nominal"].sum().mean()
-                if total_pengeluaran < rata_lalu:
-                    s_tren = 20
-                else:
-                    ratio_naik = (total_pengeluaran - rata_lalu) / max(rata_lalu, 1)
-                    s_tren = max(0, int((1 - ratio_naik) * 20))
-        except Exception:
-            pass
-    skor += s_tren
-    detail["Tren Pengeluaran"] = s_tren
+            cb,ct = df_view["bulan"].iloc[0], int(df_view["tahun"].iloc[0])
+            dp = df_all[~((df_all["bulan"]==cb)&(df_all["tahun"]==ct))]
+            if not dp.empty:
+                rata = dp.groupby(["tahun","bulan"])["nominal"].sum().mean()
+                s4 = 20 if total_pglr<rata else max(0,int((1-(total_pglr-rata)/max(rata,1))*20))
+        except Exception: pass
+    s+=s4; d["Tren Pengeluaran"]=s4
+    return min(100,s), d
 
-    return min(100, skor), detail
-
-
-def label_health_score(skor: int) -> tuple:
-    """Return (label, warna_hex, bg_hex)."""
-    if skor >= 80:
-        return "💚 Excellent",      "#2E7D32", "#E8F5E9"
-    elif skor >= 60:
-        return "💛 Sehat",          "#F57F17", "#FFFDE7"
-    elif skor >= 40:
-        return "🟠 Perlu Perhatian","#E65100", "#FFF3E0"
-    else:
-        return "🔴 Kritis",         "#B71C1C", "#FFEBEE"
-
+def label_hs(s):
+    if s>=80: return "💚 Excellent","#2E7D32","#E8F5E9"
+    elif s>=60: return "💛 Sehat","#F57F17","#FFFDE7"
+    elif s>=40: return "🟠 Perlu Perhatian","#E65100","#FFF3E0"
+    else: return "🔴 Kritis","#B71C1C","#FFEBEE"
 
 # ============================================================
-# GAMIFIKASI — BADGES
+# GAMIFIKASI
 # ============================================================
-def cek_badges(df_all: pd.DataFrame, budget_dict: dict, target_dict: dict) -> list:
-    """Return list of (icon, nama, deskripsi)."""
+def cek_badges(df_all, budget_dict, target_dict):
     badges = []
-    if df_all.empty:
-        return badges
-
-    # Badge 1: Pencatat Setia — streak ≥ 7 hari
-    tanggal_unik = sorted(df_all["waktu_transaksi"].dt.date.unique())
-    streak = max_streak = 1
-    for i in range(1, len(tanggal_unik)):
-        if (tanggal_unik[i] - tanggal_unik[i - 1]).days == 1:
-            streak += 1
-            max_streak = max(max_streak, streak)
-        else:
-            streak = 1
-    if max_streak >= 7:
-        badges.append(("🗓️", "Pencatat Setia", f"Streak {max_streak} hari berturut-turut"))
-
-    # Badge 2: Penabung Konsisten — 2+ bulan di bawah batas belanja
-    bulan_hemat = 0
-    for key, budget in budget_dict.items():
-        target = target_dict.get(key, 0)
-        batas  = max(0, budget - target)
+    if df_all.empty: return badges
+    tgl = sorted(df_all["waktu_transaksi"].dt.date.unique())
+    streak=mx=1
+    for i in range(1,len(tgl)):
+        if (tgl[i]-tgl[i-1]).days==1: streak+=1; mx=max(mx,streak)
+        else: streak=1
+    if mx>=7: badges.append(("🗓️","Pencatat Setia",f"Streak {mx} hari berturut-turut"))
+    bh=0
+    for k,bud in budget_dict.items():
+        tgt=target_dict.get(k,0); bts=max(0,bud-tgt)
         try:
-            parts  = key.rsplit("_", 1)
-            bln_k  = parts[0]
-            thn_k  = int(parts[1])
-            df_b   = df_all[(df_all["bulan"] == bln_k) & (df_all["tahun"] == thn_k)]
-            if not df_b.empty and df_b["nominal"].sum() <= batas:
-                bulan_hemat += 1
-        except Exception:
-            pass
-    if bulan_hemat >= 2:
-        badges.append(("🏆", "Penabung Konsisten", f"{bulan_hemat} bulan di bawah batas belanja"))
-
-    # Badge 3: Pengelola Lengkap — 5+ kategori dalam 1 bulan
-    if "bulan" in df_all.columns and not df_all.empty:
-        bln_terakhir = df_all.iloc[-1]["bulan"]
-        n_kat = df_all[df_all["bulan"] == bln_terakhir]["kategori"].nunique()
-        if n_kat >= 5:
-            badges.append(("🌈", "Pengelola Lengkap", f"Mencatat {n_kat} kategori berbeda"))
-
-    # Badge 4: Big Saver — target tabungan ≥ 20% anggaran & tercapai
-    for key, budget in budget_dict.items():
-        target = target_dict.get(key, 0)
-        if budget > 0 and target / budget >= 0.20:
+            bl,th=k.rsplit("_",1)
+            db=df_all[(df_all["bulan"]==bl)&(df_all["tahun"]==int(th))]
+            if not db.empty and db["nominal"].sum()<=bts: bh+=1
+        except Exception: pass
+    if bh>=2: badges.append(("🏆","Penabung Konsisten",f"{bh} bulan di bawah batas"))
+    if "bulan" in df_all.columns:
+        bl_t=df_all.iloc[-1]["bulan"]
+        nk=df_all[df_all["bulan"]==bl_t]["kategori"].nunique()
+        if nk>=5: badges.append(("🌈","Pengelola Lengkap",f"{nk} kategori berbeda"))
+    for k,bud in budget_dict.items():
+        tgt=target_dict.get(k,0)
+        if bud>0 and tgt/bud>=0.2:
             try:
-                bln_k = key.rsplit("_", 1)[0]
-                thn_k = int(key.rsplit("_", 1)[1])
-                df_b  = df_all[(df_all["bulan"] == bln_k) & (df_all["tahun"] == thn_k)]
-                if not df_b.empty and df_b["nominal"].sum() <= (budget - target):
-                    badges.append(("💎", "Big Saver", f"Target tabungan ≥20% di {bln_k}"))
-                    break
-            except Exception:
-                pass
-
+                bl,th=k.rsplit("_",1)
+                db=df_all[(df_all["bulan"]==bl)&(df_all["tahun"]==int(th))]
+                if not db.empty and db["nominal"].sum()<=(bud-tgt):
+                    badges.append(("💎","Big Saver",f"Target ≥20% di {bl}")); break
+            except Exception: pass
     return badges
-
 
 # ============================================================
 # PDF GENERATOR
 # ============================================================
-def buat_laporan_pdf(
-    email: str,
-    pilihan_bulan: str,
-    pilihan_tahun: int,
-    df_view: pd.DataFrame,
-    df_pemasukan_view: pd.DataFrame,
-    budget_evaluasi: float,
-    target_evaluasi: float,
-    total_pengeluaran: float,
-    total_pemasukan: float,
-    health_score: int,
-    label_score: str,
-) -> bytes | None:
-    if not PDF_AVAILABLE:
-        return None
-
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-
-    # Header banner
-    pdf.set_fill_color(46, 125, 50)
-    pdf.rect(0, 0, 210, 38, "F")
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Helvetica", "B", 18)
-    pdf.set_xy(10, 8)
-    pdf.cell(0, 10, "DanaPintar AI  --  Laporan Keuangan", ln=True)
-    pdf.set_font("Helvetica", "", 11)
-    pdf.set_xy(10, 21)
-    pdf.cell(0, 7, f"Periode: {pilihan_bulan} {pilihan_tahun}   |   Akun: {email}", ln=True)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_y(48)
-
-    # Ringkasan
-    pdf.set_font("Helvetica", "B", 13)
-    pdf.cell(0, 8, "Ringkasan Keuangan", ln=True)
-    pdf.set_font("Helvetica", "", 11)
-    items_ringkasan = [
-        ("Anggaran",           format_rupiah(budget_evaluasi)),
-        ("Total Pemasukan",    format_rupiah(total_pemasukan)),
-        ("Total Pengeluaran",  format_rupiah(total_pengeluaran)),
-        ("Target Tabungan",    format_rupiah(target_evaluasi)),
-        ("Sisa Anggaran",      format_rupiah(budget_evaluasi - total_pengeluaran)),
-        ("Net Cash Flow",      format_rupiah(total_pemasukan - total_pengeluaran)),
-        ("Health Score",       f"{health_score}/100  ({label_score.replace(chr(0x1F49A),'').replace(chr(0x1F49B),'').strip()})"),
-    ]
-    for lbl, val in items_ringkasan:
-        pdf.cell(75, 7, lbl + ":", border=0)
-        pdf.cell(0, 7, val, ln=True)
+def buat_pdf(email,bln,thn,df_v,df_pv,budget,target,tot_pglr,tot_msuk,hs,ls):
+    if not PDF_AVAILABLE: return None
+    pdf=FPDF(); pdf.add_page(); pdf.set_auto_page_break(auto=True,margin=15)
+    pdf.set_fill_color(46,125,50); pdf.rect(0,0,210,38,"F")
+    pdf.set_text_color(255,255,255); pdf.set_font("Helvetica","B",18)
+    pdf.set_xy(10,8); pdf.cell(0,10,"DanaPintar AI  --  Laporan Keuangan",ln=True)
+    pdf.set_font("Helvetica","",11); pdf.set_xy(10,21)
+    pdf.cell(0,7,f"Periode: {bln} {thn}   |   Akun: {email}",ln=True)
+    pdf.set_text_color(0,0,0); pdf.set_y(48)
+    pdf.set_font("Helvetica","B",13); pdf.cell(0,8,"Ringkasan Keuangan",ln=True)
+    pdf.set_font("Helvetica","",11)
+    for lbl,val in [("Anggaran",rp(budget)),("Pemasukan",rp(tot_msuk)),
+                     ("Pengeluaran",rp(tot_pglr)),("Target Tabungan",rp(target)),
+                     ("Sisa Anggaran",rp(budget-tot_pglr)),("Net Cash Flow",rp(tot_msuk-tot_pglr)),
+                     ("Health Score",f"{hs}/100")]:
+        pdf.cell(75,7,lbl+":",border=0); pdf.cell(0,7,val,ln=True)
     pdf.ln(4)
-
-    # Tabel pengeluaran
-    if not df_view.empty:
-        pdf.set_font("Helvetica", "B", 13)
-        pdf.cell(0, 8, "Detail Pengeluaran", ln=True)
-        cols_h   = ["Tanggal", "Deskripsi", "Kategori", "Sifat", "Nominal (Rp)"]
-        cols_w   = [28, 60, 35, 22, 35]
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.set_fill_color(220, 240, 220)
-        for h, w in zip(cols_h, cols_w):
-            pdf.cell(w, 7, h, border=1, fill=True)
+    if not df_v.empty:
+        pdf.set_font("Helvetica","B",13); pdf.cell(0,8,"Detail Pengeluaran",ln=True)
+        cw=[28,60,35,22,35]
+        pdf.set_font("Helvetica","B",9); pdf.set_fill_color(220,240,220)
+        for h,w in zip(["Tanggal","Deskripsi","Kategori","Sifat","Nominal (Rp)"],cw):
+            pdf.cell(w,7,h,border=1,fill=True)
         pdf.ln()
-        pdf.set_font("Helvetica", "", 8)
-        for _, row in df_view.iterrows():
-            vals = [
-                f"{int(row.get('tanggal', 0))} {str(row.get('bulan',''))[:3]}",
-                str(row.get("catatan", ""))[:30],
-                str(row.get("kategori", ""))[:20],
-                str(row.get("sifat", "")),
-                f"{row['nominal']:,.0f}",
-            ]
-            for v, w in zip(vals, cols_w):
-                pdf.cell(w, 6, v, border=1)
+        pdf.set_font("Helvetica","",8)
+        for _,row in df_v.iterrows():
+            for v,w in zip([f"{int(row.get('tanggal',0))} {str(row.get('bulan',''))[:3]}",
+                            str(row.get("catatan",""))[:30],str(row.get("kategori",""))[:20],
+                            str(row.get("sifat","")),f"{row['nominal']:,.0f}"],cw):
+                pdf.cell(w,6,v,border=1)
             pdf.ln()
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.set_fill_color(220, 240, 220)
-        pdf.cell(sum(cols_w[:-1]), 7, "TOTAL PENGELUARAN", border=1, fill=True)
-        pdf.cell(cols_w[-1], 7, f"{total_pengeluaran:,.0f}", border=1, fill=True)
-        pdf.ln(8)
-
-        # Per kategori
-        pdf.set_font("Helvetica", "B", 13)
-        pdf.cell(0, 8, "Pengeluaran per Kategori", ln=True)
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.set_fill_color(220, 240, 220)
-        for h, w in zip(["Kategori", "Total (Rp)", "% Anggaran"], [80, 45, 40]):
-            pdf.cell(w, 7, h, border=1, fill=True)
-        pdf.ln()
-        pdf.set_font("Helvetica", "", 9)
-        per_kat = df_view.groupby("kategori")["nominal"].sum().sort_values(ascending=False)
-        for kat, tot in per_kat.items():
-            pct = (tot / budget_evaluasi * 100) if budget_evaluasi > 0 else 0
-            for v, w in zip([str(kat), f"{tot:,.0f}", f"{pct:.1f}%"], [80, 45, 40]):
-                pdf.cell(w, 6, v, border=1)
-            pdf.ln()
-        pdf.ln(6)
-
-    # Tabel pemasukan
-    if not df_pemasukan_view.empty:
-        pdf.set_font("Helvetica", "B", 13)
-        pdf.cell(0, 8, "Detail Pemasukan", ln=True)
-        cols_ph = ["Tanggal", "Sumber", "Kategori", "Nominal (Rp)"]
-        cols_pw = [28, 70, 40, 42]
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.set_fill_color(220, 240, 220)
-        for h, w in zip(cols_ph, cols_pw):
-            pdf.cell(w, 7, h, border=1, fill=True)
-        pdf.ln()
-        pdf.set_font("Helvetica", "", 8)
-        for _, row in df_pemasukan_view.iterrows():
-            tgl_p = f"{int(row.get('tanggal', 0))} {str(row.get('bulan',''))[:3]}" \
-                    if 'tanggal' in row else "-"
-            vals = [
-                tgl_p,
-                str(row.get("sumber", ""))[:35],
-                str(row.get("kategori", ""))[:20],
-                f"{row['nominal']:,.0f}",
-            ]
-            for v, w in zip(vals, cols_pw):
-                pdf.cell(w, 6, v, border=1)
-            pdf.ln()
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.set_fill_color(220, 240, 220)
-        pdf.cell(sum(cols_pw[:-1]), 7, "TOTAL PEMASUKAN", border=1, fill=True)
-        pdf.cell(cols_pw[-1], 7, f"{total_pemasukan:,.0f}", border=1, fill=True)
-        pdf.ln(8)
-
-    # Footer
-    pdf.set_font("Helvetica", "I", 8)
-    pdf.set_text_color(120, 120, 120)
-    ts = waktu_sekarang_wib().strftime("%d %B %Y %H:%M")
-    pdf.cell(0, 5, f"Dibuat oleh DanaPintar AI pada {ts} WIB", align="C", ln=True)
-    pdf.cell(0, 5, "Dibangun dengan cinta oleh Hendrawan Lotanto  --  (c) 2026 DanaPintar AI",
-             align="C")
-
+        pdf.set_font("Helvetica","B",9); pdf.set_fill_color(220,240,220)
+        pdf.cell(sum(cw[:-1]),7,"TOTAL",border=1,fill=True)
+        pdf.cell(cw[-1],7,f"{tot_pglr:,.0f}",border=1,fill=True); pdf.ln(8)
+    pdf.set_font("Helvetica","I",8); pdf.set_text_color(120,120,120)
+    pdf.cell(0,5,f"Dibuat {wib().strftime('%d %B %Y %H:%M')} WIB",align="C",ln=True)
+    pdf.cell(0,5,"(c) 2026 DanaPintar AI  --  Hendrawan Lotanto",align="C")
     return bytes(pdf.output())
 
+# ============================================================
+# ONBOARDING WIZARD
+# ============================================================
+def tampilkan_onboarding(uid, email):
+    st.markdown("""
+    <style>
+    .ob-card {
+        background: linear-gradient(135deg,#1B5E20,#2E7D32);
+        border-radius:20px; padding:2rem; color:white;
+        text-align:center; margin-bottom:1.5rem;
+        box-shadow:0 8px 32px rgba(46,125,50,0.3);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    step = st.session_state.onboarding_step
+    total_steps = 4
+
+    st.markdown(f"""
+    <div class="ob-card">
+        <div style="font-size:3rem">🎉</div>
+        <h2 style="color:white;margin:0.5rem 0">Selamat Datang di DanaPintar AI!</h2>
+        <p style="opacity:0.85">Halo, <strong>{email.split('@')[0].title()}</strong>! 
+        Yuk setup akun keuanganmu dalam {total_steps} langkah mudah.</p>
+        <div style="background:rgba(255,255,255,0.2);border-radius:10px;height:8px;margin-top:1rem;">
+            <div style="background:white;width:{int((step/total_steps)*100)}%;height:8px;border-radius:10px;transition:width 0.3s;"></div>
+        </div>
+        <p style="font-size:0.85rem;opacity:0.7;margin-top:0.5rem">Langkah {step+1} dari {total_steps}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if step == 0:
+        st.markdown("### 👤 Langkah 1 — Kenalkan Dirimu")
+        with st.form("ob_step1"):
+            ob_nama = st.text_input("Nama Lengkapmu:", placeholder="Contoh: Hendrawan Lotanto")
+            ob_lokasi = st.text_input("Kota tinggal:", placeholder="Contoh: Jakarta")
+            ob_pekerjaan = st.text_input("Pekerjaan:", placeholder="Contoh: Karyawan Swasta")
+            if st.form_submit_button("Lanjut ➡️", use_container_width=True):
+                if ob_nama.strip():
+                    simpan_profil(uid, {"nama":ob_nama.strip(),"lokasi":ob_lokasi.strip(),"pekerjaan":ob_pekerjaan.strip()})
+                    st.session_state.profil.update({"nama":ob_nama.strip(),"lokasi":ob_lokasi.strip()})
+                    st.session_state.onboarding_step = 1
+                    st.rerun()
+                else:
+                    st.error("Nama tidak boleh kosong.")
+
+    elif step == 1:
+        st.markdown("### 💰 Langkah 2 — Set Anggaran Bulan Ini")
+        _now = wib()
+        _bln = KAMUS_BULAN[_now.month]
+        _thn = _now.year
+        with st.form("ob_step2"):
+            ob_budget = st.number_input(
+                f"Berapa anggaran belanjamu bulan {_bln} {_thn}? (Rp)",
+                min_value=ANGGARAN_MIN, value=ANGGARAN_DEFAULT, step=100_000
+            )
+            st.caption("💡 Ini adalah total uang yang boleh kamu belanjakan bulan ini.")
+            if st.form_submit_button("Lanjut ➡️", use_container_width=True):
+                _k = f"{_bln}_{_thn}"
+                if simpan_anggaran(uid, _k, ob_budget):
+                    st.session_state.anggaran_terkunci[_k] = ob_budget
+                    st.session_state.onboarding_step = 2
+                    st.rerun()
+
+    elif step == 2:
+        st.markdown("### 🎯 Langkah 3 — Target Tabungan")
+        _now = wib()
+        _bln = KAMUS_BULAN[_now.month]
+        _thn = _now.year
+        _k   = f"{_bln}_{_thn}"
+        _bud = st.session_state.anggaran_terkunci.get(_k, ANGGARAN_DEFAULT)
+        with st.form("ob_step3"):
+            ob_target = st.number_input(
+                f"Berapa target tabunganmu bulan {_bln}? (Rp)",
+                min_value=0, max_value=int(_bud), value=int(_bud*0.2), step=50_000
+            )
+            st.caption(f"💡 Disarankan minimal 20% dari anggaran (~{rp(_bud*0.2)})")
+            if st.form_submit_button("Lanjut ➡️", use_container_width=True):
+                if simpan_tabungan(uid, _k, ob_target):
+                    st.session_state.target_tabungan[_k] = ob_target
+                    st.session_state.onboarding_step = 3
+                    st.rerun()
+
+    elif step == 3:
+        st.markdown("### 👛 Langkah 4 — Tambah Wallet Pertama")
+        with st.form("ob_step4"):
+            ob_walet_nama = st.text_input("Nama wallet:", value="Dompet Utama")
+            ob_walet_tipe = st.selectbox("Tipe:", TIPE_WALLET)
+            ob_saldo      = st.number_input("Saldo awal (Rp):", min_value=0, value=0, step=50_000)
+            st.caption("💡 Bisa dilewati dan ditambah nanti.")
+            c1, c2 = st.columns(2)
+            skip = c1.form_submit_button("Lewati ⏭️", use_container_width=True)
+            ok   = c2.form_submit_button("Selesai 🎉", use_container_width=True)
+
+            if ok:
+                if ob_walet_nama.strip():
+                    simpan_wallet(uid, ob_walet_nama.strip(), ob_walet_tipe, ob_saldo)
+                    st.cache_data.clear()
+                st.session_state.onboarding_selesai = True
+                st.session_state.onboarding_step    = 0
+                st.rerun()
+            if skip:
+                st.session_state.onboarding_selesai = True
+                st.session_state.onboarding_step    = 0
+                st.rerun()
+
+    st.stop()
 
 # ============================================================
 # AUTH GATE
 # ============================================================
 if st.session_state.user_aktif is None:
-    tab_login, tab_daftar = st.tabs(["🔑 Masuk", "📝 Daftar"])
-
-    with tab_login:
-        email_in = st.text_input("Email", key="log_email")
-        pass_in  = st.text_input("Password", type="password", key="log_pass")
-        if st.button("Masuk 🚀"):
+    inject_css(False)
+    st.markdown("<h1 style='text-align:center;color:#2E7D32;'>📊 DanaPintar AI</h1>",
+                unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;color:#64748b;'>Sistem Keuangan Cerdas berbasis AI</p>",
+                unsafe_allow_html=True)
+    st.markdown("---")
+    tab_l, tab_d = st.tabs(["🔑 Masuk","📝 Daftar"])
+    with tab_l:
+        em = st.text_input("Email", key="log_em")
+        pw = st.text_input("Password", type="password", key="log_pw")
+        if st.button("Masuk 🚀", use_container_width=True):
             try:
-                resp = supabase.auth.sign_in_with_password(
-                    {"email": email_in, "password": pass_in}
-                )
-                st.session_state.user_aktif = resp.user
-                muat_anggaran_dari_cloud(resp.user.id, paksa=True)
-                muat_target_tabungan_dari_cloud(resp.user.id, paksa=True)
-                muat_profil_dari_cloud(resp.user.id, paksa=True)
+                r = supabase.auth.sign_in_with_password({"email":em,"password":pw})
+                st.session_state.user_aktif = r.user
+                muat_anggaran(r.user.id, True)
+                muat_tabungan(r.user.id, True)
+                muat_profil(r.user.id, True)
+                muat_wallets(r.user.id, True)
+                muat_bk(r.user.id, True)
                 st.session_state.toast_kondisi_ditampilkan = False
                 st.rerun()
             except Exception as e:
                 st.error(f"Login gagal: {e}")
-
-    with tab_daftar:
-        email_reg = st.text_input("Email Baru", key="reg_email")
-        pass_reg  = st.text_input("Password (min 6 karakter)", type="password", key="reg_pass")
-        if st.button("Daftar ✨"):
+    with tab_d:
+        em2 = st.text_input("Email Baru", key="reg_em")
+        pw2 = st.text_input("Password (min 6 karakter)", type="password", key="reg_pw")
+        if st.button("Daftar ✨", use_container_width=True):
             try:
-                supabase.auth.sign_up({"email": email_reg, "password": pass_reg})
+                supabase.auth.sign_up({"email":em2,"password":pw2})
                 st.success("Akun berhasil dibuat! Silakan masuk.")
             except Exception as e:
                 st.error(f"Pendaftaran gagal: {e}")
-
     st.stop()
 
+# ============================================================
+# INJECT CSS (setelah login, berdasarkan dark mode)
+# ============================================================
+inject_css(st.session_state.dark_mode)
+
+# ============================================================
+# HEADER
+# ============================================================
+_hc1, _hc2 = st.columns([4,1])
+with _hc1:
+    st.markdown(
+        "<h1 style='margin-bottom:0;'>📊 DanaPintar AI</h1>",
+        unsafe_allow_html=True
+    )
+    st.caption("Sistem Keuangan Cerdas · AI Chat · Target Tabungan · Multi-Wallet")
+with _hc2:
+    _dm_icon = "☀️" if st.session_state.dark_mode else "🌙"
+    _dm_lbl  = "Light" if st.session_state.dark_mode else "Dark"
+    if st.button(f"{_dm_icon} {_dm_lbl}", key="toggle_dark", use_container_width=True):
+        st.session_state.dark_mode = not st.session_state.dark_mode
+        st.rerun()
+
+st.markdown("---")
 
 # ============================================================
 # DASHBOARD UTAMA — persiapan
@@ -810,14 +817,13 @@ if st.session_state.user_aktif is None:
 uid        = st.session_state.user_aktif.id
 email_user = st.session_state.user_aktif.email
 
-if not st.session_state.muat_anggaran_sukses:
-    muat_anggaran_dari_cloud(uid, paksa=True)
-if not st.session_state.muat_tabungan_sukses:
-    muat_target_tabungan_dari_cloud(uid, paksa=True)
-if not st.session_state.muat_profil_sukses:
-    muat_profil_dari_cloud(uid, paksa=True)
+if not st.session_state.muat_anggaran_sukses:  muat_anggaran(uid, True)
+if not st.session_state.muat_tabungan_sukses:  muat_tabungan(uid, True)
+if not st.session_state.muat_profil_sukses:    muat_profil(uid, True)
+if not st.session_state.muat_wallets_sukses:   muat_wallets(uid, True)
+if not st.session_state.muat_bk_sukses:        muat_bk(uid, True)
 
-# Toast notifications
+# Toast
 if st.session_state.simpan_sukses:
     st.toast(st.session_state.pesan_toast, icon="✅")
     st.session_state.simpan_sukses = False
@@ -826,1215 +832,1198 @@ if st.session_state.hapus_sukses:
     st.session_state.hapus_sukses  = False
     st.session_state.pesan_toast   = ""
 
-
 # ============================================================
 # SIDEBAR
 # ============================================================
 with st.sidebar:
-
-    # ================================================================
-    # KARTU PROFIL PROFESIONAL
-    # ================================================================
-    _profil        = st.session_state.profil
-    _nama_tampil   = _profil.get("nama", "").strip() or email_user.split("@")[0].title()
-    _bio_tampil    = _profil.get("bio", "").strip() or "Belum ada bio."
-    _lokasi_tampil = _profil.get("lokasi", "").strip()
-    _foto_url      = _profil.get("foto_url", None)
-    _inisial       = inisial_dari_nama(_profil.get("nama", ""), email_user)
-    _joined        = st.session_state.user_aktif.created_at
+    # ---- Profil Card ----
+    _pr      = st.session_state.profil
+    _nama    = _pr.get("nama","").strip() or email_user.split("@")[0].title()
+    _bio     = _pr.get("bio","").strip() or "Belum ada bio."
+    _lokasi  = _pr.get("lokasi","").strip()
+    _foto    = _pr.get("foto_url", None)
+    _ini     = inisial(_pr.get("nama",""), email_user)
     try:
-        _joined_str = datetime.fromisoformat(
-            _joined.replace("Z", "+00:00")
+        _jn = datetime.fromisoformat(
+            st.session_state.user_aktif.created_at.replace("Z","+00:00")
         ).astimezone(TZ).strftime("%d %b %Y")
-    except Exception:
-        _joined_str = "-"
+    except Exception: _jn="-"
 
-    # ---- Avatar ----
-    if _foto_url:
-        _avatar_html = (
-            f'<img src="{_foto_url}" style="width:72px;height:72px;border-radius:50%;'
-            f'object-fit:cover;border:3px solid rgba(255,255,255,0.6);">' 
-        )
-    else:
-        _avatar_html = (
-            f'<div style="width:72px;height:72px;border-radius:50%;'
-            f'background:rgba(255,255,255,0.25);display:flex;align-items:center;'
-            f'justify-content:center;font-size:1.6rem;font-weight:700;color:white;'
-            f'border:3px solid rgba(255,255,255,0.5);">{_inisial}</div>'
-        )
-
-    # ---- Card HTML ----
-    _lokasi_html = (
-        f'<div style="font-size:0.78rem;opacity:0.8;margin-top:2px;">'
-        f'📍 {_lokasi_tampil}</div>'
-        if _lokasi_tampil else ""
+    _av_html = (
+        f'<img src="{_foto}" style="width:68px;height:68px;border-radius:50%;'
+        f'object-fit:cover;border:3px solid rgba(255,255,255,0.6);">'
+        if _foto else
+        f'<div style="width:68px;height:68px;border-radius:50%;background:rgba(255,255,255,0.25);'
+        f'display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;'
+        f'color:white;border:3px solid rgba(255,255,255,0.5);">{_ini}</div>'
     )
+    _lok_html = f'<div style="font-size:0.76rem;opacity:0.8;">📍 {_lokasi}</div>' if _lokasi else ""
+
     st.markdown(f"""
-    <style>
-    .pro-card {{
-        background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #388E3C 100%);
-        border-radius: 20px; padding: 1.2rem 1rem 1rem; margin-bottom: 0.6rem;
-        color: white; box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-        border: 1px solid rgba(255,255,255,0.1);
-    }}
-    .pro-card .nama {{
-        font-size: 1rem; font-weight: 700; margin-top: 0.5rem; letter-spacing: 0.3px;
-    }}
-    .pro-card .email-kecil {{
-        font-size: 0.72rem; opacity: 0.7; word-break: break-all; margin-top: 1px;
-    }}
-    .pro-card .bio {{
-        font-size: 0.8rem; opacity: 0.85; margin-top: 0.5rem;
-        font-style: italic; line-height: 1.4;
-        border-top: 1px solid rgba(255,255,255,0.15); padding-top: 0.5rem;
-    }}
-    .pro-card .meta {{
-        font-size: 0.72rem; opacity: 0.65; margin-top: 0.4rem;
-    }}
-    .badge-member {{
-        display:inline-block; background:rgba(255,255,255,0.2);
-        border-radius:20px; padding:2px 8px; font-size:0.7rem; font-weight:600;
-    }}
-    </style>
     <div class="pro-card">
-        <div style="display:flex;align-items:flex-start;gap:12px;">
-            {_avatar_html}
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+            {_av_html}
             <div style="flex:1;min-width:0;">
-                <div><span class="badge-member">✦ Member</span></div>
-                <div class="nama">{_nama_tampil}</div>
+                <span class="badge-member">✦ Member</span>
+                <div class="nama">{_nama}</div>
                 <div class="email-kecil">✉ {email_user}</div>
-                {_lokasi_html}
+                {_lok_html}
             </div>
         </div>
-        <div class="bio">{_bio_tampil}</div>
-        <div class="meta">🗓 Bergabung sejak {_joined_str}</div>
+        <div class="bio">{_bio}</div>
+        <div class="meta">🗓 Bergabung sejak {_jn}</div>
     </div>
     """, unsafe_allow_html=True)
 
-    # ---- Tombol aksi profil ----
-    _btn_col1, _btn_col2 = st.columns(2)
-    with _btn_col1:
-        if st.button(
-            "✏️ Edit Profil",
-            use_container_width=True,
-            key="btn_edit_profil"
-        ):
+    _bc1, _bc2 = st.columns(2)
+    with _bc1:
+        if st.button("✏️ Edit Profil", use_container_width=True, key="btn_ep"):
             st.session_state.edit_profil_mode = not st.session_state.edit_profil_mode
-
-    with _btn_col2:
+    with _bc2:
         if st.button("🚪 Logout", use_container_width=True, key="logout_btn"):
-            try:
-                supabase.auth.sign_out()
-            except Exception:
-                pass
-            for _k in ["user_aktif", "anggaran_terkunci", "target_tabungan",
-                       "muat_anggaran_sukses", "muat_tabungan_sukses",
-                       "toast_kondisi_ditampilkan", "chat_history",
-                       "profil", "muat_profil_sukses", "edit_profil_mode"]:
-                _default_val = _defaults.get(_k)
-                st.session_state[_k] = _default_val
+            try: supabase.auth.sign_out()
+            except Exception: pass
+            for _k,_v in _DEF.items():
+                st.session_state[_k] = _v
             st.rerun()
 
-    # ---- Panel Edit Profil ----
     if st.session_state.edit_profil_mode:
         with st.expander("✏️ Edit Profil", expanded=True):
             st.markdown("**📷 Foto Profil**")
-
-            # Tampilkan foto saat ini + aksi hapus
-            if _foto_url:
-                st.image(_foto_url, width=80)
-                if st.button("🗑️ Hapus Foto", key="hapus_foto"):
-                    if hapus_foto_profil(uid):
+            if _foto:
+                st.image(_foto, width=70)
+                if st.button("🗑️ Hapus Foto", key="hps_foto"):
+                    if hapus_foto(uid):
                         st.session_state.profil["foto_url"] = None
-                        st.success("Foto dihapus.")
-                        st.rerun()
-            else:
-                st.caption("Belum ada foto profil.")
-
-            _file_up = st.file_uploader(
-                "Upload foto baru (JPG/PNG/WEBP, maks 5MB)",
-                type=["jpg", "jpeg", "png", "webp"],
-                key="foto_upload"
-            )
-            if _file_up is not None:
-                if _file_up.size > 5 * 1024 * 1024:
-                    st.error("❌ Ukuran file melebihi 5MB.")
-                else:
-                    if st.button("☁️ Upload Foto", key="btn_upload_foto"):
-                        with st.spinner("Mengupload foto..."):
-                            _url_baru = upload_foto_profil(
-                                uid, _file_up.read(), _file_up.type
-                            )
-                            if _url_baru:
-                                st.session_state.profil["foto_url"] = _url_baru
-                                simpan_profil_ke_cloud(uid, {"foto_url": _url_baru})
-                                st.success("✅ Foto berhasil diupload!")
-                                st.rerun()
-
+                        st.success("Foto dihapus."); st.rerun()
+            _fu = st.file_uploader("Upload (JPG/PNG maks 2MB)", type=["jpg","jpeg","png","webp"])
+            if _fu:
+                if _fu.size > 2*1024*1024: st.error("❌ Maks 2MB")
+                elif st.button("☁️ Upload", key="btn_up_foto"):
+                    with st.spinner("Uploading..."):
+                        _url = upload_foto(uid, _fu.read(), _fu.type)
+                        if _url:
+                            st.session_state.profil["foto_url"] = _url
+                            simpan_profil(uid, {"foto_url":_url})
+                            st.success("✅ Foto diupload!"); st.rerun()
             st.markdown("---")
-            st.markdown("**👤 Informasi Pribadi**")
-
-            with st.form("form_edit_profil"):
-                _input_nama = st.text_input(
-                    "Nama Lengkap",
-                    value=_profil.get("nama", ""),
-                    placeholder="Contoh: Hendrawan Lotanto",
-                    max_chars=60
-                )
-                _input_bio = st.text_area(
-                    "Bio",
-                    value=_profil.get("bio", ""),
-                    placeholder="Ceritakan sedikit tentang dirimu...",
-                    max_chars=160,
-                    height=90
-                )
-                _input_lokasi = st.text_input(
-                    "Lokasi",
-                    value=_profil.get("lokasi", ""),
-                    placeholder="Contoh: Jakarta, Indonesia",
-                    max_chars=60
-                )
-                _input_pekerjaan = st.text_input(
-                    "Pekerjaan",
-                    value=_profil.get("pekerjaan", ""),
-                    placeholder="Contoh: Software Engineer",
-                    max_chars=60
-                )
-                _input_target_fin = st.text_input(
-                    "Target Finansial",
-                    value=_profil.get("target_finansial", ""),
-                    placeholder="Contoh: Dana darurat 6 bulan",
-                    max_chars=100
-                )
-
+            with st.form("form_profil"):
+                _in_nama = st.text_input("Nama", value=_pr.get("nama",""))
+                _in_bio  = st.text_area("Bio", value=_pr.get("bio",""), max_chars=160, height=80)
+                _in_lok  = st.text_input("Lokasi", value=_pr.get("lokasi",""))
+                _in_kerj = st.text_input("Pekerjaan", value=_pr.get("pekerjaan",""))
+                _in_tf   = st.text_input("Target Finansial", value=_pr.get("target_finansial",""))
                 st.markdown("**🔒 Ganti Password**")
-                _pw_baru  = st.text_input(
-                    "Password Baru (kosongkan jika tidak ingin ganti)",
-                    type="password", key="pw_baru"
-                )
-                _pw_konfirm = st.text_input(
-                    "Konfirmasi Password Baru",
-                    type="password", key="pw_konfirm"
-                )
-
-                _submit_profil = st.form_submit_button(
-                    "💾 Simpan Perubahan", use_container_width=True
-                )
-
-            if _submit_profil:
-                _data_profil = {
-                    "nama"            : _input_nama.strip(),
-                    "bio"             : _input_bio.strip(),
-                    "lokasi"          : _input_lokasi.strip(),
-                    "pekerjaan"       : _input_pekerjaan.strip(),
-                    "target_finansial": _input_target_fin.strip(),
-                    "foto_url"        : _profil.get("foto_url"),
-                }
-                if simpan_profil_ke_cloud(uid, _data_profil):
-                    # Ganti password jika diisi
-                    if _pw_baru:
-                        if _pw_baru != _pw_konfirm:
-                            st.error("❌ Password baru tidak cocok.")
-                        elif len(_pw_baru) < 6:
-                            st.error("❌ Password minimal 6 karakter.")
-                        else:
-                            try:
-                                supabase.auth.update_user({"password": _pw_baru})
-                                st.success("🔒 Password berhasil diubah.")
-                            except Exception as _pe:
-                                st.error(f"Gagal ubah password: {_pe}")
-                    # Update session state
-                    st.session_state.profil.update(_data_profil)
-                    st.session_state.edit_profil_mode = False
-                    st.success("✅ Profil berhasil disimpan!")
-                    st.rerun()
+                _pw1 = st.text_input("Password Baru (kosongkan jika tidak)", type="password")
+                _pw2 = st.text_input("Konfirmasi Password Baru", type="password")
+                if st.form_submit_button("💾 Simpan", use_container_width=True):
+                    _dp = {"nama":_in_nama.strip(),"bio":_in_bio.strip(),"lokasi":_in_lok.strip(),
+                           "pekerjaan":_in_kerj.strip(),"target_finansial":_in_tf.strip(),
+                           "foto_url":_pr.get("foto_url")}
+                    if simpan_profil(uid, _dp):
+                        if _pw1:
+                            if _pw1!=_pw2: st.error("Password tidak cocok.")
+                            elif len(_pw1)<6: st.error("Min 6 karakter.")
+                            else:
+                                try:
+                                    supabase.auth.update_user({"password":_pw1})
+                                    st.success("🔒 Password diubah.")
+                                except Exception as _pe: st.error(f"Gagal: {_pe}")
+                        st.session_state.profil.update(_dp)
+                        st.session_state.edit_profil_mode = False
+                        st.success("✅ Profil disimpan!"); st.rerun()
 
     st.markdown("---")
 
-    # --- Anggaran ---
-    st.subheader("🔒 Kunci Anggaran Bulanan")
-    _now = waktu_sekarang_wib()
-    bln_budget = st.selectbox(
-        "Bulan Anggaran", list(KAMUS_BULAN.values()),
-        index=_now.month - 1, key="sb_bln_budget"
-    )
-    thn_budget = st.selectbox(
-        "Tahun Anggaran", [2025, 2026, 2027], index=1, key="sb_thn_budget"
-    )
-    key_budget       = f"{bln_budget}_{thn_budget}"
-    anggaran_terkunci = st.session_state.anggaran_terkunci.get(key_budget)
+    # ---- Anggaran ----
+    st.subheader("🔒 Kunci Anggaran")
+    _now = wib()
+    _bln_bud = st.selectbox("Bulan",list(KAMUS_BULAN.values()),index=_now.month-1,key="sb_bln_bud")
+    _thn_bud = st.selectbox("Tahun",[2025,2026,2027],index=1,key="sb_thn_bud")
+    _kb      = f"{_bln_bud}_{_thn_bud}"
+    _ang     = st.session_state.anggaran_terkunci.get(_kb)
 
-    if anggaran_terkunci is not None:
-        st.success(f"🔒 Anggaran {bln_budget} {thn_budget}\n**{format_rupiah(anggaran_terkunci)}**")
+    if _ang is not None:
+        st.success(f"🔒 {_bln_bud} {_thn_bud}: **{rp(_ang)}**")
         with st.expander("⚙️ Opsi Anggaran"):
-            st.write("Kunci aktif. Reset untuk mengubah nominal.")
-            if st.button("🔓 Reset Anggaran", key="reset_budget"):
-                with st.form("konfirmasi_reset"):
-                    konfirmasi = st.text_input("Ketik RESET untuk melanjutkan")
+            if st.button("🔓 Reset Anggaran", key="rst_bud"):
+                with st.form("frm_rst"):
+                    _k = st.text_input("Ketik RESET")
                     if st.form_submit_button("Ya, Reset"):
-                        if konfirmasi.strip().upper() == "RESET":
-                            st.session_state.anggaran_terkunci.pop(key_budget, None)
+                        if _k.strip().upper()=="RESET":
+                            st.session_state.anggaran_terkunci.pop(_kb,None)
                             try:
-                                supabase.table("budgets").delete()\
-                                    .eq("user_id", uid)\
-                                    .eq("bulan_key", key_budget).execute()
-                                st.success("✅ Anggaran direset!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Gagal reset: {e}")
-                        else:
-                            st.error("Ketik RESET dengan benar.")
+                                supabase.table("budgets").delete().eq("user_id",uid).eq("bulan_key",_kb).execute()
+                                st.success("✅ Reset!"); st.rerun()
+                            except Exception as e: st.error(f"Gagal: {e}")
+                        else: st.error("Ketik RESET dengan benar.")
     else:
-        input_budget = st.number_input(
-            f"Set Anggaran {bln_budget} (Rp):",
-            min_value=ANGGARAN_MIN, value=ANGGARAN_DEFAULT, step=100_000
-        )
-        if st.button(f"🔐 KUNCI Anggaran {bln_budget}", key="kunci_budget"):
-            st.session_state.anggaran_terkunci[key_budget] = input_budget
-            if simpan_anggaran_ke_cloud(uid, key_budget, input_budget):
-                st.success(f"✅ Anggaran {bln_budget} {thn_budget} terkunci!")
-                st.rerun()
-            else:
-                st.session_state.anggaran_terkunci.pop(key_budget, None)
+        _inp_bud = st.number_input(f"Set Anggaran {_bln_bud} (Rp):",
+                                    min_value=ANGGARAN_MIN,value=ANGGARAN_DEFAULT,step=100_000)
+        if st.button(f"🔐 KUNCI {_bln_bud}"):
+            st.session_state.anggaran_terkunci[_kb]=_inp_bud
+            if not simpan_anggaran(uid,_kb,_inp_bud):
+                st.session_state.anggaran_terkunci.pop(_kb,None)
+            else: st.rerun()
 
     st.markdown("---")
 
-    # --- Target Tabungan ---
+    # ---- Target Tabungan ----
     st.subheader("💰 Target Tabungan")
-    if anggaran_terkunci is not None:
-        target_skrg = st.session_state.target_tabungan.get(key_budget)
-        if target_skrg is not None:
-            st.success(f"🎯 Target {bln_budget}: **{format_rupiah(target_skrg)}**")
-            if st.button("🔄 Ubah Target", key="ubah_target"):
-                st.session_state.target_tabungan.pop(key_budget, None)
-                try:
-                    supabase.table("savings_goals").delete()\
-                        .eq("user_id", uid).eq("bulan_key", key_budget).execute()
-                except Exception:
-                    pass
+    if _ang is not None:
+        _tgt = st.session_state.target_tabungan.get(_kb)
+        if _tgt is not None:
+            st.success(f"🎯 {_bln_bud}: **{rp(_tgt)}**")
+            if st.button("🔄 Ubah Target", key="ubah_tgt"):
+                st.session_state.target_tabungan.pop(_kb,None)
+                try: supabase.table("savings_goals").delete().eq("user_id",uid).eq("bulan_key",_kb).execute()
+                except Exception: pass
                 st.rerun()
         else:
-            input_target = st.number_input(
-                f"Target Tabungan {bln_budget} (Rp):",
-                min_value=0, max_value=int(anggaran_terkunci),
-                value=0, step=50_000
-            )
-            if st.button("💾 Simpan Target", key="simpan_target"):
-                if input_target > anggaran_terkunci:
-                    st.error("Target tidak boleh melebihi anggaran.")
-                else:
-                    st.session_state.target_tabungan[key_budget] = input_target
-                    if simpan_target_tabungan_ke_cloud(uid, key_budget, input_target):
-                        st.success("✅ Target tabungan disimpan!")
-                        st.rerun()
-                    else:
-                        st.session_state.target_tabungan.pop(key_budget, None)
+            _inp_tgt = st.number_input(f"Target {_bln_bud} (Rp):",
+                                        min_value=0,max_value=int(_ang),value=0,step=50_000)
+            if st.button("💾 Simpan Target"):
+                st.session_state.target_tabungan[_kb]=_inp_tgt
+                if not simpan_tabungan(uid,_kb,_inp_tgt):
+                    st.session_state.target_tabungan.pop(_kb,None)
+                else: st.rerun()
     else:
         st.info("Kunci anggaran terlebih dahulu.")
 
     st.markdown("---")
 
-    # --- Form Catat Pengeluaran ---
-    st.subheader("✍️ Catat Pengeluaran")
-    with st.form("form_transaksi"):
-        in_catatan   = st.text_input("Nama Transaksi:", placeholder="Contoh: Beli Tissue")
-        in_nominal   = st.number_input("Nominal (Rp):", min_value=0, value=0, step=1_000)
-        in_kategori  = st.selectbox("Kategori:", KATEGORI_PENGELUARAN)
-        in_sifat     = st.radio("Sifat:", ["Wajib", "Sukarela"])
-        _now_form    = waktu_sekarang_wib()
-        in_tanggal   = st.date_input("Tanggal", value=_now_form.date(), format="DD/MM/YYYY")
-        _cj, _cm     = st.columns(2)
-        with _cj:
-            jam_inp = st.number_input(
-                "Jam", 0, 23, st.session_state.jam_input, 1, key="inp_jam"
-            )
-        with _cm:
-            mnt_inp = st.number_input(
-                "Menit", 0, 59, st.session_state.menit_input, 1, key="inp_mnt"
-            )
-        in_recurring = st.checkbox("Jadikan template berulang?")
-        in_freq      = None
-        if in_recurring:
-            in_freq = st.selectbox("Frekuensi:", FREKUENSI_BERULANG)
-        st.session_state.jam_input   = jam_inp
-        st.session_state.menit_input = mnt_inp
-        submitted_transaksi = st.form_submit_button("💾 Simpan Pengeluaran")
-
-    if submitted_transaksi:
-        _errors = []
-        if not in_catatan.strip():
-            _errors.append("Nama transaksi tidak boleh kosong.")
-        if in_nominal <= 0:
-            _errors.append("Nominal harus lebih dari 0.")
-        if _errors:
-            for _e in _errors:
-                st.error(_e)
-        else:
-            try:
-                _dt     = datetime(in_tanggal.year, in_tanggal.month, in_tanggal.day,
-                                   jam_inp, mnt_inp)
-                _dt_iso = TZ.localize(_dt).astimezone(pytz.UTC).isoformat()
-                _resp   = supabase.table("transaksi").insert({
-                    "user_id": uid, "catatan": in_catatan.strip(),
-                    "nominal": in_nominal, "kategori": in_kategori,
-                    "sifat": in_sifat, "waktu_transaksi": _dt_iso
-                }).execute()
-                if in_recurring and in_freq and _resp.data:
-                    supabase.table("recurring_templates").insert({
-                        "user_id": uid, "catatan": in_catatan.strip(),
-                        "nominal": in_nominal, "kategori": in_kategori,
-                        "sifat": in_sifat, "frekuensi": in_freq
-                    }).execute()
-                if _resp.data:
-                    st.cache_data.clear()
-                    st.session_state.simpan_sukses = True
-                    st.session_state.pesan_toast   = f"✅ '{in_catatan.strip()}' berhasil dicatat!"
-                    st.session_state.jam_input     = waktu_sekarang_wib().hour
-                    st.session_state.menit_input   = waktu_sekarang_wib().minute
-                    st.rerun()
-                else:
-                    st.error("Gagal menyimpan transaksi.")
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-    st.markdown("---")
-
-    # --- Form Catat Pemasukan ---
-    st.subheader("💵 Catat Pemasukan")
-    with st.form("form_pemasukan"):
-        in_sumber      = st.text_input("Sumber Pemasukan:", placeholder="Contoh: Gaji Bulanan")
-        in_nom_masuk   = st.number_input("Nominal (Rp):", min_value=0, value=0,
-                                          step=100_000, key="nom_masuk")
-        in_kat_masuk   = st.selectbox("Kategori:", KATEGORI_PEMASUKAN)
-        in_tgl_masuk   = st.date_input("Tanggal", value=waktu_sekarang_wib().date(),
-                                        format="DD/MM/YYYY", key="tgl_masuk")
-        submitted_pmskan = st.form_submit_button("💾 Simpan Pemasukan")
-
-    if submitted_pmskan:
-        if not in_sumber.strip():
-            st.error("Sumber pemasukan tidak boleh kosong.")
-        elif in_nom_masuk <= 0:
-            st.error("Nominal harus lebih dari 0.")
-        else:
-            try:
-                _dt_m   = datetime(in_tgl_masuk.year, in_tgl_masuk.month,
-                                   in_tgl_masuk.day, 12, 0)
-                _dt_m_i = TZ.localize(_dt_m).astimezone(pytz.UTC).isoformat()
-                _resp_m = supabase.table("pemasukan").insert({
-                    "user_id": uid, "sumber": in_sumber.strip(),
-                    "nominal": in_nom_masuk, "kategori": in_kat_masuk,
-                    "waktu_pemasukan": _dt_m_i
-                }).execute()
-                if _resp_m.data:
-                    st.cache_data.clear()
-                    st.session_state.simpan_sukses = True
-                    st.session_state.pesan_toast   = f"💵 '{in_sumber.strip()}' berhasil dicatat!"
-                    st.rerun()
-                else:
-                    st.error("Gagal menyimpan pemasukan.")
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-    st.markdown("---")
-
-    # --- Recurring Templates ---
-    st.subheader("🔄 Template Berulang")
-    data_recurring = ambil_recurring(uid)
-    if data_recurring:
-        with st.expander(f"📋 {len(data_recurring)} template aktif"):
-            for _rec in data_recurring:
-                _c1, _c2 = st.columns([4, 1])
-                with _c1:
-                    st.caption(
-                        f"**{_rec['catatan']}** — {format_rupiah(_rec['nominal'])} "
-                        f"({_rec.get('frekuensi','?')})"
+    # ---- Budget per Kategori ----
+    st.subheader("📂 Budget per Kategori")
+    if _ang is not None:
+        _bk_data = st.session_state.budget_kategori.get(_kb,{})
+        with st.expander(f"Set Budget Kategori {_bln_bud}"):
+            with st.form("frm_bk"):
+                _bk_inputs = {}
+                for _kat in KATEGORI_PENGELUARAN:
+                    _bk_inputs[_kat] = st.number_input(
+                        _kat, min_value=0,
+                        value=int(_bk_data.get(_kat,0)), step=50_000,
+                        key=f"bk_{_kat}"
                     )
-                with _c2:
-                    if st.button("❌", key=f"del_rec_{_rec['id']}"):
-                        supabase.table("recurring_templates").delete()\
-                            .eq("id", _rec["id"]).eq("user_id", uid).execute()
-                        st.cache_data.clear()
-                        st.rerun()
-
-        if st.button("⚡ Generate Transaksi Bulan Ini", key="gen_recurring"):
-            _skrg  = waktu_sekarang_wib()
-            _ok    = 0
-            for _rec in data_recurring:
-                try:
-                    _wt  = datetime(_skrg.year, _skrg.month, 1, 8, 0)
-                    _wti = TZ.localize(_wt).astimezone(pytz.UTC).isoformat()
-                    supabase.table("transaksi").insert({
-                        "user_id": uid, "catatan": _rec["catatan"],
-                        "nominal": _rec["nominal"], "kategori": _rec["kategori"],
-                        "sifat": _rec["sifat"], "waktu_transaksi": _wti
-                    }).execute()
-                    _ok += 1
-                except Exception:
-                    pass
-            if _ok:
-                st.cache_data.clear()
-                st.success(f"✅ {_ok} transaksi berulang digenerate!")
-                st.rerun()
+                if st.form_submit_button("💾 Simpan Budget Kategori", use_container_width=True):
+                    _ok = True
+                    for _k2,_v2 in _bk_inputs.items():
+                        if not simpan_bk(uid,_kb,_k2,_v2): _ok=False
+                    if _ok:
+                        st.session_state.budget_kategori[_kb] = {k:v for k,v in _bk_inputs.items() if v>0}
+                        st.session_state.muat_bk_sukses = False
+                        st.success("✅ Budget kategori disimpan!"); st.rerun()
     else:
-        st.info("Belum ada template. Centang 'berulang' saat mencatat transaksi.")
+        st.info("Kunci anggaran terlebih dahulu.")
 
+    st.markdown("---")
+
+    # ---- Form Catat Pengeluaran ----
+    st.subheader("✍️ Catat Pengeluaran")
+    _wallets_list = st.session_state.wallets
+    _wallet_opts  = ["— Tanpa Wallet —"] + [f"{w['tipe']} {w['nama']}" for w in _wallets_list]
+
+    with st.form("frm_tx"):
+        _in_cat   = st.text_input("Nama Transaksi:", placeholder="Contoh: Beli Tissue")
+        _in_nom   = st.number_input("Nominal (Rp):", min_value=0, value=0, step=1_000)
+        _in_kat   = st.selectbox("Kategori:", KATEGORI_PENGELUARAN)
+        _in_sft   = st.radio("Sifat:", ["Wajib","Sukarela"])
+        _in_wlt   = st.selectbox("Wallet:", _wallet_opts)
+        _in_tgl   = st.date_input("Tanggal", value=wib().date(), format="DD/MM/YYYY")
+        _cj,_cm   = st.columns(2)
+        with _cj: _jin = st.number_input("Jam",0,23,st.session_state.jam_input,1,key="inp_j")
+        with _cm: _min = st.number_input("Menit",0,59,st.session_state.menit_input,1,key="inp_m")
+        _in_rec   = st.checkbox("Jadikan template berulang?")
+        _in_freq  = st.selectbox("Frekuensi:",FREKUENSI_BERULANG) if _in_rec else None
+        st.session_state.jam_input   = _jin
+        st.session_state.menit_input = _min
+        _sub_tx   = st.form_submit_button("💾 Simpan Pengeluaran")
+
+    if _sub_tx:
+        _errs = []
+        if not _in_cat.strip(): _errs.append("Nama tidak boleh kosong.")
+        if _in_nom<=0: _errs.append("Nominal harus >0.")
+        for _e in _errs: st.error(_e)
+        if not _errs:
+            try:
+                _dt  = datetime(_in_tgl.year,_in_tgl.month,_in_tgl.day,_jin,_min)
+                _iso = TZ.localize(_dt).astimezone(pytz.UTC).isoformat()
+                _wid = None
+                if _in_wlt != "— Tanpa Wallet —":
+                    _idx = _wallet_opts.index(_in_wlt)-1
+                    if 0<=_idx<len(_wallets_list): _wid=_wallets_list[_idx]["id"]
+                _payload = {"user_id":uid,"catatan":_in_cat.strip(),"nominal":_in_nom,
+                            "kategori":_in_kat,"sifat":_in_sft,"waktu_transaksi":_iso}
+                if _wid: _payload["wallet_id"]=_wid
+                _r = supabase.table("transaksi").insert(_payload).execute()
+                if _in_rec and _in_freq and _r.data:
+                    supabase.table("recurring_templates").insert({
+                        "user_id":uid,"catatan":_in_cat.strip(),"nominal":_in_nom,
+                        "kategori":_in_kat,"sifat":_in_sft,"frekuensi":_in_freq
+                    }).execute()
+                if _r.data:
+                    st.cache_data.clear()
+                    st.session_state.simpan_sukses = True
+                    st.session_state.pesan_toast   = f"✅ '{_in_cat.strip()}' dicatat!"
+                    st.session_state.jam_input     = wib().hour
+                    st.session_state.menit_input   = wib().minute
+                    st.rerun()
+            except Exception as _e: st.error(f"Error: {_e}")
+
+    st.markdown("---")
+
+    # ---- Form Catat Pemasukan ----
+    st.subheader("💵 Catat Pemasukan")
+    with st.form("frm_pm"):
+        _in_smb = st.text_input("Sumber:", placeholder="Contoh: Gaji Bulanan")
+        _in_npm = st.number_input("Nominal (Rp):", min_value=0, value=0, step=100_000)
+        _in_kpm = st.selectbox("Kategori:", KATEGORI_PEMASUKAN)
+        _in_wpm = st.selectbox("Wallet:", _wallet_opts, key="wlt_pm")
+        _in_tpm = st.date_input("Tanggal", value=wib().date(), format="DD/MM/YYYY", key="tgl_pm")
+        _sub_pm = st.form_submit_button("💾 Simpan Pemasukan")
+
+    if _sub_pm:
+        if not _in_smb.strip(): st.error("Sumber tidak boleh kosong.")
+        elif _in_npm<=0: st.error("Nominal harus >0.")
+        else:
+            try:
+                _dtp = datetime(_in_tpm.year,_in_tpm.month,_in_tpm.day,12,0)
+                _iso_p = TZ.localize(_dtp).astimezone(pytz.UTC).isoformat()
+                _wid_p = None
+                if _in_wpm != "— Tanpa Wallet —":
+                    _idx_p = _wallet_opts.index(_in_wpm)-1
+                    if 0<=_idx_p<len(_wallets_list): _wid_p=_wallets_list[_idx_p]["id"]
+                _pay_p = {"user_id":uid,"sumber":_in_smb.strip(),"nominal":_in_npm,
+                          "kategori":_in_kpm,"waktu_pemasukan":_iso_p}
+                if _wid_p: _pay_p["wallet_id"]=_wid_p
+                _rp2 = supabase.table("pemasukan").insert(_pay_p).execute()
+                if _rp2.data:
+                    st.cache_data.clear()
+                    st.session_state.simpan_sukses = True
+                    st.session_state.pesan_toast   = f"💵 '{_in_smb.strip()}' dicatat!"
+                    st.rerun()
+            except Exception as _e: st.error(f"Error: {_e}")
+
+    st.markdown("---")
+
+    # ---- Recurring Templates ----
+    st.subheader("🔄 Template Berulang")
+    _recs = ambil_recurring(uid)
+    if _recs:
+        with st.expander(f"📋 {len(_recs)} template aktif"):
+            for _rc in _recs:
+                _rc1,_rc2 = st.columns([4,1])
+                with _rc1:
+                    st.caption(f"**{_rc['catatan']}** — {rp(_rc['nominal'])} ({_rc.get('frekuensi','?')})")
+                with _rc2:
+                    if st.button("❌", key=f"del_rc_{_rc['id']}"):
+                        supabase.table("recurring_templates").delete()\
+                            .eq("id",_rc["id"]).eq("user_id",uid).execute()
+                        st.cache_data.clear(); st.rerun()
+        if st.button("⚡ Generate Bulan Ini", key="gen_rc"):
+            _sk = wib()
+            _ok_rc = 0
+            for _rc in _recs:
+                try:
+                    _wt = TZ.localize(datetime(_sk.year,_sk.month,1,8,0)).astimezone(pytz.UTC).isoformat()
+                    supabase.table("transaksi").insert({
+                        "user_id":uid,"catatan":_rc["catatan"],"nominal":_rc["nominal"],
+                        "kategori":_rc["kategori"],"sifat":_rc["sifat"],"waktu_transaksi":_wt
+                    }).execute(); _ok_rc+=1
+                except Exception: pass
+            if _ok_rc: st.cache_data.clear(); st.success(f"✅ {_ok_rc} transaksi digenerate!"); st.rerun()
+    else:
+        st.info("Belum ada template berulang.")
 
 # ============================================================
-# LOAD DATA UTAMA
+# LOAD DATA
 # ============================================================
-data_mentah          = ambil_data_transaksi(uid)
-data_pemasukan_mentah = ambil_data_pemasukan(uid)
+_raw_tx = ambil_transaksi(uid)
+_raw_pm = ambil_pemasukan(uid)
 
-if not data_mentah and not data_pemasukan_mentah:
-    st.info("📭 Belum ada transaksi. Mulai catat di sidebar kiri.")
-    st.stop()
-
-# --- Proses Transaksi (Pengeluaran) ---
-if data_mentah:
-    df = pd.DataFrame(data_mentah)
+df = pd.DataFrame(_raw_tx) if _raw_tx else pd.DataFrame()
+if not df.empty:
     df["nominal"] = pd.to_numeric(df["nominal"], errors="coerce")
     df = df.dropna(subset=["nominal"])
-    _inv = df["nominal"].isna().sum()
-    if _inv:
-        st.warning(f"⚠️ {_inv} transaksi dengan nominal tidak valid diabaikan.")
-    try:
-        df = parse_df_waktu(df, "waktu_transaksi")
-    except Exception as e:
-        st.error(f"Gagal memproses data transaksi: {e}")
-        st.stop()
-else:
-    df = pd.DataFrame()
+    try: df = parse_waktu(df, "waktu_transaksi")
+    except Exception as e: st.error(f"Error data transaksi: {e}"); st.stop()
 
-# --- Proses Pemasukan ---
-if data_pemasukan_mentah:
-    df_pemasukan = pd.DataFrame(data_pemasukan_mentah)
-    df_pemasukan["nominal"] = pd.to_numeric(df_pemasukan["nominal"], errors="coerce")
-    df_pemasukan = df_pemasukan.dropna(subset=["nominal"])
-    try:
-        df_pemasukan = parse_df_waktu(df_pemasukan, "waktu_pemasukan")
-    except Exception as e:
-        st.error(f"Gagal memproses data pemasukan: {e}")
-        df_pemasukan = pd.DataFrame()
-else:
-    df_pemasukan = pd.DataFrame()
+df_pm = pd.DataFrame(_raw_pm) if _raw_pm else pd.DataFrame()
+if not df_pm.empty:
+    df_pm["nominal"] = pd.to_numeric(df_pm["nominal"], errors="coerce")
+    df_pm = df_pm.dropna(subset=["nominal"])
+    try: df_pm = parse_waktu(df_pm, "waktu_pemasukan")
+    except Exception: df_pm = pd.DataFrame()
 
+# ============================================================
+# ONBOARDING CHECK
+# ============================================================
+_is_new = (df.empty and not st.session_state.anggaran_terkunci
+           and not st.session_state.onboarding_selesai)
+if _is_new:
+    tampilkan_onboarding(uid, email_user)
+
+# ============================================================
+# IN-APP NOTIFIKASI CERDAS
+# ============================================================
+def tampilkan_notifikasi():
+    _notifs = []
+    _now = wib()
+    _kb_now = f"{KAMUS_BULAN[_now.month]}_{_now.year}"
+
+    # 1. Belum catat hari ini
+    if not df.empty:
+        _last = df["waktu_transaksi"].max().date()
+        _gap  = (_now.date()-_last).days
+        if _gap>=2:
+            _notifs.append(("🔔","warning",f"Kamu belum mencatat pengeluaran selama **{_gap} hari**. Jangan lupa catat!"))
+
+    # 2. Anggaran belum dikunci bulan ini
+    if _kb_now not in st.session_state.anggaran_terkunci:
+        _notifs.append(("💡","info",f"Anggaran bulan **{KAMUS_BULAN[_now.month]}** belum dikunci. Set di sidebar kiri."))
+
+    # 3. Target tabungan belum diset
+    if _kb_now in st.session_state.anggaran_terkunci and _kb_now not in st.session_state.target_tabungan:
+        _notifs.append(("🎯","info","Target tabungan bulan ini belum diset. Yuk tentukan targetmu!"))
+
+    # 4. 80%+ anggaran terpakai
+    _ang_now = st.session_state.anggaran_terkunci.get(_kb_now,0)
+    _tgt_now = st.session_state.target_tabungan.get(_kb_now,0)
+    _bts_now = max(0, _ang_now-_tgt_now)
+    if not df.empty and _bts_now>0:
+        _df_now = df[(df["bulan"]==KAMUS_BULAN[_now.month])&(df["tahun"]==_now.year)]
+        _tot_now = _df_now["nominal"].sum()
+        _pct = (_tot_now/_bts_now)*100
+        if _pct>=100:
+            _notifs.append(("🚨","error",f"**DARURAT!** Pengeluaran sudah **{_pct:.0f}%** dari batas. Target tabungan terancam!"))
+        elif _pct>=80:
+            _notifs.append(("⚠️","warning",f"Pengeluaran sudah **{_pct:.0f}%** dari batas belanja bulan ini."))
+
+    # 5. Hutang jatuh tempo dalam 3 hari
+    _hutang_data = ambil_hutang(uid)
+    for _h in _hutang_data:
+        if _h.get("status")=="belum_lunas" and _h.get("jatuh_tempo"):
+            try:
+                _jt = datetime.fromisoformat(_h["jatuh_tempo"].replace("Z","+00:00")).astimezone(TZ).date()
+                _sisa = (_jt - _now.date()).days
+                if 0<=_sisa<=3:
+                    _notifs.append(("💸","warning",
+                        f"{'Hutang' if _h['jenis']=='hutang' else 'Piutang'} ke **{_h['nama_pihak']}** "
+                        f"sebesar {rp(_h['nominal'])} jatuh tempo dalam **{_sisa} hari**!"))
+            except Exception: pass
+
+    for _ic,_tp,_msg in _notifs:
+        if _tp=="error": st.error(f"{_ic} {_msg}")
+        elif _tp=="warning": st.warning(f"{_ic} {_msg}")
+        else: st.info(f"{_ic} {_msg}")
+
+tampilkan_notifikasi()
 
 # ============================================================
 # FILTER PERIODE
 # ============================================================
 st.markdown("### 🗓️ Filter Periode")
-_c1, _c2 = st.columns(2)
-daftar_tahun = (
-    sorted(df["tahun"].unique().tolist())
-    if not df.empty
-    else [waktu_sekarang_wib().year]
-)
-_now_dash = waktu_sekarang_wib()
-pilihan_bulan = _c1.selectbox(
-    "Bulan", ["Semua Bulan"] + list(KAMUS_BULAN.values()),
-    index=_now_dash.month if _now_dash.month <= 12 else 0
-)
-pilihan_tahun = _c2.selectbox(
-    "Tahun", daftar_tahun,
-    index=len(daftar_tahun) - 1 if daftar_tahun else 0
-)
+_fc1,_fc2 = st.columns(2)
+_thn_list = sorted(df["tahun"].unique().tolist()) if not df.empty else [wib().year]
+_now_d = wib()
+_pil_bln = _fc1.selectbox("Bulan",["Semua Bulan"]+list(KAMUS_BULAN.values()),index=_now_d.month)
+_pil_thn = _fc2.selectbox("Tahun",_thn_list,index=len(_thn_list)-1 if _thn_list else 0)
 
-if pilihan_bulan == "Semua Bulan":
-    df_view = (
-        df[df["tahun"] == pilihan_tahun].copy() if not df.empty else pd.DataFrame()
-    )
-    df_pemasukan_view = (
-        df_pemasukan[df_pemasukan["tahun"] == pilihan_tahun].copy()
-        if not df_pemasukan.empty else pd.DataFrame()
-    )
-    budget_evaluasi = sum(
-        v for k, v in st.session_state.anggaran_terkunci.items()
-        if k.endswith(f"_{pilihan_tahun}")
-    )
-    target_evaluasi = sum(
-        v for k, v in st.session_state.target_tabungan.items()
-        if k.endswith(f"_{pilihan_tahun}")
-    )
+if _pil_bln=="Semua Bulan":
+    _dfv  = df[df["tahun"]==_pil_thn].copy() if not df.empty else pd.DataFrame()
+    _dfpv = df_pm[df_pm["tahun"]==_pil_thn].copy() if not df_pm.empty else pd.DataFrame()
+    _bud  = sum(v for k,v in st.session_state.anggaran_terkunci.items() if k.endswith(f"_{_pil_thn}"))
+    _tgt  = sum(v for k,v in st.session_state.target_tabungan.items() if k.endswith(f"_{_pil_thn}"))
 else:
-    df_view = (
-        df[(df["bulan"] == pilihan_bulan) & (df["tahun"] == pilihan_tahun)].copy()
-        if not df.empty else pd.DataFrame()
-    )
-    df_pemasukan_view = (
-        df_pemasukan[
-            (df_pemasukan["bulan"] == pilihan_bulan) &
-            (df_pemasukan["tahun"] == pilihan_tahun)
-        ].copy()
-        if not df_pemasukan.empty else pd.DataFrame()
-    )
-    _key_eval       = f"{pilihan_bulan}_{pilihan_tahun}"
-    budget_evaluasi = st.session_state.anggaran_terkunci.get(_key_eval, 0)
-    target_evaluasi = st.session_state.target_tabungan.get(_key_eval, 0)
+    _dfv  = df[(df["bulan"]==_pil_bln)&(df["tahun"]==_pil_thn)].copy() if not df.empty else pd.DataFrame()
+    _dfpv = df_pm[(df_pm["bulan"]==_pil_bln)&(df_pm["tahun"]==_pil_thn)].copy() if not df_pm.empty else pd.DataFrame()
+    _ke   = f"{_pil_bln}_{_pil_thn}"
+    _bud  = st.session_state.anggaran_terkunci.get(_ke,0)
+    _tgt  = st.session_state.target_tabungan.get(_ke,0)
 
-# Kalkulasi utama
-total_pengeluaran = df_view["nominal"].sum()       if not df_view.empty        else 0.0
-total_pemasukan   = df_pemasukan_view["nominal"].sum() if not df_pemasukan_view.empty else 0.0
-batas_belanja     = max(0.0, budget_evaluasi - target_evaluasi)  # [PERBAIKAN] guard negatif
-sisa_anggaran     = budget_evaluasi - total_pengeluaran
-net_cashflow      = total_pemasukan - total_pengeluaran
-sukarela = (
-    df_view[df_view["sifat"] == "Sukarela"]["nominal"].sum()
-    if not df_view.empty else 0.0
-)
+_tot_pglr = _dfv["nominal"].sum()    if not _dfv.empty  else 0.0
+_tot_msuk = _dfpv["nominal"].sum()   if not _dfpv.empty else 0.0
+_bts      = max(0.0, _bud-_tgt)
+_sisa_ang = _bud-_tot_pglr
+_net      = _tot_msuk-_tot_pglr
+_sukarela = _dfv[_dfv["sifat"]=="Sukarela"]["nominal"].sum() if not _dfv.empty else 0.0
+_sisa_bts = _bts-_tot_pglr
 
-# Toast kondisi keuangan (sekali per session)
-if not st.session_state.toast_kondisi_ditampilkan and batas_belanja > 0:
-    _pct = (total_pengeluaran / batas_belanja) * 100
-    if _pct >= 100:
-        st.toast("🚨 Target tabungan terancam! Pengeluaran melebihi batas.", icon="⚠️")
-    elif _pct >= 80:
-        st.toast(f"🟠 Hati-hati! Pengeluaran sudah {_pct:.0f}% dari batas.", icon="📊")
-    else:
-        st.toast(f"🟢 Pengeluaran aman ({_pct:.0f}%). Tabungan terlindungi.", icon="✅")
+if not st.session_state.toast_kondisi_ditampilkan and _bts>0:
+    _p = (_tot_pglr/_bts)*100
+    if _p>=100: st.toast("🚨 Target tabungan terancam!", icon="⚠️")
+    elif _p>=80: st.toast(f"🟠 Pengeluaran {_p:.0f}% dari batas!", icon="📊")
+    else: st.toast(f"🟢 Aman ({_p:.0f}%)", icon="✅")
     st.session_state.toast_kondisi_ditampilkan = True
 
-
 # ============================================================
-# FINANCIAL HEALTH SCORE
+# HEALTH SCORE
 # ============================================================
-health_score, health_detail = hitung_health_score(
-    total_pengeluaran, budget_evaluasi, target_evaluasi,
-    sukarela, df_view, df if not df.empty else pd.DataFrame()
-)
-label_score, warna_score, bg_score = label_health_score(health_score)
+_hs, _hd = health_score(_tot_pglr,_bud,_tgt,_sukarela,_dfv,df if not df.empty else pd.DataFrame())
+_ls, _wc, _bc = label_hs(_hs)
 
 st.markdown("### 🏅 Financial Health Score")
-_hs_col1, _hs_col2 = st.columns([1, 2])
-with _hs_col1:
+_hsc1,_hsc2 = st.columns([1,2])
+with _hsc1:
     st.markdown(f"""
-    <div style="background:{bg_score};border-radius:16px;padding:1.5rem;text-align:center;
+    <div style="background:{_bc};border-radius:16px;padding:1.5rem;text-align:center;
                 box-shadow:0 4px 12px rgba(0,0,0,0.08);">
-        <div style="font-size:3rem;font-weight:800;color:{warna_score};">{health_score}</div>
-        <div style="font-size:1rem;font-weight:600;color:{warna_score};">/100</div>
-        <div style="font-size:1.05rem;margin-top:0.4rem;">{label_score}</div>
+        <div style="font-size:3rem;font-weight:800;color:{_wc};">{_hs}</div>
+        <div style="font-size:0.9rem;color:{_wc};">/100</div>
+        <div style="font-size:1rem;margin-top:0.3rem;">{_ls}</div>
     </div>
     """, unsafe_allow_html=True)
-
-with _hs_col2:
-    _maks_map = {
-        "Rasio Tabungan": 40, "Konsistensi Catat": 20,
-        "Porsi Sukarela": 20, "Tren Pengeluaran": 20
-    }
-    for _komp, _poin in health_detail.items():
-        _maks  = _maks_map[_komp]
-        _pct_b = _poin / _maks
-        _bc    = "#2E7D32" if _pct_b >= 0.7 else ("#F57F17" if _pct_b >= 0.4 else "#B71C1C")
+with _hsc2:
+    _mx = {"Rasio Tabungan":40,"Konsistensi Catat":20,"Porsi Sukarela":20,"Tren Pengeluaran":20}
+    for _k2,_p2 in _hd.items():
+        _m2  = _mx[_k2]; _pct2=_p2/_m2
+        _bc2 = "#2E7D32" if _pct2>=0.7 else ("#F57F17" if _pct2>=0.4 else "#B71C1C")
         st.markdown(f"""
         <div style="margin-bottom:0.6rem;">
             <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
-                <span>{_komp}</span>
-                <span style="color:{_bc};font-weight:600;">{_poin}/{_maks}</span>
+                <span>{_k2}</span><span style="color:{_bc2};font-weight:600;">{_p2}/{_m2}</span>
             </div>
             <div style="background:#e0e0e0;border-radius:8px;height:8px;">
-                <div style="background:{_bc};width:{_pct_b*100:.0f}%;height:8px;border-radius:8px;"></div>
+                <div style="background:{_bc2};width:{_pct2*100:.0f}%;height:8px;border-radius:8px;"></div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+        </div>""", unsafe_allow_html=True)
 
 st.markdown("---")
 
-
 # ============================================================
-# METRIK UTAMA
+# METRIK
 # ============================================================
 st.markdown("### 💹 Ringkasan Keuangan")
-_km = st.columns(4)
-_km[0].metric("Anggaran",     format_rupiah(budget_evaluasi))
-_km[1].metric("Pemasukan",    format_rupiah(total_pemasukan))
-_km[2].metric("Pengeluaran",  format_rupiah(total_pengeluaran))
-_km[3].metric(
-    "Net Cash Flow", format_rupiah(net_cashflow),
-    delta="Surplus" if net_cashflow >= 0 else "Defisit",
-    delta_color="normal" if net_cashflow >= 0 else "inverse"
-)
-
-_km2 = st.columns(4)
-_km2[0].metric("Target Tabungan", format_rupiah(target_evaluasi))
-_km2[1].metric("Batas Belanja",   format_rupiah(batas_belanja))
-_sisa_batas = batas_belanja - total_pengeluaran
-_km2[2].metric(
-    "Sisa Batas Belanja", format_rupiah(abs(_sisa_batas)),
-    delta="Aman" if _sisa_batas >= 0 else "Defisit",
-    delta_color="normal" if _sisa_batas >= 0 else "inverse"
-)
-_km2[3].metric("Sisa Anggaran", format_rupiah(sisa_anggaran))
+_mk = st.columns(4)
+_mk[0].metric("Anggaran",    rp(_bud))
+_mk[1].metric("Pemasukan",   rp(_tot_msuk))
+_mk[2].metric("Pengeluaran", rp(_tot_pglr))
+_mk[3].metric("Net Cash Flow", rp(_net),
+    delta="Surplus" if _net>=0 else "Defisit",
+    delta_color="normal" if _net>=0 else "inverse")
+_mk2 = st.columns(4)
+_mk2[0].metric("Target Tabungan", rp(_tgt))
+_mk2[1].metric("Batas Belanja",   rp(_bts))
+_mk2[2].metric("Sisa Batas", rp(abs(_sisa_bts)),
+    delta="Aman" if _sisa_bts>=0 else "Defisit",
+    delta_color="normal" if _sisa_bts>=0 else "inverse")
+_mk2[3].metric("Sisa Anggaran", rp(_sisa_ang))
 
 st.markdown("---")
 
-
 # ============================================================
-# TAB KONTEN UTAMA
+# TABS UTAMA
 # ============================================================
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📋 Pengeluaran", "💵 Pemasukan", "📊 Visualisasi",
-    "🧠 Analisis AI",  "🤖 Chat AI"
-])
+_TABS = ["📋 Pengeluaran","💵 Pemasukan","💸 Hutang/Piutang",
+         "👛 Wallet","📊 Visualisasi","🧠 Analisis AI","🤖 Chat AI","📋 Changelog"]
+_t1,_t2,_t3,_t4,_t5,_t6,_t7,_t8 = st.tabs(_TABS)
 
 
 # ============================================================
 # TAB 1 — PENGELUARAN
 # ============================================================
-with tab1:
+with _t1:
     st.markdown("#### 📋 Lembar Pengeluaran")
-    if not df_view.empty:
-        _dv = df_view.copy()
-        _dv["Jam Catat"] = _dv.apply(
-            lambda r: f"{int(r['jam']):02d}:{int(r['menit']):02d} WIB", axis=1
-        )
-        _dv["Tanggal Lengkap"] = _dv["waktu_transaksi"].apply(
-            lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}"
-        )
-        _df_tampil = _dv[[
-            "Tanggal Lengkap", "catatan", "nominal",
-            "kategori", "sifat", "Jam Catat"
-        ]].copy()
-        _df_tampil.columns = ["Tanggal", "Deskripsi",
-                               "Nominal (Rp)", "Kategori", "Sifat", "Waktu"]
 
-        _sel = st.dataframe(
-            _df_tampil, use_container_width=True, hide_index=True,
-            selection_mode="multi-row", on_select="rerun", key="tbl_transaksi"
-        )
+    # --- Search & Filter ---
+    with st.expander("🔍 Search & Filter", expanded=False):
+        _sf1,_sf2 = st.columns(2)
+        _search = _sf1.text_input("🔍 Cari kata kunci:", placeholder="Nama transaksi...", key="srch_tx")
+        _flt_kat = _sf2.multiselect("Filter Kategori:", KATEGORI_PENGELUARAN, key="flt_kat")
+        _sf3,_sf4,_sf5 = st.columns(3)
+        _flt_sft = _sf3.selectbox("Sifat:", ["Semua","Wajib","Sukarela"], key="flt_sft")
+        _flt_tgl_min = _sf4.date_input("Dari Tanggal:", value=None, key="flt_tgl1")
+        _flt_tgl_max = _sf5.date_input("Sampai Tanggal:", value=None, key="flt_tgl2")
+        _sort_by = st.selectbox("Urutkan:", ["Terbaru","Terlama","Nominal Terbesar","Nominal Terkecil"], key="srt_tx")
 
-        _col_del, _col_dl = st.columns(2)
-        with _col_del:
-            if st.button("🗑️ Hapus Terpilih", key="hapus_transaksi"):
-                _sel_idx = _sel.selection.rows
+    # Terapkan filter
+    _dfv_flt = _dfv.copy() if not _dfv.empty else pd.DataFrame()
+    if not _dfv_flt.empty:
+        if _search:
+            _dfv_flt = _dfv_flt[_dfv_flt["catatan"].str.contains(_search, case=False, na=False)]
+        if _flt_kat:
+            _dfv_flt = _dfv_flt[_dfv_flt["kategori"].isin(_flt_kat)]
+        if _flt_sft != "Semua":
+            _dfv_flt = _dfv_flt[_dfv_flt["sifat"]==_flt_sft]
+        if _flt_tgl_min:
+            _dfv_flt = _dfv_flt[_dfv_flt["waktu_transaksi"].dt.date >= _flt_tgl_min]
+        if _flt_tgl_max:
+            _dfv_flt = _dfv_flt[_dfv_flt["waktu_transaksi"].dt.date <= _flt_tgl_max]
+        _sort_map = {
+            "Terbaru": ("waktu_transaksi", False), "Terlama": ("waktu_transaksi", True),
+            "Nominal Terbesar": ("nominal", False), "Nominal Terkecil": ("nominal", True)
+        }
+        _sc,_sa = _sort_map[_sort_by]
+        _dfv_flt = _dfv_flt.sort_values(_sc, ascending=_sa)
+
+    if not _dfv_flt.empty:
+        _dfv_flt["Jam Catat"] = _dfv_flt.apply(
+            lambda r: f"{int(r['jam']):02d}:{int(r['menit']):02d} WIB", axis=1)
+        _dfv_flt["Tanggal"] = _dfv_flt["waktu_transaksi"].apply(
+            lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}")
+        _dt_show = _dfv_flt[["Tanggal","catatan","nominal","kategori","sifat","Jam Catat"]].copy()
+        _dt_show.columns = ["Tanggal","Deskripsi","Nominal (Rp)","Kategori","Sifat","Waktu"]
+
+        st.caption(f"Menampilkan **{len(_dt_show)}** transaksi" +
+                   (f" (dari {len(_dfv)} total)" if len(_dt_show)!=len(_dfv) else ""))
+
+        _sel = st.dataframe(_dt_show, use_container_width=True, hide_index=True,
+                             selection_mode="multi-row", on_select="rerun", key="tbl_tx")
+        _sel_idx = _sel.selection.rows
+
+        _ba1,_ba2,_ba3 = st.columns(3)
+
+        # EDIT
+        with _ba1:
+            if st.button("✏️ Edit Terpilih", key="btn_edit_tx"):
+                if len(_sel_idx)==1:
+                    _ri = _dfv_flt.iloc[_sel_idx[0]]
+                    st.session_state.edit_tx_id   = _ri["id"]
+                    st.session_state.edit_tx_data = _ri.to_dict()
+                elif len(_sel_idx)==0: st.warning("Pilih 1 baris untuk diedit.")
+                else: st.warning("Hanya bisa edit 1 transaksi sekaligus.")
+
+        # HAPUS dengan konfirmasi
+        with _ba2:
+            if st.button("🗑️ Hapus Terpilih", key="btn_hps_tx"):
                 if _sel_idx:
-                    _valid = [i for i in _sel_idx if i < len(_dv)]
+                    _valid = [i for i in _sel_idx if i<len(_dfv_flt)]
                     if _valid:
-                        _ids = _dv.iloc[_valid]["id"].tolist()
-                        try:
-                            for _tid in _ids:
-                                # [PERBAIKAN] Sertakan user_id pada delete
-                                supabase.table("transaksi").delete()\
-                                    .eq("id", _tid).eq("user_id", uid).execute()
-                            st.cache_data.clear()
-                            st.session_state.hapus_sukses = True
-                            st.session_state.pesan_toast  = f"🗑️ {len(_ids)} transaksi dihapus."
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Gagal hapus: {e}")
-                    else:
-                        st.warning("Tidak ada baris valid.")
+                        st.session_state.hapus_konfirmasi_ids  = _dfv_flt.iloc[_valid]["id"].tolist()
+                        st.session_state.hapus_konfirmasi_tipe = "transaksi"
+                else: st.warning("Pilih minimal 1 baris.")
+
+        # UNDUH
+        with _ba3:
+            _csv = _dt_show.to_csv(index=False).encode("utf-8")
+            st.download_button("📥 CSV", _csv,
+                f"pengeluaran_{_pil_bln}_{_pil_thn}.csv","text/csv")
+
+        # ---- Konfirmasi Hapus ----
+        if (st.session_state.hapus_konfirmasi_ids
+                and st.session_state.hapus_konfirmasi_tipe=="transaksi"):
+            _n = len(st.session_state.hapus_konfirmasi_ids)
+            st.warning(f"⚠️ Kamu akan menghapus **{_n} transaksi** secara permanen. Lanjutkan?")
+            _kc1,_kc2 = st.columns(2)
+            if _kc1.button("✅ Ya, Hapus Sekarang", key="konfirm_ya", use_container_width=True):
+                try:
+                    for _tid in st.session_state.hapus_konfirmasi_ids:
+                        supabase.table("transaksi").delete()\
+                            .eq("id",_tid).eq("user_id",uid).execute()
+                    st.cache_data.clear()
+                    st.session_state.hapus_sukses = True
+                    st.session_state.pesan_toast  = f"🗑️ {_n} transaksi dihapus."
+                    st.session_state.hapus_konfirmasi_ids  = []
+                    st.session_state.hapus_konfirmasi_tipe = ""
+                    st.rerun()
+                except Exception as _e: st.error(f"Gagal hapus: {_e}")
+            if _kc2.button("❌ Batal", key="konfirm_batal", use_container_width=True):
+                st.session_state.hapus_konfirmasi_ids  = []
+                st.session_state.hapus_konfirmasi_tipe = ""
+                st.rerun()
+
+        # ---- Form Edit Transaksi ----
+        if st.session_state.edit_tx_id:
+            st.markdown("---")
+            st.markdown("#### ✏️ Edit Transaksi")
+            _ed = st.session_state.edit_tx_data
+            with st.form("frm_edit_tx"):
+                _e_cat  = st.text_input("Nama:", value=str(_ed.get("catatan","")))
+                _e_nom  = st.number_input("Nominal (Rp):", min_value=0,
+                                           value=int(_ed.get("nominal",0)), step=1_000)
+                _e_kat  = st.selectbox("Kategori:", KATEGORI_PENGELUARAN,
+                    index=KATEGORI_PENGELUARAN.index(_ed["kategori"])
+                    if _ed.get("kategori") in KATEGORI_PENGELUARAN else 0)
+                _e_sft  = st.radio("Sifat:", ["Wajib","Sukarela"],
+                    index=0 if _ed.get("sifat")=="Wajib" else 1)
+                _c_save,_c_cancel = st.columns(2)
+                _save   = _c_save.form_submit_button("💾 Simpan Perubahan", use_container_width=True)
+                _cancel = _c_cancel.form_submit_button("❌ Batal", use_container_width=True)
+
+            if _save:
+                if not _e_cat.strip(): st.error("Nama tidak boleh kosong.")
+                elif _e_nom<=0: st.error("Nominal harus >0.")
                 else:
-                    st.warning("Pilih minimal satu baris.")
-        with _col_dl:
-            _csv = _df_tampil.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "📥 Unduh CSV", _csv,
-                f"pengeluaran_{pilihan_bulan}_{pilihan_tahun}.csv", "text/csv"
-            )
+                    try:
+                        supabase.table("transaksi").update({
+                            "catatan":_e_cat.strip(),"nominal":_e_nom,
+                            "kategori":_e_kat,"sifat":_e_sft
+                        }).eq("id",st.session_state.edit_tx_id).eq("user_id",uid).execute()
+                        st.cache_data.clear()
+                        st.session_state.edit_tx_id   = None
+                        st.session_state.edit_tx_data = {}
+                        st.session_state.simpan_sukses = True
+                        st.session_state.pesan_toast   = "✏️ Transaksi berhasil diupdate!"
+                        st.rerun()
+                    except Exception as _e: st.error(f"Gagal update: {_e}")
+            if _cancel:
+                st.session_state.edit_tx_id   = None
+                st.session_state.edit_tx_data = {}
+                st.rerun()
+
+        # Budget per kategori progress bars
+        _bk_now = st.session_state.budget_kategori.get(f"{_pil_bln}_{_pil_thn}",{})
+        if _bk_now and not _dfv.empty:
+            st.markdown("---")
+            st.markdown("**📂 Progress Budget per Kategori**")
+            _kat_tot = _dfv.groupby("kategori")["nominal"].sum()
+            for _kat,_bk_val in _bk_now.items():
+                if _bk_val>0:
+                    _spent = float(_kat_tot.get(_kat,0))
+                    _pct3  = min(100, (_spent/_bk_val)*100)
+                    _clr3  = "#2E7D32" if _pct3<70 else ("#F57F17" if _pct3<90 else "#E53935")
+                    st.markdown(f"""
+                    <div style="margin-bottom:0.5rem;">
+                        <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
+                            <span>{_kat}</span>
+                            <span style="color:{_clr3}">{rp(_spent)} / {rp(_bk_val)} ({_pct3:.0f}%)</span>
+                        </div>
+                        <div style="background:#e0e0e0;border-radius:6px;height:7px;">
+                            <div style="background:{_clr3};width:{_pct3:.0f}%;height:7px;border-radius:6px;"></div>
+                        </div>
+                    </div>""", unsafe_allow_html=True)
     else:
-        st.info("Tidak ada pengeluaran pada periode ini.")
+        st.info("Tidak ada pengeluaran" + (" yang sesuai filter." if _search or _flt_kat else " pada periode ini."))
 
 
 # ============================================================
 # TAB 2 — PEMASUKAN
 # ============================================================
-with tab2:
+with _t2:
     st.markdown("#### 💵 Lembar Pemasukan")
-    if not df_pemasukan_view.empty:
-        _dpv = df_pemasukan_view.copy()
-        _dpv["Tanggal"] = _dpv["waktu_pemasukan"].apply(
-            lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}"
-        )
-        _dfp_tampil = _dpv[["Tanggal", "sumber", "nominal", "kategori"]].copy()
-        _dfp_tampil.columns = ["Tanggal", "Sumber", "Nominal (Rp)", "Kategori"]
+    if not _dfpv.empty:
+        _dfpv2 = _dfpv.copy()
+        _dfpv2["Tanggal"] = _dfpv2["waktu_pemasukan"].apply(
+            lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}")
+        _dps = _dfpv2[["Tanggal","sumber","nominal","kategori"]].copy()
+        _dps.columns = ["Tanggal","Sumber","Nominal (Rp)","Kategori"]
 
-        _sel_p = st.dataframe(
-            _dfp_tampil, use_container_width=True, hide_index=True,
-            selection_mode="multi-row", on_select="rerun", key="tbl_pemasukan"
-        )
+        _sp = st.dataframe(_dps, use_container_width=True, hide_index=True,
+                            selection_mode="multi-row", on_select="rerun", key="tbl_pm")
 
-        _cp1, _cp2 = st.columns(2)
-        with _cp1:
-            if st.button("🗑️ Hapus Pemasukan Terpilih", key="hapus_pemasukan"):
-                _sel_pi = _sel_p.selection.rows
-                if _sel_pi:
-                    _vp = [i for i in _sel_pi if i < len(_dpv)]
+        _pb1,_pb2 = st.columns(2)
+        with _pb1:
+            if st.button("🗑️ Hapus Pemasukan Terpilih", key="btn_hps_pm"):
+                _si = _sp.selection.rows
+                if _si:
+                    _vp = [i for i in _si if i<len(_dfpv2)]
                     if _vp:
-                        _idp = _dpv.iloc[_vp]["id"].tolist()
-                        try:
-                            for _pid in _idp:
-                                supabase.table("pemasukan").delete()\
-                                    .eq("id", _pid).eq("user_id", uid).execute()
-                            st.cache_data.clear()
-                            st.session_state.hapus_sukses = True
-                            st.session_state.pesan_toast  = f"🗑️ {len(_idp)} pemasukan dihapus."
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Gagal hapus: {e}")
-                else:
-                    st.warning("Pilih minimal satu baris.")
-        with _cp2:
-            _csvp = _dfp_tampil.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "📥 Unduh CSV", _csvp,
-                f"pemasukan_{pilihan_bulan}_{pilihan_tahun}.csv", "text/csv"
-            )
+                        st.session_state.hapus_konfirmasi_ids  = _dfpv2.iloc[_vp]["id"].tolist()
+                        st.session_state.hapus_konfirmasi_tipe = "pemasukan"
+                else: st.warning("Pilih minimal 1 baris.")
+
+        with _pb2:
+            _csvp = _dps.to_csv(index=False).encode("utf-8")
+            st.download_button("📥 CSV", _csvp,
+                f"pemasukan_{_pil_bln}_{_pil_thn}.csv","text/csv")
+
+        if (st.session_state.hapus_konfirmasi_ids
+                and st.session_state.hapus_konfirmasi_tipe=="pemasukan"):
+            _np = len(st.session_state.hapus_konfirmasi_ids)
+            st.warning(f"⚠️ Hapus **{_np} pemasukan** secara permanen?")
+            _kp1,_kp2 = st.columns(2)
+            if _kp1.button("✅ Ya, Hapus", key="kfm_pm_ya", use_container_width=True):
+                try:
+                    for _pid in st.session_state.hapus_konfirmasi_ids:
+                        supabase.table("pemasukan").delete()\
+                            .eq("id",_pid).eq("user_id",uid).execute()
+                    st.cache_data.clear()
+                    st.session_state.hapus_sukses = True
+                    st.session_state.pesan_toast  = f"🗑️ {_np} pemasukan dihapus."
+                    st.session_state.hapus_konfirmasi_ids  = []
+                    st.session_state.hapus_konfirmasi_tipe = ""
+                    st.rerun()
+                except Exception as _e: st.error(f"Gagal: {_e}")
+            if _kp2.button("❌ Batal", key="kfm_pm_batal", use_container_width=True):
+                st.session_state.hapus_konfirmasi_ids  = []
+                st.session_state.hapus_konfirmasi_tipe = ""
+                st.rerun()
 
         st.markdown("**Rincian per Kategori**")
-        _kat_masuk = _dpv.groupby("kategori")["nominal"].sum().reset_index()
-        _kat_masuk.columns = ["Kategori", "Total (Rp)"]
-        st.dataframe(_kat_masuk, use_container_width=True, hide_index=True)
+        _kpm = _dfpv2.groupby("kategori")["nominal"].sum().reset_index()
+        _kpm.columns = ["Kategori","Total (Rp)"]
+        st.dataframe(_kpm, use_container_width=True, hide_index=True)
     else:
         st.info("Tidak ada pemasukan pada periode ini.")
 
 
 # ============================================================
-# TAB 3 — VISUALISASI
+# TAB 3 — HUTANG / PIUTANG
 # ============================================================
-with tab3:
-    st.markdown("#### 📊 Grafik & Perbandingan")
-    _vt1, _vt2, _vt3 = st.tabs(["📈 Tren", "🥧 Kategori", "↔️ Komparatif"])
+with _t3:
+    st.markdown("#### 💸 Pelacakan Hutang & Piutang")
+    _hp_data = ambil_hutang(uid)
+    _df_hp   = pd.DataFrame(_hp_data) if _hp_data else pd.DataFrame()
 
-    # Sub-tab Tren
+    # Form tambah
+    with st.expander("➕ Tambah Hutang / Piutang", expanded=False):
+        with st.form("frm_hp"):
+            _hp_jenis   = st.radio("Jenis:", ["hutang","piutang"],
+                                    format_func=lambda x:"💸 Saya Berhutang" if x=="hutang" else "💰 Orang Lain Berhutang ke Saya")
+            _hp_nama    = st.text_input("Nama Pihak:", placeholder="Contoh: Budi")
+            _hp_nom     = st.number_input("Nominal (Rp):", min_value=0, value=0, step=10_000)
+            _hp_ket     = st.text_input("Keterangan:", placeholder="Contoh: Pinjam beli makan")
+            _hp_tgl     = st.date_input("Tanggal Pinjam:", value=wib().date(), format="DD/MM/YYYY")
+            _hp_jt      = st.date_input("Jatuh Tempo:", value=None, format="DD/MM/YYYY")
+            _sub_hp     = st.form_submit_button("💾 Simpan", use_container_width=True)
+
+        if _sub_hp:
+            if not _hp_nama.strip(): st.error("Nama tidak boleh kosong.")
+            elif _hp_nom<=0: st.error("Nominal harus >0.")
+            else:
+                try:
+                    _tgl_iso = TZ.localize(datetime(_hp_tgl.year,_hp_tgl.month,_hp_tgl.day,12,0))\
+                                .astimezone(pytz.UTC).isoformat()
+                    _jt_iso  = TZ.localize(datetime(_hp_jt.year,_hp_jt.month,_hp_jt.day,23,59))\
+                                .astimezone(pytz.UTC).isoformat() if _hp_jt else None
+                    supabase.table("hutang_piutang").insert({
+                        "user_id":uid,"jenis":_hp_jenis,"nama_pihak":_hp_nama.strip(),
+                        "nominal":_hp_nom,"keterangan":_hp_ket.strip(),
+                        "tanggal":_tgl_iso,"jatuh_tempo":_jt_iso,"status":"belum_lunas"
+                    }).execute()
+                    st.cache_data.clear()
+                    st.success("✅ Berhasil disimpan!"); st.rerun()
+                except Exception as _e: st.error(f"Error: {_e}")
+
+    if not _df_hp.empty:
+        # Ringkasan
+        _tot_hutang  = _df_hp[(_df_hp["jenis"]=="hutang") &(_df_hp["status"]=="belum_lunas")]["nominal"].sum()
+        _tot_piutang = _df_hp[(_df_hp["jenis"]=="piutang")&(_df_hp["status"]=="belum_lunas")]["nominal"].sum()
+        _mhp = st.columns(3)
+        _mhp[0].metric("Total Hutang",     rp(_tot_hutang),  delta_color="inverse")
+        _mhp[1].metric("Total Piutang",    rp(_tot_piutang))
+        _mhp[2].metric("Net Hutang/Piutang", rp(_tot_piutang-_tot_hutang),
+            delta="Surplus" if _tot_piutang>=_tot_hutang else "Defisit",
+            delta_color="normal" if _tot_piutang>=_tot_hutang else "inverse")
+
+        _hp_tab1,_hp_tab2 = st.tabs(["💸 Hutang Saya","💰 Piutang Saya"])
+
+        for _ht,_ht_label in [(_hp_tab1,"hutang"),(_hp_tab2,"piutang")]:
+            with _ht:
+                _df_ht = _df_hp[_df_hp["jenis"]==_ht_label].copy()
+                if not _df_ht.empty:
+                    for _,_row in _df_ht.iterrows():
+                        _stat_col = "#2E7D32" if _row["status"]=="lunas" else "#E53935"
+                        _jt_str = ""
+                        if _row.get("jatuh_tempo"):
+                            try:
+                                _jt_d = datetime.fromisoformat(
+                                    str(_row["jatuh_tempo"]).replace("Z","+00:00")
+                                ).astimezone(TZ).date()
+                                _sisa_hp = (_jt_d-wib().date()).days
+                                _jt_str  = f" · Jatuh tempo: {_jt_d.strftime('%d %b %Y')}"
+                                if _sisa_hp<=3 and _row["status"]!="lunas":
+                                    _jt_str += f" ⚠️ ({_sisa_hp}h lagi)"
+                            except Exception: pass
+                        _hpc = st.columns([3,1,1])
+                        with _hpc[0]:
+                            st.markdown(
+                                f"**{_row['nama_pihak']}** — {rp(_row['nominal'])}\n\n"
+                                f"<small style='color:#64748b'>{_row.get('keterangan','')}{_jt_str}</small>",
+                                unsafe_allow_html=True
+                            )
+                        with _hpc[1]:
+                            st.markdown(
+                                f"<span style='color:{_stat_col};font-weight:600;font-size:0.85rem;'>"
+                                f"{'✅ Lunas' if _row['status']=='lunas' else '🔴 Belum'}</span>",
+                                unsafe_allow_html=True
+                            )
+                        with _hpc[2]:
+                            if _row["status"]=="belum_lunas":
+                                if st.button("✅ Lunas", key=f"lns_{_row['id']}"):
+                                    supabase.table("hutang_piutang").update({"status":"lunas"})\
+                                        .eq("id",_row["id"]).eq("user_id",uid).execute()
+                                    st.cache_data.clear(); st.rerun()
+                            else:
+                                if st.button("🗑️", key=f"del_hp_{_row['id']}"):
+                                    st.session_state.hapus_konfirmasi_ids  = [_row["id"]]
+                                    st.session_state.hapus_konfirmasi_tipe = "hutang"
+                                    st.rerun()
+                        st.markdown("---")
+                else:
+                    st.info(f"Tidak ada {'hutang' if _ht_label=='hutang' else 'piutang'} yang tercatat.")
+
+        if (st.session_state.hapus_konfirmasi_ids
+                and st.session_state.hapus_konfirmasi_tipe=="hutang"):
+            st.warning("⚠️ Hapus catatan ini secara permanen?")
+            _kh1,_kh2 = st.columns(2)
+            if _kh1.button("✅ Ya", key="kfm_hp_ya"):
+                for _hid in st.session_state.hapus_konfirmasi_ids:
+                    supabase.table("hutang_piutang").delete()\
+                        .eq("id",_hid).eq("user_id",uid).execute()
+                st.cache_data.clear()
+                st.session_state.hapus_konfirmasi_ids  = []
+                st.session_state.hapus_konfirmasi_tipe = ""
+                st.rerun()
+            if _kh2.button("❌ Batal", key="kfm_hp_batal"):
+                st.session_state.hapus_konfirmasi_ids  = []
+                st.session_state.hapus_konfirmasi_tipe = ""
+                st.rerun()
+    else:
+        st.info("Belum ada catatan hutang/piutang.")
+
+
+# ============================================================
+# TAB 4 — WALLET
+# ============================================================
+with _t4:
+    st.markdown("#### 👛 Multi-Wallet")
+    _wts = st.session_state.wallets
+
+    with st.expander("➕ Tambah Wallet Baru"):
+        with st.form("frm_add_wallet"):
+            _wn = st.text_input("Nama Wallet:", placeholder="Contoh: BCA Utama")
+            _wt = st.selectbox("Tipe:", TIPE_WALLET)
+            _ws = st.number_input("Saldo Awal (Rp):", min_value=0, value=0, step=50_000)
+            _wc_input = st.color_picker("Warna:", value="#2E7D32")
+            if st.form_submit_button("💾 Tambah Wallet", use_container_width=True):
+                if not _wn.strip(): st.error("Nama tidak boleh kosong.")
+                else:
+                    if simpan_wallet(uid, _wn.strip(), _wt, _ws, _wc_input):
+                        st.session_state.muat_wallets_sukses = False
+                        st.cache_data.clear(); st.success("✅ Wallet ditambahkan!"); st.rerun()
+
+    if _wts:
+        for _w in _wts:
+            _wid2 = _w["id"]
+            # Hitung saldo estimasi
+            _tx_w  = df[df["wallet_id"]==_wid2]["nominal"].sum() if (not df.empty and "wallet_id" in df.columns) else 0
+            _pm_w  = df_pm[df_pm["wallet_id"]==_wid2]["nominal"].sum() if (not df_pm.empty and "wallet_id" in df_pm.columns) else 0
+            _saldo_est = float(_w.get("saldo_awal",0)) + _pm_w - _tx_w
+
+            _wc2 = _w.get("warna","#2E7D32")
+            st.markdown(f"""
+            <div style="background:linear-gradient(135deg,{_wc2}dd,{_wc2}88);border-radius:14px;
+                        padding:1rem 1.2rem;margin-bottom:0.8rem;color:white;
+                        box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div style="font-size:1.1rem;font-weight:700;">{_w['tipe']} {_w['nama']}</div>
+                        <div style="font-size:0.8rem;opacity:0.8;">Saldo Awal: {rp(_w.get('saldo_awal',0))}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:1.3rem;font-weight:800;">{rp(_saldo_est)}</div>
+                        <div style="font-size:0.75rem;opacity:0.8;">Estimasi Saldo</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            _wc_col1,_wc_col2 = st.columns([4,1])
+            with _wc_col2:
+                if st.button("🗑️ Hapus", key=f"del_w_{_wid2}"):
+                    if hapus_wallet(uid, _wid2):
+                        st.session_state.muat_wallets_sukses = False
+                        muat_wallets(uid, True); st.rerun()
+    else:
+        st.info("Belum ada wallet. Tambahkan wallet pertamamu di atas.")
+
+
+# ============================================================
+# TAB 5 — VISUALISASI
+# ============================================================
+with _t5:
+    st.markdown("#### 📊 Grafik & Perbandingan")
+    _vt1,_vt2,_vt3 = st.tabs(["📈 Tren","🥧 Kategori","↔️ Komparatif"])
+
     with _vt1:
-        _vc1, _vc2 = st.columns(2)
+        _vc1,_vc2 = st.columns(2)
         with _vc1:
             st.markdown("**Tren Pengeluaran**")
             if not df.empty:
-                _dft = df.groupby(["tahun", "bulan"])["nominal"].sum().reset_index()
+                _dft = df.groupby(["tahun","bulan"])["nominal"].sum().reset_index()
                 st.altair_chart(
-                    alt.Chart(_dft).mark_line(point=True, color="#E53935").encode(
-                        x=alt.X("bulan:N", sort=list(KAMUS_BULAN.values()), title="Bulan"),
-                        y=alt.Y("nominal:Q", title="Total (Rp)"),
-                        tooltip=["bulan", "tahun", "nominal"]
-                    ).properties(height=280),
-                    use_container_width=True
-                )
-            else:
-                st.write("Belum ada data.")
+                    alt.Chart(_dft).mark_line(point=True,color="#E53935").encode(
+                        x=alt.X("bulan:N",sort=list(KAMUS_BULAN.values()),title="Bulan"),
+                        y=alt.Y("nominal:Q",title="Total (Rp)"),
+                        tooltip=["bulan","tahun","nominal"]
+                    ).properties(height=260), use_container_width=True)
+            else: st.write("Belum ada data.")
         with _vc2:
             st.markdown("**Tren Pemasukan**")
-            if not df_pemasukan.empty:
-                _dftp = df_pemasukan.groupby(["tahun", "bulan"])["nominal"].sum().reset_index()
+            if not df_pm.empty:
+                _dftp = df_pm.groupby(["tahun","bulan"])["nominal"].sum().reset_index()
                 st.altair_chart(
-                    alt.Chart(_dftp).mark_line(point=True, color="#2E7D32").encode(
-                        x=alt.X("bulan:N", sort=list(KAMUS_BULAN.values()), title="Bulan"),
-                        y=alt.Y("nominal:Q", title="Total (Rp)"),
-                        tooltip=["bulan", "tahun", "nominal"]
-                    ).properties(height=280),
-                    use_container_width=True
-                )
-            else:
-                st.write("Belum ada data pemasukan.")
+                    alt.Chart(_dftp).mark_line(point=True,color="#2E7D32").encode(
+                        x=alt.X("bulan:N",sort=list(KAMUS_BULAN.values()),title="Bulan"),
+                        y=alt.Y("nominal:Q",title="Total (Rp)"),
+                        tooltip=["bulan","tahun","nominal"]
+                    ).properties(height=260), use_container_width=True)
+            else: st.write("Belum ada data pemasukan.")
 
         st.markdown("**Net Cash Flow Bulanan**")
-        if not df.empty or not df_pemasukan.empty:
-            _dfo = (
-                df.groupby(["tahun", "bulan"])["nominal"].sum().reset_index()
-                  .rename(columns={"nominal": "pengeluaran"})
-                if not df.empty
-                else pd.DataFrame(columns=["tahun", "bulan", "pengeluaran"])
-            )
-            _dfi = (
-                df_pemasukan.groupby(["tahun", "bulan"])["nominal"].sum().reset_index()
-                            .rename(columns={"nominal": "pemasukan"})
-                if not df_pemasukan.empty
-                else pd.DataFrame(columns=["tahun", "bulan", "pemasukan"])
-            )
-            _dfcf = pd.merge(_dfo, _dfi, on=["tahun", "bulan"], how="outer").fillna(0)
-            _dfcf["net"]   = _dfcf["pemasukan"] - _dfcf["pengeluaran"]
-            _dfcf["status"] = _dfcf["net"].apply(lambda x: "Surplus" if x >= 0 else "Defisit")
+        if not df.empty or not df_pm.empty:
+            _dfo = df.groupby(["tahun","bulan"])["nominal"].sum().reset_index()\
+                     .rename(columns={"nominal":"pengeluaran"}) if not df.empty \
+                   else pd.DataFrame(columns=["tahun","bulan","pengeluaran"])
+            _dfi = df_pm.groupby(["tahun","bulan"])["nominal"].sum().reset_index()\
+                        .rename(columns={"nominal":"pemasukan"}) if not df_pm.empty \
+                  else pd.DataFrame(columns=["tahun","bulan","pemasukan"])
+            _dfcf = pd.merge(_dfo,_dfi,on=["tahun","bulan"],how="outer").fillna(0)
+            _dfcf["net"]    = _dfcf["pemasukan"]-_dfcf["pengeluaran"]
+            _dfcf["status"] = _dfcf["net"].apply(lambda x:"Surplus" if x>=0 else "Defisit")
             st.altair_chart(
                 alt.Chart(_dfcf).mark_bar().encode(
-                    x=alt.X("bulan:N", sort=list(KAMUS_BULAN.values()), title="Bulan"),
-                    y=alt.Y("net:Q", title="Net (Rp)"),
-                    color=alt.Color("status:N", scale=alt.Scale(
-                        domain=["Surplus", "Defisit"], range=["#2E7D32", "#E53935"]
-                    )),
-                    tooltip=["bulan", "tahun", "pemasukan", "pengeluaran", "net"]
-                ).properties(height=250),
-                use_container_width=True
-            )
+                    x=alt.X("bulan:N",sort=list(KAMUS_BULAN.values()),title="Bulan"),
+                    y=alt.Y("net:Q",title="Net (Rp)"),
+                    color=alt.Color("status:N",scale=alt.Scale(
+                        domain=["Surplus","Defisit"],range=["#2E7D32","#E53935"])),
+                    tooltip=["bulan","tahun","pemasukan","pengeluaran","net"]
+                ).properties(height=230), use_container_width=True)
 
-    # Sub-tab Kategori
     with _vt2:
-        _vc3, _vc4 = st.columns(2)
+        _vc3,_vc4 = st.columns(2)
         with _vc3:
-            st.markdown("**Porsi Pengeluaran per Kategori**")
-            if not df_view.empty:
+            st.markdown("**Porsi Kategori Pengeluaran**")
+            if not _dfv.empty:
                 st.altair_chart(
-                    alt.Chart(df_view).mark_arc(innerRadius=40).encode(
-                        theta=alt.Theta(field="nominal", type="quantitative"),
-                        color=alt.Color(field="kategori", type="nominal",
-                                        scale=alt.Scale(scheme="accent")),
-                        tooltip=["kategori", "nominal"]
-                    ).properties(height=280),
-                    use_container_width=True
-                )
-            else:
-                st.write("Tidak ada data.")
+                    alt.Chart(_dfv).mark_arc(innerRadius=40).encode(
+                        theta=alt.Theta(field="nominal",type="quantitative"),
+                        color=alt.Color(field="kategori",type="nominal",scale=alt.Scale(scheme="accent")),
+                        tooltip=["kategori","nominal"]
+                    ).properties(height=270), use_container_width=True)
+            else: st.write("Tidak ada data.")
         with _vc4:
             st.markdown("**Wajib vs Sukarela**")
-            if not df_view.empty:
-                _ds = df_view.groupby("sifat")["nominal"].sum().reset_index()
+            if not _dfv.empty:
+                _ds = _dfv.groupby("sifat")["nominal"].sum().reset_index()
                 st.altair_chart(
                     alt.Chart(_ds).mark_arc(innerRadius=40).encode(
-                        theta=alt.Theta(field="nominal", type="quantitative"),
-                        color=alt.Color(field="sifat", type="nominal",
-                                        scale=alt.Scale(
-                                            domain=["Wajib", "Sukarela"],
-                                            range=["#1565C0", "#FF7043"]
-                                        )),
-                        tooltip=["sifat", "nominal"]
-                    ).properties(height=280),
-                    use_container_width=True
-                )
-            else:
-                st.write("Tidak ada data.")
+                        theta=alt.Theta(field="nominal",type="quantitative"),
+                        color=alt.Color(field="sifat",type="nominal",
+                                        scale=alt.Scale(domain=["Wajib","Sukarela"],
+                                                        range=["#1565C0","#FF7043"])),
+                        tooltip=["sifat","nominal"]
+                    ).properties(height=270), use_container_width=True)
+            else: st.write("Tidak ada data.")
 
-    # Sub-tab Komparatif
     with _vt3:
         st.markdown("**↔️ Perbandingan 2 Bulan**")
         if not df.empty:
-            _bulan_ada = list(df["bulan"].unique())
-            _thn_ada   = sorted(df["tahun"].unique().tolist())
-            _cc1, _cc2 = st.columns(2)
+            _ba = list(df["bulan"].unique())
+            _ta = sorted(df["tahun"].unique().tolist())
+            _cc1,_cc2 = st.columns(2)
             with _cc1:
-                _bln_a = st.selectbox("Bulan A", _bulan_ada, index=0, key="cmp_a")
-                _thn_a = st.selectbox("Tahun A", _thn_ada, index=0, key="cmp_ta")
+                _bla = st.selectbox("Bulan A",_ba,index=0,key="cmp_a")
+                _tha = st.selectbox("Tahun A",_ta,index=0,key="cmp_ta")
             with _cc2:
-                _bln_b = st.selectbox(
-                    "Bulan B", _bulan_ada,
-                    index=min(1, len(_bulan_ada) - 1), key="cmp_b"
-                )
-                _thn_b = st.selectbox("Tahun B", _thn_ada, index=0, key="cmp_tb")
-
-            # Guard: periode harus berbeda
-            if _bln_a == _bln_b and _thn_a == _thn_b:
-                st.warning("⚠️ Pilih periode yang berbeda untuk membandingkan.")
+                _blb = st.selectbox("Bulan B",_ba,index=min(1,len(_ba)-1),key="cmp_b")
+                _thb = st.selectbox("Tahun B",_ta,index=0,key="cmp_tb")
+            if _bla==_blb and _tha==_thb:
+                st.warning("⚠️ Pilih periode yang berbeda.")
             else:
-                _df_a = df[(df["bulan"] == _bln_a) & (df["tahun"] == _thn_a)]
-                _df_b = df[(df["bulan"] == _bln_b) & (df["tahun"] == _thn_b)]
-
-                # Label unik mencegah kolom duplikat saat concat
-                _lab_a = f"{_bln_a} {_thn_a} (A)"
-                _lab_b = f"{_bln_b} {_thn_b} (B)"
-                _ka    = _df_a.groupby("kategori")["nominal"].sum().rename(_lab_a)
-                _kb    = _df_b.groupby("kategori")["nominal"].sum().rename(_lab_b)
-                _dfcmp = pd.concat([_ka, _kb], axis=1).fillna(0).reset_index()
-                _dfcmp.columns    = ["Kategori", _lab_a, _lab_b]
-                _dfcmp["Selisih"] = _dfcmp[_lab_b].astype(float) - _dfcmp[_lab_a].astype(float)
-                _dfcmp["Status"]  = _dfcmp["Selisih"].apply(
-                    lambda x: "Naik" if x > 0 else ("Turun" if x < 0 else "Sama")
-                )
-
-                _tot_a = _df_a["nominal"].sum()
-                _tot_b = _df_b["nominal"].sum()
-                _mm    = st.columns(3)
-                _mm[0].metric(f"Total {_bln_a} {_thn_a}", format_rupiah(_tot_a))
-                _mm[1].metric(
-                    f"Total {_bln_b} {_thn_b}", format_rupiah(_tot_b),
-                    delta=format_rupiah(_tot_b - _tot_a),
-                    delta_color="inverse"
-                )
-                _mm[2].metric(
-                    "Perbandingan", format_rupiah(abs(_tot_b - _tot_a)),
-                    delta="Lebih Hemat" if _tot_b < _tot_a else "Lebih Boros",
-                    delta_color="normal" if _tot_b <= _tot_a else "inverse"
-                )
-
-                _melt = _dfcmp.melt(
-                    id_vars="Kategori", value_vars=[_lab_a, _lab_b],
-                    var_name="Periode", value_name="Nominal"
-                )
+                _dfa = df[(df["bulan"]==_bla)&(df["tahun"]==_tha)]
+                _dfb = df[(df["bulan"]==_blb)&(df["tahun"]==_thb)]
+                _la  = f"{_bla} {_tha} (A)"; _lb = f"{_blb} {_thb} (B)"
+                _ka2 = _dfa.groupby("kategori")["nominal"].sum().rename(_la)
+                _kb2 = _dfb.groupby("kategori")["nominal"].sum().rename(_lb)
+                _dcmp = pd.concat([_ka2,_kb2],axis=1).fillna(0).reset_index()
+                _dcmp.columns = ["Kategori",_la,_lb]
+                _dcmp["Selisih"] = _dcmp[_lb].astype(float)-_dcmp[_la].astype(float)
+                _ta2=_dfa["nominal"].sum(); _tb2=_dfb["nominal"].sum()
+                _mm2=st.columns(3)
+                _mm2[0].metric(f"Total {_bla}",rp(_ta2))
+                _mm2[1].metric(f"Total {_blb}",rp(_tb2),delta=rp(_tb2-_ta2),delta_color="inverse")
+                _mm2[2].metric("Selisih",rp(abs(_tb2-_ta2)),
+                    delta="Lebih Hemat" if _tb2<_ta2 else "Lebih Boros",
+                    delta_color="normal" if _tb2<=_ta2 else "inverse")
+                _melt2 = _dcmp.melt(id_vars="Kategori",value_vars=[_la,_lb],
+                                     var_name="Periode",value_name="Nominal")
                 st.altair_chart(
-                    alt.Chart(_melt).mark_bar().encode(
-                        x=alt.X("Kategori:N", title=""),
-                        y=alt.Y("Nominal:Q", title="Nominal (Rp)"),
-                        color=alt.Color("Periode:N", scale=alt.Scale(
-                            range=["#1565C0", "#FF7043"]
-                        )),
-                        xOffset="Periode:N",
-                        tooltip=["Kategori", "Periode", "Nominal"]
-                    ).properties(height=300),
-                    use_container_width=True
-                )
-                st.markdown("**Detail per Kategori**")
-                st.dataframe(_dfcmp, use_container_width=True, hide_index=True)
-        else:
-            st.info("Belum ada data pengeluaran untuk dibandingkan.")
+                    alt.Chart(_melt2).mark_bar().encode(
+                        x=alt.X("Kategori:N",title=""),
+                        y=alt.Y("Nominal:Q",title="Nominal (Rp)"),
+                        color=alt.Color("Periode:N",scale=alt.Scale(range=["#1565C0","#FF7043"])),
+                        xOffset="Periode:N",tooltip=["Kategori","Periode","Nominal"]
+                    ).properties(height=290), use_container_width=True)
+                st.dataframe(_dcmp, use_container_width=True, hide_index=True)
+        else: st.info("Belum ada data untuk dibandingkan.")
 
 
 # ============================================================
-# TAB 4 — ANALISIS AI
+# TAB 6 — ANALISIS AI
 # ============================================================
-with tab4:
+with _t6:
     st.markdown("#### 🧠 Analisis AI Cerdas")
-
-    if not df_view.empty:
-        # 1. Tren historis
+    if not _dfv.empty:
         st.markdown("##### 📈 Tren Historis")
-        if not df.empty and pilihan_bulan != "Semua Bulan":
-            _df_lain = df[
-                ~((df["bulan"] == pilihan_bulan) & (df["tahun"] == pilihan_tahun))
-            ]
-            if not _df_lain.empty:
-                _rata = _df_lain.groupby(["tahun", "bulan"])["nominal"].sum().mean()
-                if total_pengeluaran > _rata:
-                    _sel = total_pengeluaran - _rata
-                    _brs = df_view.groupby("kategori")["nominal"].sum().idxmax()
-                    st.error(
-                        f"📈 **Tren Memburuk:** Lebih tinggi **{format_rupiah(_sel)}** "
-                        f"dari rata-rata historis. Penyumbang terbesar: **{_brs}**."
-                    )
+        if not df.empty and _pil_bln!="Semua Bulan":
+            _dl = df[~((df["bulan"]==_pil_bln)&(df["tahun"]==_pil_thn))]
+            if not _dl.empty:
+                _rt = _dl.groupby(["tahun","bulan"])["nominal"].sum().mean()
+                if _tot_pglr>_rt:
+                    st.error(f"📈 Lebih tinggi {rp(_tot_pglr-_rt)} dari rata-rata historis. "
+                             f"Penyumbang terbesar: **{_dfv.groupby('kategori')['nominal'].sum().idxmax()}**.")
                 else:
-                    st.success(
-                        f"📉 **Tren Membaik:** Lebih hemat "
-                        f"**{format_rupiah(_rata - total_pengeluaran)}** dari rata-rata."
-                    )
-            else:
-                st.info("Belum ada data historis sebelumnya.")
-        else:
-            st.info("Pilih bulan tertentu untuk melihat perbandingan historis.")
+                    st.success(f"📉 Lebih hemat {rp(_rt-_tot_pglr)} dari rata-rata historis.")
+            else: st.info("Belum ada data historis.")
+        else: st.info("Pilih bulan tertentu untuk perbandingan historis.")
 
-        # 2. Waktu rawan
         st.markdown("##### ⏰ Deteksi Waktu Rawan")
-        if "jam" in df_view.columns:
-            _malam = df_view[(df_view["jam"] >= 20) | (df_view["jam"] <= 5)]
-            if not _malam.empty:
-                st.warning(
-                    f"🌙 **Belanja Malam/Dini Hari:** {format_rupiah(_malam['nominal'].sum())} "
-                    f"— waspadai impulsive buying saat lelah."
-                )
+        if "jam" in _dfv.columns:
+            _ml = _dfv[(_dfv["jam"]>=20)|(_dfv["jam"]<=5)]
+            if not _ml.empty:
+                st.warning(f"🌙 Belanja malam/dini hari: {rp(_ml['nominal'].sum())} — waspadai impulsive buying.")
             else:
-                st.success("✅ Tidak ada transaksi di jam rawan (20:00–05:00).")
+                st.success("✅ Tidak ada transaksi di jam rawan.")
 
-        # 3. Porsi pengeluaran
         st.markdown("##### ⚖️ Porsi Pengeluaran")
-        _wajib = df_view[df_view["sifat"] == "Wajib"]["nominal"].sum()
-        if budget_evaluasi > 0:
-            _pct_s = (sukarela / budget_evaluasi) * 100
-            if _pct_s > 50:
-                st.error(
-                    f"💸 Porsi sukarela **{_pct_s:.1f}%** dari anggaran — terlalu besar. "
-                    f"Evaluasi prioritas pengeluaran!"
-                )
-            else:
-                st.info(
-                    f"💡 Porsi sukarela terkendali ({_pct_s:.1f}% anggaran). "
-                    f"Pengeluaran wajib: {format_rupiah(_wajib)}."
-                )
+        if _bud>0:
+            _ps = (_sukarela/_bud)*100
+            (st.error if _ps>50 else st.info)(
+                f"{'💸 Porsi sukarela terlalu besar' if _ps>50 else '💡 Porsi sukarela terkendali'} "
+                f"({_ps:.1f}% anggaran).")
 
-        # 4. Evaluasi target tabungan
         st.markdown("##### 🎯 Evaluasi Target Tabungan")
-        if target_evaluasi > 0:
-            if total_pengeluaran <= batas_belanja:
-                _lebih = batas_belanja - total_pengeluaran
-                st.success(
-                    f"✅ **Target Tercapai!** Masih ada ruang {format_rupiah(_lebih)} "
-                    f"sebelum menyentuh batas."
-                )
+        if _tgt>0:
+            if _tot_pglr<=_bts:
+                st.success(f"✅ Target tercapai! Masih ada ruang {rp(_bts-_tot_pglr)}.")
             else:
-                _kekrg = total_pengeluaran - batas_belanja
-                st.error(
-                    f"🚨 **Target Terancam!** Pengeluaran melebihi batas "
-                    f"sebesar **{format_rupiah(_kekrg)}**."
-                )
-                _df_suka = df_view[df_view["sifat"] == "Sukarela"]
-                if not _df_suka.empty:
-                    _kat_suka = _df_suka.groupby("kategori")["nominal"]\
-                        .sum().sort_values(ascending=False)
-                    st.write("**💡 Rekomendasi Penghematan:**")
-                    _sisa = _kekrg
-                    for _kat, _tot_kat in _kat_suka.items():
-                        if _sisa <= 0:
-                            break
-                        _potong = min(_tot_kat, _sisa)
-                        st.info(f"➖ Kurangi **{_kat}** sebesar **{format_rupiah(_potong)}**")
-                        _sisa -= _potong
-                    if _sisa > 0:
-                        st.warning(
-                            f"⚠️ Setelah memotong semua kategori sukarela, "
-                            f"masih kurang {format_rupiah(_sisa)}."
-                        )
-                else:
-                    st.warning("Tidak ada pengeluaran sukarela yang bisa dipangkas.")
-        else:
-            st.info("📌 Belum ada target tabungan untuk periode ini.")
+                _kr = _tot_pglr-_bts
+                st.error(f"🚨 Target terancam! Melebihi batas {rp(_kr)}.")
+                _dsuka = _dfv[_dfv["sifat"]=="Sukarela"]
+                if not _dsuka.empty:
+                    _sisa_k=_kr
+                    for _k3,_t3 in _dsuka.groupby("kategori")["nominal"].sum().sort_values(ascending=False).items():
+                        if _sisa_k<=0: break
+                        _pt=min(_t3,_sisa_k)
+                        st.info(f"➖ Kurangi **{_k3}** sebesar **{rp(_pt)}**")
+                        _sisa_k-=_pt
+        else: st.info("📌 Belum ada target tabungan.")
 
-        # 5. Rekomendasi umum
         st.markdown("##### 🎯 Rekomendasi Umum")
-        _top_kat  = df_view.groupby("kategori")["nominal"].sum().idxmax()
-        _nom_top  = df_view[df_view["kategori"] == _top_kat]["nominal"].sum()
-        _pangkas  = int(_nom_top * 0.2)
-        if _pangkas > 0:
-            st.info(
-                f"➔ Kurangi 20% dari **{_top_kat}** (~{format_rupiah(_pangkas)}) "
-                f"untuk penghematan signifikan bulan depan."
-            )
-        if budget_evaluasi > 0 and sisa_anggaran < 0:
-            st.info(
-                "➔ Anggaran sudah tekor. Alokasikan dana darurat di "
-                "kategori 'Wajib' di awal bulan berikutnya."
-            )
+        _tp = _dfv.groupby("kategori")["nominal"].sum().idxmax()
+        _np = _dfv[_dfv["kategori"]==_tp]["nominal"].sum()
+        if int(_np*0.2)>0:
+            st.info(f"➔ Kurangi 20% dari **{_tp}** (~{rp(_np*0.2)}) untuk penghematan signifikan.")
+        if _bud>0 and _sisa_ang<0:
+            st.info("➔ Anggaran tekor. Alokasikan dana darurat di awal bulan depan.")
 
         st.markdown("---")
-
-        # 6. Badges
-        st.markdown("##### 🏅 Pencapaian & Badges")
-        _badges = cek_badges(
-            df if not df.empty else pd.DataFrame(),
-            st.session_state.anggaran_terkunci,
-            st.session_state.target_tabungan
-        )
-        if _badges:
-            _badge_html = "".join([
-                f'<span style="display:inline-block;background:linear-gradient(135deg,#FFD700,#FFA500);'
-                f'border-radius:50px;padding:0.3rem 0.85rem;font-size:0.88rem;font-weight:600;'
-                f'margin:0.25rem;color:#1a1a1a;" title="{_desc}">{_ic} {_nm}</span>'
-                for _ic, _nm, _desc in _badges
-            ])
-            st.markdown(_badge_html, unsafe_allow_html=True)
-            for _ic, _nm, _desc in _badges:
-                st.caption(f"{_ic} **{_nm}**: {_desc}")
+        st.markdown("##### 🏅 Badges")
+        _bdgs = cek_badges(df if not df.empty else pd.DataFrame(),
+                            st.session_state.anggaran_terkunci,
+                            st.session_state.target_tabungan)
+        if _bdgs:
+            _bh = "".join([f'<span style="display:inline-block;background:linear-gradient(135deg,#FFD700,#FFA500);'
+                            f'border-radius:50px;padding:0.3rem 0.8rem;font-size:0.85rem;font-weight:600;'
+                            f'margin:0.2rem;color:#1a1a1a;" title="{_d}">{_i} {_n}</span>'
+                            for _i,_n,_d in _bdgs])
+            st.markdown(_bh, unsafe_allow_html=True)
+            for _i,_n,_d in _bdgs: st.caption(f"{_i} **{_n}**: {_d}")
         else:
-            st.info(
-                "Belum ada badge yang diraih. Terus catat transaksi secara konsisten "
-                "untuk membuka pencapaian!"
-            )
+            st.info("Belum ada badge. Terus catat transaksi untuk membuka pencapaian!")
 
         st.markdown("---")
-
-        # 7. Ekspor PDF
-        st.markdown("##### 📄 Ekspor Laporan PDF")
+        st.markdown("##### 📄 Ekspor PDF")
         if PDF_AVAILABLE:
-            if st.button("🖨️ Buat Laporan PDF", key="btn_pdf"):
-                with st.spinner("Membuat laporan PDF..."):
-                    _pdf_bytes = buat_laporan_pdf(
-                        email_user, pilihan_bulan, pilihan_tahun,
-                        df_view, df_pemasukan_view,
-                        budget_evaluasi, target_evaluasi,
-                        total_pengeluaran, total_pemasukan,
-                        health_score, label_score
-                    )
-                    if _pdf_bytes:
-                        st.download_button(
-                            label="📥 Unduh Laporan PDF",
-                            data=_pdf_bytes,
-                            file_name=f"DanaPintar_{pilihan_bulan}_{pilihan_tahun}.pdf",
-                            mime="application/pdf"
-                        )
+            if st.button("🖨️ Buat Laporan PDF"):
+                with st.spinner("Membuat laporan..."):
+                    _pb = buat_pdf(email_user,_pil_bln,_pil_thn,_dfv,_dfpv,
+                                    _bud,_tgt,_tot_pglr,_tot_msuk,_hs,_ls)
+                    if _pb:
+                        st.download_button("📥 Unduh PDF", _pb,
+                            f"DanaPintar_{_pil_bln}_{_pil_thn}.pdf","application/pdf")
         else:
-            st.warning(
-                "📦 Install `fpdf2` untuk mengaktifkan ekspor PDF:\n"
-                "```\npip install fpdf2\n```"
-            )
-
+            st.warning("Install `fpdf2` untuk PDF: `pip install fpdf2`")
     else:
-        st.info("Tidak ada data transaksi untuk dianalisis pada periode ini.")
+        st.info("Tidak ada data transaksi untuk dianalisis.")
 
 
 # ============================================================
-# TAB 5 — CHAT AI (Google Gemini 2.5 Flash)
+# TAB 7 — CHAT AI
 # ============================================================
-with tab5:
+with _t7:
     st.markdown("#### 🤖 DanaBot — AI Keuangan Pribadi")
+    st.caption("✨ Powered by Google Gemini 2.5 Flash (Free Tier)")
 
-    _ai_ready = GEMINI_AVAILABLE and GEMINI_API_KEY is not None
-
-    if not _ai_ready:
-        st.warning(
-            "⚠️ **Fitur Chat AI belum aktif.** Langkah aktivasi:\n\n"
-            "1. Install package: `pip install google-generativeai`\n"
-            "2. Dapatkan API key **gratis** di: https://aistudio.google.com/app/apikey\n"
-            "3. Tambahkan ke `.streamlit/secrets.toml`:\n"
-            "   ```\n   GEMINI_API_KEY = \"AIzaSy...\"\n   ```"
-        )
+    _ai_ok = GEMINI_AVAILABLE and GEMINI_API_KEY is not None
+    if not _ai_ok:
+        st.warning("⚠️ Tambahkan `GEMINI_API_KEY` ke `.streamlit/secrets.toml` dan install `google-generativeai`.")
     else:
-        # Tampilkan riwayat chat
         for _msg in st.session_state.chat_history:
-            with st.chat_message(
-                _msg["role"],
-                avatar="🤖" if _msg["role"] == "assistant" else "👤"
-            ):
+            with st.chat_message(_msg["role"],
+                                  avatar="🤖" if _msg["role"]=="assistant" else "👤"):
                 st.markdown(_msg["content"])
 
-        if _prompt := st.chat_input(
-            "Tanya soal keuanganmu... (contoh: 'Kenapa bulan ini lebih boros?')"
-        ):
-            st.session_state.chat_history.append(
-                {"role": "user", "content": _prompt}
-            )
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(_prompt)
+        if _pr7 := st.chat_input("Tanya soal keuanganmu..."):
+            st.session_state.chat_history.append({"role":"user","content":_pr7})
+            with st.chat_message("user",avatar="👤"): st.markdown(_pr7)
 
-            # Bangun konteks keuangan untuk sistem prompt
-            _kat_detail = ""
-            if not df_view.empty:
-                _kat_dict = df_view.groupby("kategori")["nominal"].sum().to_dict()
-                _kat_detail = "\nPengeluaran per kategori:\n" + "\n".join(
-                    f"  - {k}: {format_rupiah(v)}" for k, v in _kat_dict.items()
-                )
+            _kd7=""
+            if not _dfv.empty:
+                _kd7="\nPengeluaran per kategori:\n"+"".join(
+                    f"  - {k}: {rp(v)}\n" for k,v in _dfv.groupby("kategori")["nominal"].sum().items())
 
-            _sys = f"""Kamu adalah DanaBot, asisten keuangan pribadi yang cerdas dan empatik
-dari aplikasi DanaPintar AI. Bantu pengguna Indonesia menganalisis keuangan mereka.
-Gunakan bahasa Indonesia yang ramah, ringkas, dan berikan saran yang spesifik & actionable.
-Jangan mengarang data — hanya gunakan data yang tersedia di bawah ini.
+            _sys7=f"""Kamu adalah DanaBot, asisten keuangan pribadi dari DanaPintar AI.
+Bantu pengguna Indonesia menganalisis keuangan mereka dengan bahasa yang ramah dan saran actionable.
+Jangan mengarang data.
 
-=== DATA KEUANGAN PENGGUNA ===
-Periode        : {pilihan_bulan} {pilihan_tahun}
-Anggaran       : {format_rupiah(budget_evaluasi)}
-Pemasukan      : {format_rupiah(total_pemasukan)}
-Pengeluaran    : {format_rupiah(total_pengeluaran)}
-Target Tabungan: {format_rupiah(target_evaluasi)}
-Batas Belanja  : {format_rupiah(batas_belanja)}
-Sisa Batas     : {format_rupiah(_sisa_batas)}
-Net Cash Flow  : {format_rupiah(net_cashflow)}
-Health Score   : {health_score}/100 ({label_score})
-{_kat_detail}
-"""
+DATA KEUANGAN:
+Periode: {_pil_bln} {_pil_thn}
+Anggaran: {rp(_bud)} | Pemasukan: {rp(_tot_msuk)} | Pengeluaran: {rp(_tot_pglr)}
+Target Tabungan: {rp(_tgt)} | Batas Belanja: {rp(_bts)} | Net Cash Flow: {rp(_net)}
+Health Score: {_hs}/100 ({_ls}){_kd7}"""
 
-            with st.chat_message("assistant", avatar="🤖"):
-                with st.spinner("DanaBot sedang berpikir..."):
+            with st.chat_message("assistant",avatar="🤖"):
+                with st.spinner("DanaBot berpikir..."):
                     try:
                         genai.configure(api_key=GEMINI_API_KEY)
-
-                        # Konversi riwayat ke format Gemini (user/model)
-                        _gemini_history = []
-                        for _m in st.session_state.chat_history[:-1]:
-                            _role = "user" if _m["role"] == "user" else "model"
-                            _gemini_history.append({
-                                "role": _role,
-                                "parts": [_m["content"]]
-                            })
-
-                        _model = genai.GenerativeModel(
-                            model_name="gemini-2.5-flash",
-                            system_instruction=_sys
-                        )
-                        _chat_session = _model.start_chat(
-                            history=_gemini_history
-                        )
-                        _response = _chat_session.send_message(_prompt)
-                        _jawaban  = _response.text
-
-                        st.markdown(_jawaban)
-                        st.session_state.chat_history.append(
-                            {"role": "assistant", "content": _jawaban}
-                        )
-
+                        _gh = [{"role":"user" if m["role"]=="user" else "model",
+                                 "parts":[m["content"]]}
+                                for m in st.session_state.chat_history[:-1]]
+                        _mdl = genai.GenerativeModel("gemini-2.5-flash",system_instruction=_sys7)
+                        _rs  = _mdl.start_chat(history=_gh).send_message(_pr7)
+                        _jaw = _rs.text
+                        st.markdown(_jaw)
+                        st.session_state.chat_history.append({"role":"assistant","content":_jaw})
                     except Exception as _e:
-                        _err = f"Maaf, terjadi error: {_e}"
-                        st.error(_err)
-                        st.session_state.chat_history.append(
-                            {"role": "assistant", "content": _err}
-                        )
+                        _em=f"Maaf, terjadi error: {_e}"
+                        st.error(_em)
+                        st.session_state.chat_history.append({"role":"assistant","content":_em})
 
-        # Tombol reset percakapan
         if st.session_state.chat_history:
-            if st.button("🗑️ Reset Percakapan", key="reset_chat"):
-                st.session_state.chat_history = []
-                st.rerun()
+            if st.button("🗑️ Reset Percakapan", key="rst_chat"):
+                st.session_state.chat_history=[]; st.rerun()
 
+
+# ============================================================
+# TAB 8 — CHANGELOG
+# ============================================================
+with _t8:
+    st.markdown("#### 📋 Riwayat Update — DanaPintar AI")
+    st.caption("Semua perubahan yang dilakukan developer pada aplikasi ini.")
+
+    for _cl in CHANGELOG:
+        _is_latest = _cl == CHANGELOG[0]
+        _badge = ' <span style="background:#2E7D32;color:white;border-radius:20px;padding:2px 10px;font-size:0.75rem;font-weight:600;">LATEST</span>' if _is_latest else ""
+
+        st.markdown(f"""
+        <div style="border-left:4px solid {'#2E7D32' if _is_latest else '#94a3b8'};
+                    padding:1rem 1.2rem;margin-bottom:1.2rem;border-radius:0 10px 10px 0;
+                    background:{'#f0fdf4' if _is_latest else '#f8fafc'};">
+            <div style="font-size:1.1rem;font-weight:700;color:{'#1B5E20' if _is_latest else '#334155'};">
+                v{_cl['versi']} {_badge}
+            </div>
+            <div style="font-size:0.82rem;color:#64748b;margin-bottom:0.6rem;">
+                🗓 {_cl['tanggal']}
+            </div>
+        """, unsafe_allow_html=True)
+
+        if _cl["fitur"]:
+            st.markdown("**✨ Fitur Baru:**")
+            for _f in _cl["fitur"]:
+                st.markdown(f"- {_f}")
+        if _cl["perbaikan"]:
+            st.markdown("**🔧 Perbaikan:**")
+            for _p in _cl["perbaikan"]:
+                st.markdown(f"- {_p}")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+        if _cl != CHANGELOG[-1]: st.markdown("")
+
+    st.markdown("---")
+    st.caption("🛠️ DanaPintar AI dikembangkan oleh **Hendrawan Lotanto**")
 
 # ============================================================
 # FOOTER
@@ -2043,7 +2032,7 @@ st.markdown("---")
 st.markdown(
     "<p style='text-align:center;color:#2E7D32;font-size:14px;'>"
     "🛠️ Dibangun dengan ❤️ oleh <strong>Hendrawan Lotanto</strong> "
-    "— © 2026 DanaPintar AI Premium v2.0"
+    "— © 2026 DanaPintar AI Premium v3.0"
     "</p>",
     unsafe_allow_html=True
 )
