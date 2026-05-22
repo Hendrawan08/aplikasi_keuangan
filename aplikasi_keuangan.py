@@ -1425,49 +1425,58 @@ with tab3:
                 )
                 _thn_b = st.selectbox("Tahun B", _thn_ada, index=0, key="cmp_tb")
 
-            _df_a = df[(df["bulan"] == _bln_a) & (df["tahun"] == _thn_a)]
-            _df_b = df[(df["bulan"] == _bln_b) & (df["tahun"] == _thn_b)]
-            _ka   = _df_a.groupby("kategori")["nominal"].sum().rename(f"{_bln_a} {_thn_a}")
-            _kb   = _df_b.groupby("kategori")["nominal"].sum().rename(f"{_bln_b} {_thn_b}")
-            _dfcmp = pd.concat([_ka, _kb], axis=1).fillna(0).reset_index()
-            _lab_a, _lab_b = f"{_bln_a} {_thn_a}", f"{_bln_b} {_thn_b}"
-            _dfcmp.columns  = ["Kategori", _lab_a, _lab_b]
-            _dfcmp["Selisih"] = _dfcmp[_lab_b] - _dfcmp[_lab_a]
-            _dfcmp["Status"]  = _dfcmp["Selisih"].apply(
-                lambda x: "Naik" if x > 0 else ("Turun" if x < 0 else "Sama")
-            )
+            # Guard: periode harus berbeda
+            if _bln_a == _bln_b and _thn_a == _thn_b:
+                st.warning("⚠️ Pilih periode yang berbeda untuk membandingkan.")
+            else:
+                _df_a = df[(df["bulan"] == _bln_a) & (df["tahun"] == _thn_a)]
+                _df_b = df[(df["bulan"] == _bln_b) & (df["tahun"] == _thn_b)]
 
-            _tot_a = _df_a["nominal"].sum()
-            _tot_b = _df_b["nominal"].sum()
-            _mm = st.columns(3)
-            _mm[0].metric(f"Total {_bln_a}", format_rupiah(_tot_a))
-            _mm[1].metric(f"Total {_bln_b}", format_rupiah(_tot_b),
-                          delta=format_rupiah(_tot_b - _tot_a),
-                          delta_color="inverse")
-            _mm[2].metric(
-                "Perbandingan", format_rupiah(abs(_tot_b - _tot_a)),
-                delta="Lebih Hemat" if _tot_b < _tot_a else "Lebih Boros",
-                delta_color="normal" if _tot_b <= _tot_a else "inverse"
-            )
+                # Label unik mencegah kolom duplikat saat concat
+                _lab_a = f"{_bln_a} {_thn_a} (A)"
+                _lab_b = f"{_bln_b} {_thn_b} (B)"
+                _ka    = _df_a.groupby("kategori")["nominal"].sum().rename(_lab_a)
+                _kb    = _df_b.groupby("kategori")["nominal"].sum().rename(_lab_b)
+                _dfcmp = pd.concat([_ka, _kb], axis=1).fillna(0).reset_index()
+                _dfcmp.columns    = ["Kategori", _lab_a, _lab_b]
+                _dfcmp["Selisih"] = _dfcmp[_lab_b].astype(float) - _dfcmp[_lab_a].astype(float)
+                _dfcmp["Status"]  = _dfcmp["Selisih"].apply(
+                    lambda x: "Naik" if x > 0 else ("Turun" if x < 0 else "Sama")
+                )
 
-            _melt = _dfcmp.melt(
-                id_vars="Kategori", value_vars=[_lab_a, _lab_b],
-                var_name="Periode", value_name="Nominal"
-            )
-            st.altair_chart(
-                alt.Chart(_melt).mark_bar().encode(
-                    x=alt.X("Kategori:N", title=""),
-                    y=alt.Y("Nominal:Q", title="Nominal (Rp)"),
-                    color=alt.Color("Periode:N", scale=alt.Scale(
-                        range=["#1565C0", "#FF7043"]
-                    )),
-                    xOffset="Periode:N",
-                    tooltip=["Kategori", "Periode", "Nominal"]
-                ).properties(height=300),
-                use_container_width=True
-            )
-            st.markdown("**Detail per Kategori**")
-            st.dataframe(_dfcmp, use_container_width=True, hide_index=True)
+                _tot_a = _df_a["nominal"].sum()
+                _tot_b = _df_b["nominal"].sum()
+                _mm    = st.columns(3)
+                _mm[0].metric(f"Total {_bln_a} {_thn_a}", format_rupiah(_tot_a))
+                _mm[1].metric(
+                    f"Total {_bln_b} {_thn_b}", format_rupiah(_tot_b),
+                    delta=format_rupiah(_tot_b - _tot_a),
+                    delta_color="inverse"
+                )
+                _mm[2].metric(
+                    "Perbandingan", format_rupiah(abs(_tot_b - _tot_a)),
+                    delta="Lebih Hemat" if _tot_b < _tot_a else "Lebih Boros",
+                    delta_color="normal" if _tot_b <= _tot_a else "inverse"
+                )
+
+                _melt = _dfcmp.melt(
+                    id_vars="Kategori", value_vars=[_lab_a, _lab_b],
+                    var_name="Periode", value_name="Nominal"
+                )
+                st.altair_chart(
+                    alt.Chart(_melt).mark_bar().encode(
+                        x=alt.X("Kategori:N", title=""),
+                        y=alt.Y("Nominal:Q", title="Nominal (Rp)"),
+                        color=alt.Color("Periode:N", scale=alt.Scale(
+                            range=["#1565C0", "#FF7043"]
+                        )),
+                        xOffset="Periode:N",
+                        tooltip=["Kategori", "Periode", "Nominal"]
+                    ).properties(height=300),
+                    use_container_width=True
+                )
+                st.markdown("**Detail per Kategori**")
+                st.dataframe(_dfcmp, use_container_width=True, hide_index=True)
         else:
             st.info("Belum ada data pengeluaran untuk dibandingkan.")
 
