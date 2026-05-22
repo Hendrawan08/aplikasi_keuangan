@@ -952,7 +952,7 @@ with st.sidebar:
                 st.caption("Belum ada foto profil.")
 
             _file_up = st.file_uploader(
-                "Upload foto baru (JPG/PNG/WEBP, maks 2MB)",
+                "Upload foto baru (JPG/PNG/WEBP, maks 5MB)",
                 type=["jpg", "jpeg", "png", "webp"],
                 key="foto_upload"
             )
