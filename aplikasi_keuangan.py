@@ -1207,10 +1207,10 @@ with tab1:
             lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}"
         )
         _df_tampil = _dv[[
-            "Tanggal Lengkap", "bulan", "catatan", "nominal",
+            "Tanggal Lengkap", "catatan", "nominal",
             "kategori", "sifat", "Jam Catat"
         ]].copy()
-        _df_tampil.columns = ["Tanggal", "Bulan", "Deskripsi",
+        _df_tampil.columns = ["Tanggal", "Deskripsi",
                                "Nominal (Rp)", "Kategori", "Sifat", "Waktu"]
 
         _sel = st.dataframe(
@@ -1655,7 +1655,6 @@ with tab4:
 # ============================================================
 with tab5:
     st.markdown("#### 🤖 DanaBot — AI Keuangan Pribadi")
-    st.caption("✨ Powered by Google Gemini 2.5 Flash (Free Tier)")
 
     _ai_ready = GEMINI_AVAILABLE and GEMINI_API_KEY is not None
 
