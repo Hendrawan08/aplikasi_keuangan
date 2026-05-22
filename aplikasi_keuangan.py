@@ -195,7 +195,12 @@ except (KeyError, FileNotFoundError):
         ".eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxteXZkZHF3bW1wc3JwaWd6eWdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNzQ0NjQsImV4cCI6MjA5NDc1MDQ2NH0"
         ".Cv41r1Mo6fR164y3g8OX-zP_Cmj0NiR9zyRzkmYJi9I"
     )
-    
+    st.warning(
+        "⚠️ **Keamanan:** API key masih hardcoded. "
+        "Pindahkan ke `.streamlit/secrets.toml` sebelum deploy ke production.",
+        icon="🔐"
+    )
+
 try:
     ANTHROPIC_API_KEY = st.secrets["ANTHROPIC_API_KEY"]
     if not ANTHROPIC_API_KEY:
