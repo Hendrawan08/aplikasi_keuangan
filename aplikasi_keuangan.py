@@ -59,10 +59,10 @@ except ImportError:
     PDF_AVAILABLE = False
 
 try:
-    import anthropic
-    CLAUDE_AVAILABLE = True
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
 except ImportError:
-    CLAUDE_AVAILABLE = False
+    GEMINI_AVAILABLE = False
 
 
 # ============================================================
@@ -202,11 +202,11 @@ except (KeyError, FileNotFoundError):
     )
 
 try:
-    ANTHROPIC_API_KEY = st.secrets["ANTHROPIC_API_KEY"]
-    if not ANTHROPIC_API_KEY:
-        ANTHROPIC_API_KEY = None
+    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+    if not GEMINI_API_KEY:
+        GEMINI_API_KEY = None
 except (KeyError, FileNotFoundError):
-    ANTHROPIC_API_KEY = None
+    GEMINI_API_KEY = None
 
 try:
     TZ = pytz.timezone("Asia/Jakarta")
@@ -1656,30 +1656,35 @@ with tab4:
 with tab5:
     st.markdown("#### 🤖 DanaBot — AI Keuangan Pribadi")
 
-    _ai_ready = CLAUDE_AVAILABLE and ANTHROPIC_API_KEY is not None
+    _ai_ready = GEMINI_AVAILABLE and GEMINI_API_KEY is not None
 
     if not _ai_ready:
         st.warning(
             "⚠️ **Fitur Chat AI belum aktif.** Langkah aktivasi:\n\n"
-            "1. Install: `pip install anthropic`\n"
-            "2. Tambahkan ke `.streamlit/secrets.toml`:\n"
-            "   ```\n   ANTHROPIC_API_KEY = \"sk-ant-...\"\n   ```"
+            "1. Install: `pip install google-generativeai`\n"
+            "2. Dapatkan API key gratis di: https://aistudio.google.com/app/apikey\n"
+            "3. Tambahkan ke `.streamlit/secrets.toml`:\n"
+            "   ```\n   GEMINI_API_KEY = \"AIzaSy...\"\n   ```"
         )
     else:
         # Tampilkan riwayat chat
         for _msg in st.session_state.chat_history:
-            with st.chat_message(_msg["role"]):
+            with st.chat_message(
+                _msg["role"],
+                avatar="🤖" if _msg["role"] == "assistant" else "👤"
+            ):
                 st.markdown(_msg["content"])
 
-        # Input chat
         if _prompt := st.chat_input(
             "Tanya soal keuanganmu... (contoh: 'Kenapa bulan ini lebih boros?')"
         ):
-            st.session_state.chat_history.append({"role": "user", "content": _prompt})
-            with st.chat_message("user"):
+            st.session_state.chat_history.append(
+                {"role": "user", "content": _prompt}
+            )
+            with st.chat_message("user", avatar="👤"):
                 st.markdown(_prompt)
 
-            # Bangun konteks keuangan untuk sistem prompt
+            # Bangun konteks keuangan
             _kat_detail = ""
             if not df_view.empty:
                 _kat_dict = df_view.groupby("kategori")["nominal"].sum().to_dict()
@@ -1705,25 +1710,35 @@ Health Score   : {health_score}/100 ({label_score})
 {_kat_detail}
 """
 
-            with st.chat_message("assistant"):
+            with st.chat_message("assistant", avatar="🤖"):
                 with st.spinner("DanaBot sedang berpikir..."):
                     try:
-                        _ai_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-                        _messages_api = [
-                            {"role": m["role"], "content": m["content"]}
-                            for m in st.session_state.chat_history
-                        ]
-                        _resp_ai = _ai_client.messages.create(
-                            model="claude-sonnet-4-20250514",
-                            max_tokens=1_000,
-                            system=_sys,
-                            messages=_messages_api
+                        genai.configure(api_key=GEMINI_API_KEY)
+
+                        # Konversi riwayat chat ke format Gemini
+                        _gemini_history = []
+                        for _m in st.session_state.chat_history[:-1]:
+                            _role = "user" if _m["role"] == "user" else "model"
+                            _gemini_history.append({
+                                "role": _role,
+                                "parts": [_m["content"]]
+                            })
+
+                        _model = genai.GenerativeModel(
+                            model_name="gemini-1.5-flash",
+                            system_instruction=_sys
                         )
-                        _jawaban = _resp_ai.content[0].text
+                        _chat_session = _model.start_chat(
+                            history=_gemini_history
+                        )
+                        _response = _chat_session.send_message(_prompt)
+                        _jawaban  = _response.text
+
                         st.markdown(_jawaban)
                         st.session_state.chat_history.append(
                             {"role": "assistant", "content": _jawaban}
                         )
+
                     except Exception as _e:
                         _err = f"Maaf, terjadi error: {_e}"
                         st.error(_err)
@@ -1731,7 +1746,6 @@ Health Score   : {health_score}/100 ({label_score})
                             {"role": "assistant", "content": _err}
                         )
 
-        # Reset chat
         if st.session_state.chat_history:
             if st.button("🗑️ Reset Percakapan", key="reset_chat"):
                 st.session_state.chat_history = []
