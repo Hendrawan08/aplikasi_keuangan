@@ -247,6 +247,9 @@ _defaults = {
     "hapus_sukses": False,
     "toast_kondisi_ditampilkan": False,
     "chat_history": [],
+    "profil": {},
+    "muat_profil_sukses": False,
+    "edit_profil_mode": False,
 }
 for _k, _v in _defaults.items():
     if _k not in st.session_state:
@@ -277,6 +280,91 @@ def parse_df_waktu(df: pd.DataFrame, col: str = "waktu_transaksi") -> pd.DataFra
     df["jam"]    = df[col].dt.hour.astype(int)
     df["menit"]  = df[col].dt.minute.astype(int)
     return df
+
+
+# ============================================================
+# DB FUNCTIONS — PROFIL PENGGUNA
+# ============================================================
+def muat_profil_dari_cloud(uid: str, paksa: bool = False) -> None:
+    """Muat data profil user dari tabel profiles."""
+    if not paksa and st.session_state.muat_profil_sukses:
+        return
+    try:
+        res = supabase.table("profiles").select("*").eq("id", uid).execute()
+        if res.data:
+            st.session_state.profil = res.data[0]
+        else:
+            st.session_state.profil = {}
+        st.session_state.muat_profil_sukses = True
+    except Exception as e:
+        st.session_state.profil = {}
+        st.session_state.muat_profil_sukses = True  # tetap lanjut meski gagal
+
+
+def simpan_profil_ke_cloud(uid: str, data: dict) -> bool:
+    """Upsert data profil ke Supabase."""
+    try:
+        data["id"]         = uid
+        data["updated_at"] = waktu_sekarang_wib().isoformat()
+        supabase.table("profiles").upsert(data).execute()
+        return True
+    except Exception as e:
+        st.error(f"Gagal menyimpan profil: {e}")
+        return False
+
+
+def upload_foto_profil(uid: str, file_bytes: bytes, mime: str) -> str | None:
+    """Upload foto ke Supabase Storage, return public URL atau None."""
+    try:
+        ext      = "jpg" if "jpeg" in mime else mime.split("/")[-1]
+        path     = f"{uid}/avatar.{ext}"
+        bucket   = supabase.storage.from_("profile-photos")
+
+        # Hapus foto lama jika ada
+        try:
+            bucket.remove([path])
+        except Exception:
+            pass
+
+        bucket.upload(
+            path=path,
+            file=file_bytes,
+            file_options={"content-type": mime, "upsert": "true"}
+        )
+        url = bucket.get_public_url(path)
+        # Tambah cache-buster agar browser reload foto baru
+        url = f"{url}?t={int(datetime.now().timestamp())}"
+        return url
+    except Exception as e:
+        st.error(f"Gagal upload foto: {e}")
+        return None
+
+
+def hapus_foto_profil(uid: str) -> bool:
+    """Hapus foto profil dari Storage dan set foto_url ke None."""
+    try:
+        for ext in ["jpg", "jpeg", "png", "webp"]:
+            try:
+                supabase.storage.from_("profile-photos").remove([f"{uid}/avatar.{ext}"])
+            except Exception:
+                pass
+        supabase.table("profiles").upsert({
+            "id": uid, "foto_url": None,
+            "updated_at": waktu_sekarang_wib().isoformat()
+        }).execute()
+        return True
+    except Exception as e:
+        st.error(f"Gagal menghapus foto: {e}")
+        return False
+
+
+def inisial_dari_nama(nama: str, email: str) -> str:
+    """Ambil 1–2 inisial dari nama atau email."""
+    teks = nama.strip() if nama and nama.strip() else email
+    bagian = teks.split()
+    if len(bagian) >= 2:
+        return (bagian[0][0] + bagian[1][0]).upper()
+    return teks[:2].upper() if teks else "??"
 
 
 # ============================================================
@@ -697,6 +785,7 @@ if st.session_state.user_aktif is None:
                 st.session_state.user_aktif = resp.user
                 muat_anggaran_dari_cloud(resp.user.id, paksa=True)
                 muat_target_tabungan_dari_cloud(resp.user.id, paksa=True)
+                muat_profil_dari_cloud(resp.user.id, paksa=True)
                 st.session_state.toast_kondisi_ditampilkan = False
                 st.rerun()
             except Exception as e:
@@ -725,6 +814,8 @@ if not st.session_state.muat_anggaran_sukses:
     muat_anggaran_dari_cloud(uid, paksa=True)
 if not st.session_state.muat_tabungan_sukses:
     muat_target_tabungan_dari_cloud(uid, paksa=True)
+if not st.session_state.muat_profil_sukses:
+    muat_profil_dari_cloud(uid, paksa=True)
 
 # Toast notifications
 if st.session_state.simpan_sukses:
@@ -741,30 +832,222 @@ if st.session_state.hapus_sukses:
 # ============================================================
 with st.sidebar:
 
-    # --- Profil ---
+    # ================================================================
+    # KARTU PROFIL PROFESIONAL
+    # ================================================================
+    _profil        = st.session_state.profil
+    _nama_tampil   = _profil.get("nama", "").strip() or email_user.split("@")[0].title()
+    _bio_tampil    = _profil.get("bio", "").strip() or "Belum ada bio."
+    _lokasi_tampil = _profil.get("lokasi", "").strip()
+    _foto_url      = _profil.get("foto_url", None)
+    _inisial       = inisial_dari_nama(_profil.get("nama", ""), email_user)
+    _joined        = st.session_state.user_aktif.created_at
+    try:
+        _joined_str = datetime.fromisoformat(
+            _joined.replace("Z", "+00:00")
+        ).astimezone(TZ).strftime("%d %b %Y")
+    except Exception:
+        _joined_str = "-"
+
+    # ---- Avatar ----
+    if _foto_url:
+        _avatar_html = (
+            f'<img src="{_foto_url}" style="width:72px;height:72px;border-radius:50%;'
+            f'object-fit:cover;border:3px solid rgba(255,255,255,0.6);">' 
+        )
+    else:
+        _avatar_html = (
+            f'<div style="width:72px;height:72px;border-radius:50%;'
+            f'background:rgba(255,255,255,0.25);display:flex;align-items:center;'
+            f'justify-content:center;font-size:1.6rem;font-weight:700;color:white;'
+            f'border:3px solid rgba(255,255,255,0.5);">{_inisial}</div>'
+        )
+
+    # ---- Card HTML ----
+    _lokasi_html = (
+        f'<div style="font-size:0.78rem;opacity:0.8;margin-top:2px;">'
+        f'📍 {_lokasi_tampil}</div>'
+        if _lokasi_tampil else ""
+    )
     st.markdown(f"""
-    <div class="profile-card">
-        <div style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:1.8rem;">👤</span>
-            <div>
-                <div class="label">Akun Aktif</div>
-                <div class="email">{email_user}</div>
+    <style>
+    .pro-card {{
+        background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #388E3C 100%);
+        border-radius: 20px; padding: 1.2rem 1rem 1rem; margin-bottom: 0.6rem;
+        color: white; box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        border: 1px solid rgba(255,255,255,0.1);
+    }}
+    .pro-card .nama {{
+        font-size: 1rem; font-weight: 700; margin-top: 0.5rem; letter-spacing: 0.3px;
+    }}
+    .pro-card .email-kecil {{
+        font-size: 0.72rem; opacity: 0.7; word-break: break-all; margin-top: 1px;
+    }}
+    .pro-card .bio {{
+        font-size: 0.8rem; opacity: 0.85; margin-top: 0.5rem;
+        font-style: italic; line-height: 1.4;
+        border-top: 1px solid rgba(255,255,255,0.15); padding-top: 0.5rem;
+    }}
+    .pro-card .meta {{
+        font-size: 0.72rem; opacity: 0.65; margin-top: 0.4rem;
+    }}
+    .badge-member {{
+        display:inline-block; background:rgba(255,255,255,0.2);
+        border-radius:20px; padding:2px 8px; font-size:0.7rem; font-weight:600;
+    }}
+    </style>
+    <div class="pro-card">
+        <div style="display:flex;align-items:flex-start;gap:12px;">
+            {_avatar_html}
+            <div style="flex:1;min-width:0;">
+                <div><span class="badge-member">✦ Member</span></div>
+                <div class="nama">{_nama_tampil}</div>
+                <div class="email-kecil">✉ {email_user}</div>
+                {_lokasi_html}
             </div>
         </div>
+        <div class="bio">{_bio_tampil}</div>
+        <div class="meta">🗓 Bergabung sejak {_joined_str}</div>
     </div>
     """, unsafe_allow_html=True)
 
-    if st.button("🚪 Logout", use_container_width=True, key="logout_btn"):
-        try:
-            supabase.auth.sign_out()
-        except Exception:
-            pass
-        for _k in ["user_aktif", "anggaran_terkunci", "target_tabungan",
-                   "muat_anggaran_sukses", "muat_tabungan_sukses",
-                   "toast_kondisi_ditampilkan", "chat_history"]:
-            _default_val = _defaults.get(_k)
-            st.session_state[_k] = _default_val
-        st.rerun()
+    # ---- Tombol aksi profil ----
+    _btn_col1, _btn_col2 = st.columns(2)
+    with _btn_col1:
+        if st.button(
+            "✏️ Edit Profil",
+            use_container_width=True,
+            key="btn_edit_profil"
+        ):
+            st.session_state.edit_profil_mode = not st.session_state.edit_profil_mode
+
+    with _btn_col2:
+        if st.button("🚪 Logout", use_container_width=True, key="logout_btn"):
+            try:
+                supabase.auth.sign_out()
+            except Exception:
+                pass
+            for _k in ["user_aktif", "anggaran_terkunci", "target_tabungan",
+                       "muat_anggaran_sukses", "muat_tabungan_sukses",
+                       "toast_kondisi_ditampilkan", "chat_history",
+                       "profil", "muat_profil_sukses", "edit_profil_mode"]:
+                _default_val = _defaults.get(_k)
+                st.session_state[_k] = _default_val
+            st.rerun()
+
+    # ---- Panel Edit Profil ----
+    if st.session_state.edit_profil_mode:
+        with st.expander("✏️ Edit Profil", expanded=True):
+            st.markdown("**📷 Foto Profil**")
+
+            # Tampilkan foto saat ini + aksi hapus
+            if _foto_url:
+                st.image(_foto_url, width=80)
+                if st.button("🗑️ Hapus Foto", key="hapus_foto"):
+                    if hapus_foto_profil(uid):
+                        st.session_state.profil["foto_url"] = None
+                        st.success("Foto dihapus.")
+                        st.rerun()
+            else:
+                st.caption("Belum ada foto profil.")
+
+            _file_up = st.file_uploader(
+                "Upload foto baru (JPG/PNG/WEBP, maks 2MB)",
+                type=["jpg", "jpeg", "png", "webp"],
+                key="foto_upload"
+            )
+            if _file_up is not None:
+                if _file_up.size > 2 * 1024 * 1024:
+                    st.error("❌ Ukuran file melebihi 2MB.")
+                else:
+                    if st.button("☁️ Upload Foto", key="btn_upload_foto"):
+                        with st.spinner("Mengupload foto..."):
+                            _url_baru = upload_foto_profil(
+                                uid, _file_up.read(), _file_up.type
+                            )
+                            if _url_baru:
+                                st.session_state.profil["foto_url"] = _url_baru
+                                simpan_profil_ke_cloud(uid, {"foto_url": _url_baru})
+                                st.success("✅ Foto berhasil diupload!")
+                                st.rerun()
+
+            st.markdown("---")
+            st.markdown("**👤 Informasi Pribadi**")
+
+            with st.form("form_edit_profil"):
+                _input_nama = st.text_input(
+                    "Nama Lengkap",
+                    value=_profil.get("nama", ""),
+                    placeholder="Contoh: Hendrawan Lotanto",
+                    max_chars=60
+                )
+                _input_bio = st.text_area(
+                    "Bio",
+                    value=_profil.get("bio", ""),
+                    placeholder="Ceritakan sedikit tentang dirimu...",
+                    max_chars=160,
+                    height=90
+                )
+                _input_lokasi = st.text_input(
+                    "Lokasi",
+                    value=_profil.get("lokasi", ""),
+                    placeholder="Contoh: Jakarta, Indonesia",
+                    max_chars=60
+                )
+                _input_pekerjaan = st.text_input(
+                    "Pekerjaan",
+                    value=_profil.get("pekerjaan", ""),
+                    placeholder="Contoh: Software Engineer",
+                    max_chars=60
+                )
+                _input_target_fin = st.text_input(
+                    "Target Finansial",
+                    value=_profil.get("target_finansial", ""),
+                    placeholder="Contoh: Dana darurat 6 bulan",
+                    max_chars=100
+                )
+
+                st.markdown("**🔒 Ganti Password**")
+                _pw_baru  = st.text_input(
+                    "Password Baru (kosongkan jika tidak ingin ganti)",
+                    type="password", key="pw_baru"
+                )
+                _pw_konfirm = st.text_input(
+                    "Konfirmasi Password Baru",
+                    type="password", key="pw_konfirm"
+                )
+
+                _submit_profil = st.form_submit_button(
+                    "💾 Simpan Perubahan", use_container_width=True
+                )
+
+            if _submit_profil:
+                _data_profil = {
+                    "nama"            : _input_nama.strip(),
+                    "bio"             : _input_bio.strip(),
+                    "lokasi"          : _input_lokasi.strip(),
+                    "pekerjaan"       : _input_pekerjaan.strip(),
+                    "target_finansial": _input_target_fin.strip(),
+                    "foto_url"        : _profil.get("foto_url"),
+                }
+                if simpan_profil_ke_cloud(uid, _data_profil):
+                    # Ganti password jika diisi
+                    if _pw_baru:
+                        if _pw_baru != _pw_konfirm:
+                            st.error("❌ Password baru tidak cocok.")
+                        elif len(_pw_baru) < 6:
+                            st.error("❌ Password minimal 6 karakter.")
+                        else:
+                            try:
+                                supabase.auth.update_user({"password": _pw_baru})
+                                st.success("🔒 Password berhasil diubah.")
+                            except Exception as _pe:
+                                st.error(f"Gagal ubah password: {_pe}")
+                    # Update session state
+                    st.session_state.profil.update(_data_profil)
+                    st.session_state.edit_profil_mode = False
+                    st.success("✅ Profil berhasil disimpan!")
+                    st.rerun()
 
     st.markdown("---")
 
