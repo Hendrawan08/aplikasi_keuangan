@@ -1651,18 +1651,19 @@ with tab4:
 
 
 # ============================================================
-# TAB 5 — CHAT AI
+# TAB 5 — CHAT AI (Google Gemini 2.5 Flash)
 # ============================================================
 with tab5:
     st.markdown("#### 🤖 DanaBot — AI Keuangan Pribadi")
+    st.caption("✨ Powered by Google Gemini 2.5 Flash (Free Tier)")
 
     _ai_ready = GEMINI_AVAILABLE and GEMINI_API_KEY is not None
 
     if not _ai_ready:
         st.warning(
             "⚠️ **Fitur Chat AI belum aktif.** Langkah aktivasi:\n\n"
-            "1. Install: `pip install google-generativeai`\n"
-            "2. Dapatkan API key gratis di: https://aistudio.google.com/app/apikey\n"
+            "1. Install package: `pip install google-generativeai`\n"
+            "2. Dapatkan API key **gratis** di: https://aistudio.google.com/app/apikey\n"
             "3. Tambahkan ke `.streamlit/secrets.toml`:\n"
             "   ```\n   GEMINI_API_KEY = \"AIzaSy...\"\n   ```"
         )
@@ -1684,7 +1685,7 @@ with tab5:
             with st.chat_message("user", avatar="👤"):
                 st.markdown(_prompt)
 
-            # Bangun konteks keuangan
+            # Bangun konteks keuangan untuk sistem prompt
             _kat_detail = ""
             if not df_view.empty:
                 _kat_dict = df_view.groupby("kategori")["nominal"].sum().to_dict()
@@ -1715,7 +1716,7 @@ Health Score   : {health_score}/100 ({label_score})
                     try:
                         genai.configure(api_key=GEMINI_API_KEY)
 
-                        # Konversi riwayat chat ke format Gemini
+                        # Konversi riwayat ke format Gemini (user/model)
                         _gemini_history = []
                         for _m in st.session_state.chat_history[:-1]:
                             _role = "user" if _m["role"] == "user" else "model"
@@ -1725,7 +1726,7 @@ Health Score   : {health_score}/100 ({label_score})
                             })
 
                         _model = genai.GenerativeModel(
-                            model_name="gemini-1.5-flash",
+                            model_name="gemini-2.5-flash",
                             system_instruction=_sys
                         )
                         _chat_session = _model.start_chat(
@@ -1746,6 +1747,7 @@ Health Score   : {health_score}/100 ({label_score})
                             {"role": "assistant", "content": _err}
                         )
 
+        # Tombol reset percakapan
         if st.session_state.chat_history:
             if st.button("🗑️ Reset Percakapan", key="reset_chat"):
                 st.session_state.chat_history = []
