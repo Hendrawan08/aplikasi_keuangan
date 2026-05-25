@@ -144,114 +144,224 @@ CHANGELOG = [
 # ============================================================
 def inject_css(dark: bool = False):
     if dark:
-        bg      = "#0f172a"
-        bg2     = "#1e293b"
-        bg3     = "#334155"
-        text    = "#e2e8f0"
-        text2   = "#94a3b8"
-        accent  = "#4ade80"
-        border  = "#475569"
-        sidebar = "#0a0f1e"
-        card_bg = "#1e293b"
+        bg="0f172a"; bg2="1e293b"; bg3="334155"; text="e2e8f0"; text2="94a3b8"
+        accent="4ade80"; accent2="16a34a"; border="475569"; sidebar="080f1e"
+        card="1e293b"; inp_bg="0f172a"; shadow="rgba(0,0,0,0.4)"
+        metric_bg="1e293b"; bal_grad="linear-gradient(135deg,#1a2744 0%,#0f3460 100%)"
     else:
-        bg      = "#ffffff"
-        bg2     = "#f8fafc"
-        bg3     = "#f1f5f9"
-        text    = "#1e293b"
-        text2   = "#64748b"
-        accent  = "#2E7D32"
-        border  = "#e2e8f0"
-        sidebar = "#0f172a"
-        card_bg = "#ffffff"
+        bg="f8fafc"; bg2="ffffff"; bg3="f1f5f9"; text="1e293b"; text2="64748b"
+        accent="16a34a"; accent2="15803d"; border="e2e8f0"; sidebar="0f172a"
+        card="ffffff"; inp_bg="f8fafc"; shadow="rgba(0,0,0,0.08)"
+        metric_bg="ffffff"; bal_grad="linear-gradient(135deg,#166534 0%,#16a34a 60%,#22c55e 100%)"
 
     st.markdown(f"""
     <style>
-    html, body, [data-testid="stAppViewContainer"] {{
-        background-color: {bg} !important;
-        color: {text} !important;
-        font-size: 16px;
+    /* ===== GLOBAL ===== */
+    html,body,[data-testid="stAppViewContainer"]{{
+        background:#{bg} !important; color:#{text} !important; font-size:16px;
     }}
-    [data-testid="stSidebar"] {{
-        background-color: {sidebar} !important;
+    [data-testid="stSidebar"]{{background:#{sidebar} !important;}}
+    [data-testid="stSidebar"] *{{color:#e2e8f0 !important;}}
+    [data-testid="stSidebar"] .stMarkdown p{{color:#e2e8f0 !important;}}
+
+    /* ===== TYPOGRAPHY ===== */
+    h1,h2,h3,h4{{color:#{text} !important; font-weight:700 !important;}}
+    h1{{font-size:1.8rem !important;}}
+    h4{{color:#{accent} !important;}}
+    p,li,span,label{{color:#{text} !important;}}
+    .stMarkdown p{{color:#{text} !important;}}
+    small, .stCaption{{color:#{text2} !important;}}
+
+    /* ===== BALANCE CARD ===== */
+    .balance-card{{
+        background:{bal_grad};
+        border-radius:20px; padding:1.5rem 1.5rem 1.2rem; color:white;
+        box-shadow:0 8px 32px {shadow}; margin-bottom:1rem; position:relative; overflow:hidden;
     }}
-    [data-testid="stSidebar"] * {{ color: #e2e8f0 !important; }}
-    h1 {{ font-size:2.2rem !important; color:{accent} !important; }}
-    h2 {{ font-size:1.8rem !important; }}
-    h3 {{ font-size:1.4rem !important; }}
-    h4 {{ color:{accent} !important; }}
-    p, li, span, label {{ color:{text} !important; }}
-    .stMarkdown p {{ color:{text} !important; }}
-    [data-testid="stMetricValue"] {{
-        font-size:1.6rem !important; color:{accent} !important;
+    .balance-card::before{{
+        content:''; position:absolute; top:-30px; right:-30px;
+        width:120px; height:120px; border-radius:50%;
+        background:rgba(255,255,255,0.08);
     }}
-    [data-testid="stMetricLabel"] {{ font-size:0.9rem !important; }}
-    .stDataFrame {{ font-size:0.95rem !important; }}
-    .stButton button, .stFormSubmitButton button {{
-        font-size:1rem !important; padding:0.6rem 1.2rem !important;
-        border-radius:8px !important; transition:all 0.2s ease;
-        background-color:{bg3} !important; color:{text} !important;
-        border:1px solid {border} !important;
+    .balance-card .label{{font-size:0.75rem;opacity:0.75;text-transform:uppercase;letter-spacing:1px;}}
+    .balance-card .amount{{font-size:2.2rem;font-weight:800;margin:0.3rem 0;}}
+    .balance-card .sub-card{{
+        background:rgba(255,255,255,0.15); border-radius:12px;
+        padding:0.7rem 1rem; flex:1;
     }}
-    .stButton button:hover {{
-        transform:scale(1.02); box-shadow:0 2px 8px rgba(0,0,0,0.15);
-        border-color:{accent} !important;
+    .balance-card .sub-label{{font-size:0.78rem;opacity:0.8;}}
+    .balance-card .sub-amount{{font-size:1rem;font-weight:700;}}
+    .income-color{{color:#bbf7d0 !important;}}
+    .expense-color{{color:#fca5a5 !important;}}
+
+    /* ===== COMPARISON BAR ===== */
+    .cmp-bar-wrap{{
+        background:#{card}; border-radius:14px; padding:1rem 1.2rem;
+        box-shadow:0 2px 8px {shadow}; margin-bottom:1rem;
+        border:1px solid #{border};
     }}
-    input, textarea, select,
-    .stTextInput input, .stNumberInput input,
-    .stDateInput input, .stTimeInput input {{
-        font-size:1rem !important; padding:0.5rem !important;
-        border-radius:6px !important;
-        background-color:{bg2} !important; color:{text} !important;
-        border:1px solid {border} !important;
+    .cmp-bar-title{{font-size:0.85rem;font-weight:600;color:#{text2};margin-bottom:0.5rem;}}
+    .cmp-bar{{border-radius:8px;height:10px;overflow:hidden;display:flex;margin-bottom:0.4rem;}}
+    .cmp-income{{background:#22c55e;transition:width 0.5s;}}
+    .cmp-expense{{background:#ef4444;transition:width 0.5s;}}
+    .cmp-labels{{display:flex;justify-content:space-between;font-size:0.78rem;}}
+    .cmp-income-lbl{{color:#16a34a;font-weight:600;}}
+    .cmp-expense-lbl{{color:#dc2626;font-weight:600;}}
+
+    /* ===== CARDS ===== */
+    .stat-card{{
+        background:#{card}; border-radius:14px; padding:1rem 1.1rem;
+        box-shadow:0 2px 8px {shadow}; border:1px solid #{border};
+        margin-bottom:0.5rem;
     }}
-    .stSelectbox div[data-baseweb="select"] {{
-        background-color:{bg2} !important; color:{text} !important;
+    .stat-card .sc-label{{font-size:0.78rem;color:#{text2};margin-bottom:0.2rem;}}
+    .stat-card .sc-value{{font-size:1.2rem;font-weight:700;color:#{text};}}
+
+    /* ===== TRANSACTION ITEM ===== */
+    .tx-item{{
+        background:#{card}; border-radius:14px; padding:0.9rem 1rem;
+        box-shadow:0 1px 6px {shadow}; border:1px solid #{border};
+        display:flex; align-items:center; gap:0.8rem; margin-bottom:0.5rem;
+        transition:transform 0.15s,box-shadow 0.15s;
     }}
-    [data-testid="stExpander"] {{
-        background-color:{bg2} !important;
-        border:1px solid {border} !important; border-radius:8px !important;
+    .tx-item:hover{{transform:translateY(-1px);box-shadow:0 4px 12px {shadow};}}
+    .tx-icon{{
+        width:42px;height:42px;border-radius:12px;display:flex;align-items:center;
+        justify-content:center;font-size:1.2rem;flex-shrink:0;
+        background:rgba({('74,222,128' if dark else '22,163,74')},0.15);
     }}
-    .stTabs [data-baseweb="tab-list"] {{
-        background-color:{bg2} !important;
+    .tx-icon.expense{{background:rgba(239,68,68,0.12);}}
+    .tx-name{{font-size:0.9rem;font-weight:600;color:#{text};}}
+    .tx-sub{{font-size:0.75rem;color:#{text2};margin-top:1px;}}
+    .tx-amount{{font-size:0.95rem;font-weight:700;margin-left:auto;white-space:nowrap;}}
+    .tx-amount.income{{color:#16a34a;}}
+    .tx-amount.expense{{color:#dc2626;}}
+
+    /* ===== SEARCH CHIP FILTER ===== */
+    .chip-wrap{{display:flex;gap:0.4rem;flex-wrap:wrap;margin:0.4rem 0;}}
+    .chip{{
+        display:inline-flex;align-items:center;gap:4px;
+        background:#{bg3};border:1px solid #{border};border-radius:20px;
+        padding:0.3rem 0.75rem;font-size:0.82rem;color:#{text2};
+        cursor:pointer;transition:all 0.15s;
     }}
-    .stTabs [data-baseweb="tab"] {{
-        color:{text2} !important;
+    .chip.active{{background:#{accent};color:white;border-color:#{accent};}}
+
+    /* ===== METRICS ===== */
+    [data-testid="stMetricValue"]{{font-size:1.4rem !important;color:#{accent} !important;font-weight:700 !important;}}
+    [data-testid="stMetricLabel"]{{font-size:0.82rem !important;color:#{text2} !important;}}
+    [data-testid="metric-container"]{{
+        background:#{metric_bg} !important; border-radius:12px !important;
+        border:1px solid #{border} !important; padding:0.8rem !important;
+        box-shadow:0 2px 6px {shadow} !important;
     }}
-    .stTabs [aria-selected="true"] {{
-        color:{accent} !important;
+
+    /* ===== BUTTONS ===== */
+    .stButton button,.stFormSubmitButton button{{
+        font-size:0.92rem !important; padding:0.55rem 1.1rem !important;
+        border-radius:10px !important; transition:all 0.2s ease;
+        border:1px solid #{border} !important;
+        background:#{bg3} !important; color:#{text} !important;
+        font-weight:500 !important;
     }}
-    .pro-card {{
-        background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #388E3C 100%);
-        border-radius:20px; padding:1.2rem 1rem 1rem; margin-bottom:0.6rem;
-        color:white; box-shadow:0 8px 24px rgba(0,0,0,0.2);
+    .stButton button:hover,.stFormSubmitButton button:hover{{
+        transform:translateY(-1px); box-shadow:0 4px 12px {shadow};
+        border-color:#{accent} !important; color:#{accent} !important;
+    }}
+    /* Primary submit button */
+    .stFormSubmitButton button[kind="primaryFormSubmit"],
+    [data-testid="stFormSubmitButton"] button{{
+        background:linear-gradient(135deg,#{accent},#{accent2}) !important;
+        color:white !important; border:none !important; font-weight:600 !important;
+    }}
+
+    /* ===== INPUTS ===== */
+    input,textarea,.stTextInput input,.stNumberInput input,
+    .stDateInput input,.stTimeInput input{{
+        font-size:0.95rem !important; padding:0.55rem 0.8rem !important;
+        border-radius:10px !important; background:#{inp_bg} !important;
+        color:#{text} !important; border:1px solid #{border} !important;
+    }}
+    input:focus,.stTextInput input:focus{{border-color:#{accent} !important;outline:none !important;}}
+    .stSelectbox>div,[data-baseweb="select"]>div{{
+        background:#{inp_bg} !important; border-color:#{border} !important;
+        border-radius:10px !important; color:#{text} !important;
+    }}
+
+    /* ===== TABS ===== */
+    .stTabs [data-baseweb="tab-list"]{{
+        background:#{bg3} !important; border-radius:12px !important;
+        padding:4px !important; gap:2px !important; border:none !important;
+    }}
+    .stTabs [data-baseweb="tab"]{{
+        border-radius:9px !important; color:#{text2} !important;
+        font-size:0.85rem !important; padding:0.4rem 0.7rem !important;
+        border:none !important; background:transparent !important;
+    }}
+    .stTabs [aria-selected="true"]{{
+        background:#{bg2} !important; color:#{accent} !important;
+        font-weight:600 !important; box-shadow:0 1px 4px {shadow} !important;
+    }}
+
+    /* ===== EXPANDER ===== */
+    [data-testid="stExpander"]{{
+        background:#{card} !important; border:1px solid #{border} !important;
+        border-radius:12px !important; overflow:hidden !important;
+    }}
+    [data-testid="stExpanderToggleIcon"]{{color:#{text2} !important;}}
+
+    /* ===== DATAFRAME ===== */
+    .stDataFrame{{font-size:0.88rem !important;}}
+    [data-testid="stDataFrame"] th{{background:#{bg3} !important; color:#{text2} !important;}}
+    [data-testid="stDataFrame"] td{{color:#{text} !important;}}
+
+    /* ===== SIDEBAR PROFILE ===== */
+    .pro-card{{
+        background:linear-gradient(135deg,#1B5E20,#2E7D32,#388E3C);
+        border-radius:18px; padding:1.1rem 1rem 0.9rem; margin-bottom:0.5rem;
+        color:white; box-shadow:0 6px 20px rgba(0,0,0,0.25);
         border:1px solid rgba(255,255,255,0.1);
     }}
-    .pro-card .nama {{ font-size:1rem; font-weight:700; margin-top:0.5rem; }}
-    .pro-card .email-kecil {{ font-size:0.72rem; opacity:0.7; word-break:break-all; }}
-    .pro-card .bio {{
-        font-size:0.8rem; opacity:0.85; margin-top:0.5rem; font-style:italic;
-        border-top:1px solid rgba(255,255,255,0.15); padding-top:0.5rem;
+    .pro-card .nama{{font-size:0.95rem;font-weight:700;margin-top:0.4rem;}}
+    .pro-card .email-kecil{{font-size:0.7rem;opacity:0.7;word-break:break-all;margin-top:1px;}}
+    .pro-card .bio{{font-size:0.78rem;opacity:0.8;margin-top:0.5rem;font-style:italic;
+        border-top:1px solid rgba(255,255,255,0.15);padding-top:0.5rem;line-height:1.4;}}
+    .pro-card .meta{{font-size:0.7rem;opacity:0.6;margin-top:0.3rem;}}
+    .badge-member{{display:inline-block;background:rgba(255,255,255,0.2);
+        border-radius:20px;padding:1px 8px;font-size:0.68rem;font-weight:600;}}
+
+    /* ===== ONBOARDING ===== */
+    .ob-card{{
+        background:linear-gradient(135deg,#1B5E20,#16a34a);
+        border-radius:20px;padding:1.8rem;color:white;text-align:center;
+        margin-bottom:1.5rem;box-shadow:0 8px 32px rgba(22,163,74,0.25);
     }}
-    .pro-card .meta {{ font-size:0.72rem; opacity:0.65; margin-top:0.4rem; }}
-    .badge-member {{
-        display:inline-block; background:rgba(255,255,255,0.2);
-        border-radius:20px; padding:2px 8px; font-size:0.7rem; font-weight:600;
-    }}
-    @media (max-width:768px) {{
-        h1 {{ font-size:1.6rem !important; }}
-        h2 {{ font-size:1.4rem !important; }}
-        .stButton button, .stFormSubmitButton button {{
-            font-size:1rem !important; min-height:44px !important;
-            width:100%; display:block;
+
+    /* ===== SUCCESS / INFO BANNERS ===== */
+    [data-testid="stAlert"]{{border-radius:12px !important;}}
+
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar{{width:5px;height:5px;}}
+    ::-webkit-scrollbar-track{{background:#{bg3};}}
+    ::-webkit-scrollbar-thumb{{background:#{border};border-radius:3px;}}
+
+    /* ===== MOBILE ===== */
+    @media(max-width:768px){{
+        h1{{font-size:1.5rem !important;}}
+        h2{{font-size:1.3rem !important;}}
+        .stButton button,.stFormSubmitButton button{{
+            min-height:44px !important; width:100%; font-size:0.95rem !important;
         }}
-        [data-testid="stMetricValue"] {{ font-size:1.3rem !important; }}
-        [data-testid="stHorizontalBlock"]>div {{
-            flex:1 1 100% !important; max-width:100% !important;
-        }}
-        .stTabs [data-baseweb="tab"] {{ font-size:0.8rem !important; padding:0.4rem !important; }}
+        [data-testid="stMetricValue"]{{font-size:1.2rem !important;}}
+        [data-testid="stHorizontalBlock"]>div{{flex:1 1 100% !important;max-width:100% !important;}}
+        .stTabs [data-baseweb="tab"]{{font-size:0.78rem !important;padding:0.35rem 0.5rem !important;}}
+        .balance-card .amount{{font-size:1.8rem !important;}}
+        .tx-name{{font-size:0.85rem !important;}}
+        .tx-amount{{font-size:0.88rem !important;}}
     }}
     </style>
     """, unsafe_allow_html=True)
+
 
 # ============================================================
 # SECRETS & KONEKSI
@@ -324,6 +434,8 @@ _DEF = {
     "chat_history": [],
     "onboarding_selesai": False,
     "onboarding_step": 0,
+    "tx_form_key": 0,
+    "pm_form_key": 0,
 }
 for _k, _v in _DEF.items():
     if _k not in st.session_state:
@@ -795,17 +907,19 @@ inject_css(st.session_state.dark_mode)
 # ============================================================
 # HEADER
 # ============================================================
+_dm_icon = "☀️" if st.session_state.dark_mode else "🌙"
+_dm_lbl  = "Light" if st.session_state.dark_mode else "Dark"
+
 _hc1, _hc2 = st.columns([4,1])
 with _hc1:
     st.markdown(
-        "<h1 style='margin-bottom:0;'>📊 DanaPintar AI</h1>",
+        "<h1 style='margin-bottom:2px;letter-spacing:-0.5px;'>📊 DanaPintar AI</h1>",
         unsafe_allow_html=True
     )
-    st.caption("Sistem Keuangan Cerdas · AI Chat · Target Tabungan · Multi-Wallet")
+    st.caption("✦ Sistem Keuangan Cerdas · AI Chat · Multi-Wallet · Target Tabungan")
 with _hc2:
-    _dm_icon = "☀️" if st.session_state.dark_mode else "🌙"
-    _dm_lbl  = "Light" if st.session_state.dark_mode else "Dark"
-    if st.button(f"{_dm_icon} {_dm_lbl}", key="toggle_dark", use_container_width=True):
+    if st.button(f"{_dm_icon}", key="toggle_dark", use_container_width=True,
+                  help=f"Ganti ke {_dm_lbl} Mode"):
         st.session_state.dark_mode = not st.session_state.dark_mode
         st.rerun()
 
@@ -1023,7 +1137,7 @@ with st.sidebar:
     _wallets_list = st.session_state.wallets
     _wallet_opts  = ["— Tanpa Wallet —"] + [f"{w['tipe']} {w['nama']}" for w in _wallets_list]
 
-    with st.form("frm_tx"):
+    with st.form(f"frm_tx_{st.session_state.tx_form_key}"):
         _in_cat   = st.text_input("Nama Transaksi:", placeholder="Contoh: Beli Tissue")
         _in_nom   = st.number_input("Nominal (Rp):", min_value=0, value=0, step=1_000)
         _in_kat   = st.selectbox("Kategori:", KATEGORI_PENGELUARAN)
@@ -1067,6 +1181,7 @@ with st.sidebar:
                     st.session_state.pesan_toast   = f"✅ '{_in_cat.strip()}' dicatat!"
                     st.session_state.jam_input     = wib().hour
                     st.session_state.menit_input   = wib().minute
+                    st.session_state.tx_form_key  += 1
                     st.rerun()
             except Exception as _e: st.error(f"Error: {_e}")
 
@@ -1074,7 +1189,7 @@ with st.sidebar:
 
     # ---- Form Catat Pemasukan ----
     st.subheader("💵 Catat Pemasukan")
-    with st.form("frm_pm"):
+    with st.form(f"frm_pm_{st.session_state.pm_form_key}"):
         _in_smb = st.text_input("Sumber:", placeholder="Contoh: Gaji Bulanan")
         _in_npm = st.number_input("Nominal (Rp):", min_value=0, value=0, step=100_000)
         _in_kpm = st.selectbox("Kategori:", KATEGORI_PEMASUKAN)
@@ -1101,6 +1216,7 @@ with st.sidebar:
                     st.cache_data.clear()
                     st.session_state.simpan_sukses = True
                     st.session_state.pesan_toast   = f"💵 '{_in_smb.strip()}' dicatat!"
+                    st.session_state.pm_form_key  += 1
                     st.rerun()
             except Exception as _e: st.error(f"Error: {_e}")
 
@@ -1291,23 +1407,54 @@ with _hsc2:
 st.markdown("---")
 
 # ============================================================
-# METRIK
+# BALANCE CARD + COMPARISON BAR
 # ============================================================
-st.markdown("### 💹 Ringkasan Keuangan")
-_mk = st.columns(4)
-_mk[0].metric("Anggaran",    rp(_bud))
-_mk[1].metric("Pemasukan",   rp(_tot_msuk))
-_mk[2].metric("Pengeluaran", rp(_tot_pglr))
-_mk[3].metric("Net Cash Flow", rp(_net),
-    delta="Surplus" if _net>=0 else "Defisit",
-    delta_color="normal" if _net>=0 else "inverse")
-_mk2 = st.columns(4)
-_mk2[0].metric("Target Tabungan", rp(_tgt))
-_mk2[1].metric("Batas Belanja",   rp(_bts))
-_mk2[2].metric("Sisa Batas", rp(abs(_sisa_bts)),
-    delta="Aman" if _sisa_bts>=0 else "Defisit",
-    delta_color="normal" if _sisa_bts>=0 else "inverse")
-_mk2[3].metric("Sisa Anggaran", rp(_sisa_ang))
+_net_color  = "#bbf7d0" if _net >= 0 else "#fca5a5"
+_net_label  = "Surplus" if _net >= 0 else "Defisit"
+_tot_all    = _tot_msuk + _tot_pglr
+_pct_msuk   = int((_tot_msuk / _tot_all * 100)) if _tot_all > 0 else 50
+_pct_pglr   = 100 - _pct_msuk
+
+st.markdown(f"""
+<div class="balance-card">
+    <div class="label">💹 RINGKASAN KEUANGAN — {_pil_bln} {_pil_thn}</div>
+    <div class="amount">{rp(_net)}</div>
+    <div style="font-size:0.8rem;opacity:0.7;margin-bottom:0.8rem;">
+        Net Cash Flow &nbsp;·&nbsp;
+        <span style="color:{_net_color};font-weight:600">{_net_label}</span>
+    </div>
+    <div style="display:flex;gap:0.6rem;">
+        <div class="sub-card">
+            <div class="sub-label">⬆ Pemasukan</div>
+            <div class="sub-amount income-color">{rp(_tot_msuk)}</div>
+        </div>
+        <div class="sub-card">
+            <div class="sub-label">⬇ Pengeluaran</div>
+            <div class="sub-amount expense-color">{rp(_tot_pglr)}</div>
+        </div>
+    </div>
+</div>
+<div class="cmp-bar-wrap">
+    <div class="cmp-bar-title">Perbandingan Pemasukan vs Pengeluaran</div>
+    <div class="cmp-bar">
+        <div class="cmp-income" style="width:{_pct_msuk}%;"></div>
+        <div class="cmp-expense" style="width:{_pct_pglr}%;"></div>
+    </div>
+    <div class="cmp-labels">
+        <span class="cmp-income-lbl">● Pemasukan ({_pct_msuk}%)</span>
+        <span class="cmp-expense-lbl">● Pengeluaran ({_pct_pglr}%)</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Metric baris detail
+_mc1,_mc2,_mc3,_mc4 = st.columns(4)
+_mc1.metric("Anggaran",        rp(_bud))
+_mc2.metric("Target Tabungan", rp(_tgt))
+_mc3.metric("Batas Belanja",   rp(_bts))
+_mc4.metric("Sisa Anggaran",   rp(_sisa_ang),
+    delta="Aman" if _sisa_ang>=0 else "Tekor",
+    delta_color="normal" if _sisa_ang>=0 else "inverse")
 
 st.markdown("---")
 
@@ -1356,19 +1503,48 @@ with _t1:
         _sc,_sa = _sort_map[_sort_by]
         _dfv_flt = _dfv_flt.sort_values(_sc, ascending=_sa)
 
+    # Ikon per kategori
+    _KAT_ICON = {
+        "Makanan":"🍽️","Transportasi":"🚗","Hiburan/Gaya Hidup":"🎮",
+        "Kebutuhan Rumah/Kesehatan":"🏠","Tagihan Wajib":"📋","Lain-lain":"📦"
+    }
+
     if not _dfv_flt.empty:
         _dfv_flt["Jam Catat"] = _dfv_flt.apply(
             lambda r: f"{int(r['jam']):02d}:{int(r['menit']):02d} WIB", axis=1)
         _dfv_flt["Tanggal"] = _dfv_flt["waktu_transaksi"].apply(
             lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}")
+
+        st.caption(f"Menampilkan **{len(_dfv_flt)}** transaksi" +
+                   (f" (dari {len(_dfv)} total)" if len(_dfv_flt)!=len(_dfv) else ""))
+
+        # Tampilkan sebagai card list (max 50 untuk performa)
+        _show_limit = 50
+        _dfv_show = _dfv_flt.head(_show_limit)
+        if len(_dfv_flt) > _show_limit:
+            st.info(f"Menampilkan {_show_limit} dari {len(_dfv_flt)} transaksi. Gunakan filter untuk mempersempit.")
+
+        for _, _row in _dfv_show.iterrows():
+            _ikon = _KAT_ICON.get(str(_row.get("kategori","")), "💳")
+            _tgl_str = f"{int(_row.get('tanggal',1))} {str(_row.get('bulan',''))[:3]} · {_row['Jam Catat']}"
+            st.markdown(f"""
+            <div class="tx-item">
+                <div class="tx-icon expense">{_ikon}</div>
+                <div style="flex:1;min-width:0;">
+                    <div class="tx-name">{_row.get('catatan','')}</div>
+                    <div class="tx-sub">{_row.get('kategori','')} · {_row.get('sifat','')} · {_tgl_str}</div>
+                </div>
+                <div class="tx-amount expense">-{rp(_row['nominal'])}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Tabel untuk select + aksi (tersembunyi tapi fungsional)
+        st.markdown("**Pilih transaksi untuk edit/hapus:**")
         _dt_show = _dfv_flt[["Tanggal","catatan","nominal","kategori","sifat","Jam Catat"]].copy()
         _dt_show.columns = ["Tanggal","Deskripsi","Nominal (Rp)","Kategori","Sifat","Waktu"]
-
-        st.caption(f"Menampilkan **{len(_dt_show)}** transaksi" +
-                   (f" (dari {len(_dfv)} total)" if len(_dt_show)!=len(_dfv) else ""))
-
         _sel = st.dataframe(_dt_show, use_container_width=True, hide_index=True,
-                             selection_mode="multi-row", on_select="rerun", key="tbl_tx")
+                             selection_mode="multi-row", on_select="rerun", key="tbl_tx",
+                             height=200)
         _sel_idx = _sel.selection.rows
 
         _ba1,_ba2,_ba3 = st.columns(3)
@@ -1491,15 +1667,35 @@ with _t1:
 # ============================================================
 with _t2:
     st.markdown("#### 💵 Lembar Pemasukan")
+    _KAT_ICON_PM = {
+        "Gaji":"💼","Freelance":"💻","Bisnis":"🏪","Investasi":"📈",
+        "Hadiah/Bonus":"🎁","Passive Income":"💰","Lain-lain":"💵"
+    }
     if not _dfpv.empty:
         _dfpv2 = _dfpv.copy()
         _dfpv2["Tanggal"] = _dfpv2["waktu_pemasukan"].apply(
             lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}")
+
+        # Card list pemasukan
+        for _, _prow in _dfpv2.iterrows():
+            _pikon = _KAT_ICON_PM.get(str(_prow.get("kategori","")), "💵")
+            st.markdown(f"""
+            <div class="tx-item">
+                <div class="tx-icon">{_pikon}</div>
+                <div style="flex:1;min-width:0;">
+                    <div class="tx-name">{_prow.get('sumber','')}</div>
+                    <div class="tx-sub">{_prow.get('kategori','')} · {_prow['Tanggal']}</div>
+                </div>
+                <div class="tx-amount income">+{rp(_prow['nominal'])}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("**Pilih untuk hapus:**")
         _dps = _dfpv2[["Tanggal","sumber","nominal","kategori"]].copy()
         _dps.columns = ["Tanggal","Sumber","Nominal (Rp)","Kategori"]
-
         _sp = st.dataframe(_dps, use_container_width=True, hide_index=True,
-                            selection_mode="multi-row", on_select="rerun", key="tbl_pm")
+                            selection_mode="multi-row", on_select="rerun", key="tbl_pm",
+                            height=180)
 
         _pb1,_pb2 = st.columns(2)
         with _pb1:
