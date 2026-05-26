@@ -324,11 +324,13 @@ def inject_css():
     }}
     /* Placeholder text */
     input::placeholder, textarea::placeholder{{color:#9ca3af !important;}}
-    /* Selectbox — hapus double border */
-    .stSelectbox>div{{border:none !important; background:transparent !important;}}
-    [data-baseweb="select"]{{
+    /* Selectbox — hapus border DALAM, pertahankan border LUAR */
+    .stSelectbox>div{{
         border:1.5px solid #{border} !important;
         border-radius:10px !important; background:#{inp_bg} !important;
+    }}
+    [data-baseweb="select"]{{
+        border:none !important; background:transparent !important;
     }}
     [data-baseweb="select"]>div{{
         border:none !important; background:transparent !important;
