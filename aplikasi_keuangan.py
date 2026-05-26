@@ -40,6 +40,7 @@ import pandas as pd
 import altair as alt
 from datetime import datetime, time, date, timedelta
 import pytz, os
+import hashlib
 
 try:
     from fpdf import FPDF
@@ -1468,59 +1469,125 @@ if _is_new:
     tampilkan_onboarding(uid, email_user)
 
 # ============================================================
-# IN-APP NOTIFIKASI CERDAS
+# IN-APP NOTIFIKASI CERDAS (DIPERBARUI)
 # ============================================================
+def get_hash(text):
+    """Fungsi pembantu untuk membuat ID unik dari teks pesan"""
+    return hashlib.md5(text.encode()).hexdigest()
+
 def tampilkan_notifikasi():
+    # 1. Injeksi Animasi CSS (Fade-In Halus)
+    st.markdown("""
+    <style>
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .stAlert, .notif-anim {
+        animation: fadeIn 0.4s ease-out;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # 2. Persiapan Memori untuk mengingat notifikasi yang ditutup
+    if "notif_ditutup" not in st.session_state:
+        st.session_state.notif_ditutup = set()
+
     _notifs = []
     _now = wib()
     _kb_now = f"{KAMUS_BULAN[_now.month]}_{_now.year}"
 
-    # 1. Belum catat hari ini
+    # Evaluasi Kondisi & Bobot Prioritas:
+    # 1 (Darurat/Merah), 2 (Peringatan/Kuning), 3 (Info/Biru)
+
+    # [Kondisi 1] Belum catat hari ini (Prioritas 2)
     if not df.empty:
         _last = df["waktu_transaksi"].max().date()
-        _gap  = (_now.date()-_last).days
-        if _gap>=2:
-            _notifs.append(("🔔","warning",f"Kamu belum mencatat pengeluaran selama **{_gap} hari**. Jangan lupa catat!"))
+        _gap  = (_now.date() - _last).days
+        if _gap >= 2:
+            _msg = f"Kamu belum mencatat pengeluaran selama **{_gap} hari**. Jangan lupa catat!"
+            _notifs.append({"id": get_hash(f"gap_{_gap}"), "icon": "🔔", "tipe": "warning", "msg": _msg, "prio": 2})
 
-    # 2. Anggaran belum dikunci bulan ini
+    # [Kondisi 2] Anggaran belum dikunci (Prioritas 3)
     if _kb_now not in st.session_state.anggaran_terkunci:
-        _notifs.append(("💡","info",f"Anggaran bulan **{KAMUS_BULAN[_now.month]}** belum dikunci. Set di sidebar kiri."))
+        _msg = f"Anggaran bulan **{KAMUS_BULAN[_now.month]}** belum dikunci. Set di sidebar kiri."
+        _notifs.append({"id": get_hash(f"ang_{_kb_now}"), "icon": "💡", "tipe": "info", "msg": _msg, "prio": 3})
 
-    # 3. Target tabungan belum diset
+    # [Kondisi 3] Target tabungan belum diset (Prioritas 3)
     if _kb_now in st.session_state.anggaran_terkunci and _kb_now not in st.session_state.target_tabungan:
-        _notifs.append(("🎯","info","Target tabungan bulan ini belum diset. Yuk tentukan targetmu!"))
+        _msg = "Target tabungan bulan ini belum diset. Yuk tentukan targetmu!"
+        _notifs.append({"id": get_hash(f"tgt_{_kb_now}"), "icon": "🎯", "tipe": "info", "msg": _msg, "prio": 3})
 
-    # 4. 80%+ anggaran terpakai
-    _ang_now = st.session_state.anggaran_terkunci.get(_kb_now,0)
-    _tgt_now = st.session_state.target_tabungan.get(_kb_now,0)
-    _bts_now = max(0, _ang_now-_tgt_now)
-    if not df.empty and _bts_now>0:
-        _df_now = df[(df["bulan"]==KAMUS_BULAN[_now.month])&(df["tahun"]==_now.year)]
+    # [Kondisi 4] Anggaran terpakai (Prioritas 1 atau 2)
+    _ang_now = st.session_state.anggaran_terkunci.get(_kb_now, 0)
+    _tgt_now = st.session_state.target_tabungan.get(_kb_now, 0)
+    _bts_now = max(0, _ang_now - _tgt_now)
+    
+    if not df.empty and _bts_now > 0:
+        _df_now = df[(df["bulan"] == KAMUS_BULAN[_now.month]) & (df["tahun"] == _now.year)]
         _tot_now = _df_now["nominal"].sum()
-        _pct = (_tot_now/_bts_now)*100
-        if _pct>=100:
-            _notifs.append(("🚨","error",f"**DARURAT!** Pengeluaran sudah **{_pct:.0f}%** dari batas. Target tabungan terancam!"))
-        elif _pct>=80:
-            _notifs.append(("⚠️","warning",f"Pengeluaran sudah **{_pct:.0f}%** dari batas belanja bulan ini."))
+        _pct = (_tot_now / _bts_now) * 100
+        
+        if _pct >= 100:
+            _msg = f"**DARURAT!** Pengeluaran sudah **{_pct:.0f}%** dari batas. Target tabungan terancam!"
+            _notifs.append({"id": get_hash(f"over_{_kb_now}"), "icon": "🚨", "tipe": "error", "msg": _msg, "prio": 1})
+        elif _pct >= 80:
+            _msg = f"Pengeluaran sudah **{_pct:.0f}%** dari batas belanja bulan ini."
+            _notifs.append({"id": get_hash(f"warn_{_kb_now}"), "icon": "⚠️", "tipe": "warning", "msg": _msg, "prio": 2})
 
-    # 5. Hutang jatuh tempo dalam 3 hari
+    # [Kondisi 5] Hutang jatuh tempo (Prioritas 1 atau 2)
     _hutang_data = ambil_hutang(uid)
     for _h in _hutang_data:
-        if _h.get("status")=="belum_lunas" and _h.get("jatuh_tempo"):
+        if _h.get("status") == "belum_lunas" and _h.get("jatuh_tempo"):
             try:
                 _jt = datetime.fromisoformat(_h["jatuh_tempo"].replace("Z","+00:00")).astimezone(TZ).date()
                 _sisa = (_jt - _now.date()).days
-                if 0<=_sisa<=3:
-                    _notifs.append(("💸","warning",
-                        f"{'Hutang' if _h['jenis']=='hutang' else 'Piutang'} ke **{_h['nama_pihak']}** "
-                        f"sebesar {rp(_h['nominal'])} jatuh tempo dalam **{_sisa} hari**!"))
-            except Exception: pass
+                if 0 <= _sisa <= 3:
+                    _prio = 1 if _sisa == 0 else 2
+                    _tipe = "error" if _sisa == 0 else "warning"
+                    _jp = "Hutang" if _h['jenis'] == 'hutang' else 'Piutang'
+                    _msg = f"{_jp} ke **{_h['nama_pihak']}** sebesar {rp(_h['nominal'])} jatuh tempo dalam **{_sisa} hari**!"
+                    _notifs.append({"id": get_hash(f"hut_{_h['id']}"), "icon": "💸", "tipe": _tipe, "msg": _msg, "prio": _prio})
+            except Exception: 
+                pass
 
-    for _ic,_tp,_msg in _notifs:
-        if _tp=="error": st.error(f"{_ic} {_msg}")
-        elif _tp=="warning": st.warning(f"{_ic} {_msg}")
-        else: st.info(f"{_ic} {_msg}")
+    # 3. Filter notifikasi yang BELUM ditutup pengguna
+    _notifs_aktif = [n for n in _notifs if n["id"] not in st.session_state.notif_ditutup]
 
+    # 4. Urutkan berdasarkan prioritas (1 paling atas)
+    _notifs_aktif = sorted(_notifs_aktif, key=lambda x: x["prio"])
+
+    # 5. Render UI Notifikasi
+    if _notifs_aktif:
+        st.markdown("<div class='notif-anim'>", unsafe_allow_html=True)
+        
+        # Tombol "Bebaskan Layar" jika notifikasi > 1
+        if len(_notifs_aktif) > 1:
+            col_kosong, col_clear = st.columns([0.75, 0.25])
+            with col_clear:
+                if st.button("🧹 Hapus Semua", use_container_width=True, key="btn_clear_all"):
+                    for n in _notifs_aktif:
+                        st.session_state.notif_ditutup.add(n["id"])
+                    st.rerun()
+
+        # Render setiap notifikasi
+        for n in _notifs_aktif:
+            # Proporsi kolom: 92% untuk pesan, 8% untuk tombol silang
+            col_msg, col_btn = st.columns([0.92, 0.08], vertical_alignment="center")
+            
+            with col_msg:
+                if n["tipe"] == "error": st.error(f"{n['icon']} {n['msg']}")
+                elif n["tipe"] == "warning": st.warning(f"{n['icon']} {n['msg']}")
+                else: st.info(f"{n['icon']} {n['msg']}")
+            
+            with col_btn:
+                if st.button("✖", key=f"tutup_{n['id']}", help="Tutup notifikasi"):
+                    st.session_state.notif_ditutup.add(n["id"])
+                    st.rerun()
+        
+        st.markdown("</div><br>", unsafe_allow_html=True)
+
+# Jalankan fungsinya
 tampilkan_notifikasi()
 
 # ============================================================
