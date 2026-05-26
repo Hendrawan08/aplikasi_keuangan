@@ -1087,17 +1087,22 @@ if st.session_state.hapus_sukses:
 # ============================================================
 with st.sidebar:
     # ---- Profil Card ----
-    _pr      = st.session_state.profil
-    _nama    = _pr.get("nama","").strip() or email_user.split("@")[0].title()
-    _bio     = _pr.get("bio","").strip() or "Belum ada bio."
-    _lokasi  = _pr.get("lokasi","").strip()
-    _foto    = _pr.get("foto_url", None)
-    _ini     = inisial(_pr.get("nama",""), email_user)
+    # Pengamanan pertama: pastikan st.session_state.profil bukan None
+    _pr      = st.session_state.profil or {} 
+    
+    # Pengamanan string: ubah None menjadi "" sebelum di-strip()
+    _nama    = (_pr.get("nama") or "").strip() or email_user.split("@")[0].title()
+    _bio     = (_pr.get("bio") or "").strip() or "Belum ada bio."
+    _lokasi  = (_pr.get("lokasi") or "").strip()
+    _foto    = _pr.get("foto_url") or None
+    _ini     = inisial((_pr.get("nama") or ""), email_user)
+    
     try:
         _jn = datetime.fromisoformat(
             st.session_state.user_aktif.created_at.replace("Z","+00:00")
         ).astimezone(TZ).strftime("%d %b %Y")
-    except Exception: _jn="-"
+    except Exception: 
+        _jn="-"
 
     _av_html = (
         f'<img src="{_foto}" style="width:68px;height:68px;border-radius:50%;'
@@ -1131,8 +1136,10 @@ with st.sidebar:
             st.session_state.edit_profil_mode = not st.session_state.edit_profil_mode
     with _bc2:
         if st.button("🚪 Logout", use_container_width=True, key="logout_btn"):
-            try: supabase.auth.sign_out()
-            except Exception: pass
+            try: 
+                supabase.auth.sign_out()
+            except Exception: 
+                pass
             for _k,_v in _DEF.items():
                 st.session_state[_k] = _v
             st.rerun()
@@ -1146,9 +1153,11 @@ with st.sidebar:
                     if hapus_foto(uid):
                         st.session_state.profil["foto_url"] = None
                         st.success("Foto dihapus."); st.rerun()
+            
             _fu = st.file_uploader("Upload (JPG/PNG maks 2MB)", type=["jpg","jpeg","png","webp"])
             if _fu:
-                if _fu.size > 2*1024*1024: st.error("❌ Maks 2MB")
+                if _fu.size > 2*1024*1024: 
+                    st.error("❌ Maks 2MB")
                 elif st.button("☁️ Upload", key="btn_up_foto"):
                     with st.spinner("Uploading..."):
                         _url = upload_foto(uid, _fu.read(), _fu.type)
@@ -1156,29 +1165,42 @@ with st.sidebar:
                             st.session_state.profil["foto_url"] = _url
                             simpan_profil(uid, {"foto_url":_url})
                             st.success("✅ Foto diupload!"); st.rerun()
+            
             st.markdown("---")
             with st.form("form_profil"):
-                _in_nama = st.text_input("Nama", value=_pr.get("nama",""))
-                _in_bio  = st.text_area("Bio", value=_pr.get("bio",""), max_chars=160, height=80)
-                _in_lok  = st.text_input("Lokasi", value=_pr.get("lokasi",""))
-                _in_kerj = st.text_input("Pekerjaan", value=_pr.get("pekerjaan",""))
-                _in_tf   = st.text_input("Target Finansial", value=_pr.get("target_finansial",""))
+                # Menambahkan 'or ""' agar Streamlit tidak crash jika data database bernilai None
+                _in_nama = st.text_input("Nama", value=_pr.get("nama") or "")
+                _in_bio  = st.text_area("Bio", value=_pr.get("bio") or "", max_chars=160, height=80)
+                _in_lok  = st.text_input("Lokasi", value=_pr.get("lokasi") or "")
+                _in_kerj = st.text_input("Pekerjaan", value=_pr.get("pekerjaan") or "")
+                _in_tf   = st.text_input("Target Finansial", value=_pr.get("target_finansial") or "")
+                
                 st.markdown("**🔒 Ganti Password**")
                 _pw1 = st.text_input("Password Baru (kosongkan jika tidak)", type="password")
                 _pw2 = st.text_input("Konfirmasi Password Baru", type="password")
+                
                 if st.form_submit_button("💾 Simpan", use_container_width=True):
-                    _dp = {"nama":_in_nama.strip(),"bio":_in_bio.strip(),"lokasi":_in_lok.strip(),
-                           "pekerjaan":_in_kerj.strip(),"target_finansial":_in_tf.strip(),
-                           "foto_url":_pr.get("foto_url")}
+                    _dp = {
+                        "nama": _in_nama.strip(),
+                        "bio": _in_bio.strip(),
+                        "lokasi": _in_lok.strip(),
+                        "pekerjaan": _in_kerj.strip(),
+                        "target_finansial": _in_tf.strip(),
+                        "foto_url": _pr.get("foto_url")
+                    }
                     if simpan_profil(uid, _dp):
                         if _pw1:
-                            if _pw1!=_pw2: st.error("Password tidak cocok.")
-                            elif len(_pw1)<6: st.error("Min 6 karakter.")
+                            if _pw1 != _pw2: 
+                                st.error("Password tidak cocok.")
+                            elif len(_pw1) < 6: 
+                                st.error("Min 6 karakter.")
                             else:
                                 try:
-                                    supabase.auth.update_user({"password":_pw1})
+                                    supabase.auth.update_user({"password": _pw1})
                                     st.success("🔒 Password diubah.")
-                                except Exception as _pe: st.error(f"Gagal: {_pe}")
+                                except Exception as _pe: 
+                                    st.error(f"Gagal: {_pe}")
+                        
                         st.session_state.profil.update(_dp)
                         st.session_state.edit_profil_mode = False
                         st.success("✅ Profil disimpan!"); st.rerun()
