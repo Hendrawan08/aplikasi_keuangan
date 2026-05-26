@@ -1274,27 +1274,19 @@ with st.sidebar:
                             st.session_state.notif_ditutup.add(n["id"])
                             st.rerun()
 
+
+    # Setelah login dan mendapatkan uid
+    st.session_state.uid = uid
+    
+    # Ambil data transaksi (atau buat kosong jika belum ada)
+    if "df" not in st.session_state:
+        st.session_state.df = ambil_transaksi(uid)   # fungsi Anda sendiri
+    
     # MENGUBAH MENJADI 3 KOLOM: Kolom baru (_bc0) diletakkan di paling kiri untuk Lonceng Notifikasi
     _bc0, _bc1, _bc2 = st.columns(3)
-    
+
     with _bc0:
-        # Mengeksekusi fungsi Lonceng Popover yang sudah kita buat sebelumnya
-        # Sebelum membuat 3 kolom tombol, pastikan uid dan df tersedia
-        uid = st.session_state.get("uid")
-        if not uid:
-            st.error("Sesi tidak valid. Silakan login ulang.")
-            st.stop()
-        
-        # Jika df belum diinisialisasi di tempat lain, lakukan query ulang
-        if "df" not in st.session_state or st.session_state.df is None:
-            # Ambil data transaksi terbaru, misalnya:
-            df = ambil_transaksi(uid)   # fungsi custom kamu
-            st.session_state.df = df
-        else:
-            df = st.session_state.df
-        
-        # Sekarang aman dipanggil
-        tampilkan_notifikasi(df, uid)    
+        tampilkan_notifikasi(st.session_state.df, st.session_state.uid)    
     
     with _bc1:
         if st.button("✏️ Edit Profil", use_container_width=True, key="btn_ep"):
