@@ -324,32 +324,103 @@ def inject_css():
     }}
     /* Placeholder text */
     input::placeholder, textarea::placeholder{{color:#9ca3af !important;}}
-    /* Selectbox — hapus border DALAM, pertahankan border LUAR */
-    .stSelectbox>div{{
-        border:1.5px solid #{border} !important;
-        border-radius:10px !important; background:#{inp_bg} !important;
+    /* ============================================================
+       SELECTBOX & MULTISELECT — FIX DOUBLE BORDER
+       Strategi: border hanya di wrapper terluar (.stSelectbox>div
+       dan .stMultiSelect>div), semua elemen di dalam: border none,
+       box-shadow none, outline none.
+    ============================================================ */
+
+    /* --- OUTER wrapper: ini satu-satunya yang boleh punya border --- */
+    .stSelectbox > div,
+    .stMultiSelect > div {{
+        border: 1.5px solid #{border} !important;
+        border-radius: 10px !important;
+        background: #{inp_bg} !important;
+        box-shadow: none !important;
     }}
-    [data-baseweb="select"]{{
-        border:none !important; background:transparent !important;
+
+    /* --- Hapus SEMUA border/shadow dari elemen dalam (baseweb) --- */
+    .stSelectbox [data-baseweb="select"],
+    .stSelectbox [data-baseweb="select"] > div,
+    .stSelectbox [data-baseweb="select"] > div > div,
+    .stSelectbox [data-baseweb="select"] > div > div > div,
+    .stMultiSelect [data-baseweb="select"],
+    .stMultiSelect [data-baseweb="select"] > div,
+    .stMultiSelect [data-baseweb="select"] > div > div,
+    .stMultiSelect [data-baseweb="select"] > div > div > div {{
+        border: none !important;
+        border-color: transparent !important;
+        box-shadow: none !important;
+        outline: none !important;
+        background: transparent !important;
     }}
-    [data-baseweb="select"]>div{{
-        border:none !important; background:transparent !important;
-        color:#{text} !important;
+
+    /* --- Teks di dalam select --- */
+    .stSelectbox [data-baseweb="select"] span,
+    .stSelectbox [data-baseweb="select"] div,
+    .stMultiSelect [data-baseweb="select"] span,
+    .stMultiSelect [data-baseweb="select"] div {{
+        color: #{text} !important;
     }}
-    [data-baseweb="select"]>div>div{{
-        border:none !important; background:transparent !important;
-        color:#{text} !important;
+
+    /* --- Sidebar: sama, tapi lebih spesifik --- */
+    [data-testid="stSidebar"] .stSelectbox > div,
+    [data-testid="stSidebar"] .stMultiSelect > div {{
+        border: 1.5px solid #{border} !important;
+        border-radius: 10px !important;
+        background: #{inp_bg} !important;
+        box-shadow: none !important;
     }}
-    /* Dropdown option list */
-    [data-baseweb="popover"] [data-baseweb="menu"]{{
-        background:#{bg2} !important; border:1.5px solid #{border} !important;
-        border-radius:10px !important;
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"],
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div,
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div > div,
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"],
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div,
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div > div {{
+        border: none !important;
+        border-color: transparent !important;
+        box-shadow: none !important;
+        outline: none !important;
+        background: transparent !important;
     }}
-    [data-baseweb="option"]{{
-        background:#{bg2} !important; color:#{text} !important;
+
+    /* --- Tag/chip dalam multiselect (nilai yang dipilih) --- */
+    [data-baseweb="tag"] {{
+        background: #{bg3} !important;
+        border: 1px solid #{border} !important;
+        border-radius: 6px !important;
+        color: #{text} !important;
     }}
-    [data-baseweb="option"]:hover{{
-        background:#{bg3} !important; color:#{accent} !important;
+    [data-baseweb="tag"] span {{ color: #{text} !important; }}
+
+    /* --- Dropdown option list --- */
+    [data-baseweb="popover"] {{
+        border: none !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
+    }}
+    [data-baseweb="popover"] [data-baseweb="menu"] {{
+        background: #{bg2} !important;
+        border: 1.5px solid #{border} !important;
+        border-radius: 10px !important;
+        overflow: hidden !important;
+    }}
+    [data-baseweb="option"] {{
+        background: #{bg2} !important;
+        color: #{text} !important;
+        font-size: 0.9rem !important;
+    }}
+    [data-baseweb="option"]:hover,
+    [data-baseweb="option"][aria-selected="true"] {{
+        background: #{bg3} !important;
+        color: #{accent} !important;
+    }}
+
+    /* --- Focus state: cukup glow di outer wrapper --- */
+    .stSelectbox > div:focus-within,
+    .stMultiSelect > div:focus-within {{
+        border-color: #{accent} !important;
+        box-shadow: 0 0 0 3px rgba(74,222,128,0.2) !important;
     }}
 
     /* ===== TABS ===== */
