@@ -281,82 +281,31 @@ def inject_css():
         box-shadow:0 3px 10px {shadow} !important;
     }}
 
-    /* ===== BUTTONS PREMIUM ALIGN ===== */
-    .stButton,
-    .stFormSubmitButton {{
-        width: 100% !important;
+    /* ===== BUTTONS ===== */
+    .stButton button,.stFormSubmitButton button{{
+        font-size:0.92rem !important; padding:0.55rem 1.1rem !important;
+        border-radius:10px !important; transition:all 0.2s ease;
+        border:1px solid #{border} !important;
+        background:#{bg3} !important; color:#{text} !important;
+        font-weight:500 !important;
     }}
-    
-    .stButton > button,
-    .stFormSubmitButton > button {{
-        width: 100% !important;
-        min-width: 100% !important;
-        height: 86px !important;  
-        padding: 0.7rem 1rem !important;
-        border-radius: 18px !important;
-        border: 1.5px solid #{border} !important;
-        background: linear-gradient(180deg, #{bg2}, #{bg3}) !important;
-        color: #{text} !important;
-        font-size: 1.05rem !important;
-        font-weight: 700 !important;
-        line-height: 1.15 !important;
-        box-shadow:
-            0 10px 24px rgba(0,0,0,0.18),
-            inset 0 1px 0 rgba(255,255,255,0.05) !important;
-        transition: all 0.18s ease !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        text-align: center !important;
-        white-space: nowrap !important;       /* biar tidak turun baris */
-        overflow: hidden !important;
-        box-sizing: border-box !important;
+    .stButton button:hover,.stFormSubmitButton button:hover{{
+        transform:translateY(-1px); box-shadow:0 4px 12px {shadow};
+        border-color:#{accent} !important; color:#{accent} !important;
     }}
-    
-    .stButton > button:hover,
-    .stFormSubmitButton > button:hover {{
-        transform: translateY(-1px) !important;
-        border-color: #{accent} !important;
-        box-shadow:
-            0 14px 30px rgba(0,0,0,0.24),
-            0 0 0 3px rgba(74,222,128,0.10) !important;
+    .stFormSubmitButton button[kind="primaryFormSubmit"],
+    [data-testid="stFormSubmitButton"] button{{
+        background:linear-gradient(135deg,#{accent},#{accent2}) !important;
+        color:white !important; border:none !important; font-weight:700 !important;
+        box-shadow:0 2px 8px rgba(21,128,61,0.35) !important;
     }}
-    
-    .stButton > button:active,
-    .stFormSubmitButton > button:active {{
-        transform: translateY(0) scale(0.99) !important;
+    .stButton button{{
+        color:#{text} !important; font-weight:600 !important;
+        background:#{bg2} !important; border:1.5px solid #{border} !important;
     }}
-    
-    .stButton > button:focus-visible,
-    .stFormSubmitButton > button:focus-visible {{
-        outline: none !important;
-        box-shadow:
-            0 0 0 3px rgba(74,222,128,0.18),
-            0 12px 26px rgba(0,0,0,0.20) !important;
-    }}
-    
-    /* Icon di dalam button */
-    .stButton > button svg,
-    .stFormSubmitButton > button svg {{
-        width: 1rem !important;
-        height: 1rem !important;
-        flex-shrink: 0 !important;
-        margin-right: 0.4rem !important;
-    }}
-    
-    /* Khusus sidebar agar rapi */
-    [data-testid="stSidebar"] .stButton > button {{
-        height: 84px !important;
-    }}
-    
-    /* Mobile */
-    @media(max-width:768px){{
-        .stButton > button,
-        .stFormSubmitButton > button {{
-            height: 58px !important;
-            font-size: 0.95rem !important;
-            border-radius: 14px !important;
-        }}
+    .stButton button:hover{{
+        background:#{bg3} !important; color:#{accent} !important;
+        border-color:#{accent} !important;
     }}
 
     /* ===== INPUTS ===== */
