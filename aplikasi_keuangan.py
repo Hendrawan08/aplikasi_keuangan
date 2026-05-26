@@ -1155,7 +1155,7 @@ with st.sidebar:
     def get_hash(text):
         return hashlib.md5(text.encode()).hexdigest()
     
-    def tampilkan_notifikasi():
+    def tampilkan_notifikasi(df, uid):
         # 1. Animasi halus khusus untuk isi dalam Popover
         st.markdown("""
         <style>
@@ -1279,7 +1279,7 @@ with st.sidebar:
     
     with _bc0:
         # Mengeksekusi fungsi Lonceng Popover yang sudah kita buat sebelumnya
-        tampilkan_notifikasi()
+        tampilkan_notifikasi(df, uid)
     
     with _bc1:
         if st.button("✏️ Edit Profil", use_container_width=True, key="btn_ep"):
