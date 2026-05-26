@@ -299,14 +299,84 @@ def inject_css():
         color:white !important; border:none !important; font-weight:700 !important;
         box-shadow:0 2px 8px rgba(21,128,61,0.35) !important;
     }}
-    .stButton button{{
-        color:#{text} !important; font-weight:600 !important;
-        background:#{bg2} !important; border:1.5px solid #{border} !important;
+
+    /* ============================================================
+       PERBAIKAN TOMBOL SIDEBAR PREMIUM — TAMPILAN TERBARU
+       ============================================================ */
+    [data-testid="stSidebar"] .stButton button {{
+        display: flex !important;
+        flex-direction: column !important; /* Paksa tata letak vertikal: ikon di atas, teks di bawah */
+        align-items: center !important;
+        justify-content: center !important;
+        width: 100% !important;
+        height: 80px !important; /* Paksa tinggi seragam agar terlihat rapi secara horizontal */
+        margin-bottom: 0.8rem !important;
+        
+        /* Tampilan Kotak: Glassmorphism/Gradasi Premium halus */
+        background-color: #1a2230 !important; /* Latar belakang sedikit lebih terang dari sidebar */
+        background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)) !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 16px !important; /* Tingkatkan border radius untuk kelembutan */
+        padding: 0.8rem !important;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05) !important; /* Cahaya dalam halus */
+        
+        /* Gaya Teks dan Ikon Premium */
+        color: #e2e8f0 !important;
+        font-size: 0.85rem !important; /* Kecilkan ukuran font */
+        font-weight: 500 !important; /* Gunakan bobot font lebih ringan */
+        letter-spacing: 0.5px !important; /* Jarak antar huruf premium */
+        transition: all 0.3s ease !important; /* Transisi halus untuk efek hover */
     }}
-    .stButton button:hover{{
-        background:#{bg3} !important; color:#{accent} !important;
-        border-color:#{accent} !important;
+
+    /* Menangani Ikon Secara Spesifik: Pastikan uniform */
+    [data-testid="stSidebar"] .stButton button svg {{
+        font-size: 1.4rem !important; /* Ukuran ikon uniform */
+        margin-bottom: 0.3rem !important; /* Jarak vertikal ke teks */
+        color: rgba(255, 255, 255, 0.6) !important; /* Warna ikon sedikit lebih redup */
     }}
+
+    /* Teks di bawah ikon */
+    [data-testid="stSidebar"] .stButton button [data-testid="stMarkdownContainer"] p {{
+        margin: 0 !important;
+        text-align: center !important;
+    }}
+    
+    /* Gaya spesifik untuk tombol notifikasi (popover) */
+    [data-testid="stSidebar"] .stButton button.stPopoverButton {{
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        height: 80px !important;
+    }}
+    
+    [data-testid="stSidebar"] .stButton button.stPopoverButton svg {{
+        font-size: 1.4rem !important;
+        margin-bottom: 0.2rem !important;
+    }}
+    
+    [data-testid="stSidebar"] .stButton button.stPopoverButton [data-testid="stMarkdownContainer"] p {{
+        font-size: 1rem !important;
+        font-weight: 700 !important;
+        color: #4ade80 !important; /* Gunakan warna aksen hijau */
+    }}
+
+    /* Efek Hover Premium */
+    [data-testid="stSidebar"] .stButton button:hover {{
+        background-color: #232d3f !important; /* Latar belakang lebih terang saat hover */
+        border-color: #4ade80 !important; /* Gunakan warna aksen hijau dari kartu profil */
+        color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(74, 222, 128, 0.15) !important; /* Bayangan glow hijau halus */
+        transform: translateY(-2px) !important; /* Sedikit terangkat saat hover */
+    }}
+
+    [data-testid="stSidebar"] .stButton button:focus {{
+        outline: none !important;
+        border-color: #4ade80 !important;
+        box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.1) !important;
+    }}
+
+    /* ============================================================ */
 
     /* ===== INPUTS ===== */
     input,textarea,.stTextInput input,.stNumberInput input,
@@ -321,11 +391,10 @@ def inject_css():
         border-color:#{accent} !important; outline:none !important;
         box-shadow:0 0 0 3px rgba(21,128,61,0.15) !important;
     }}
+    /* Placeholder text */
     input::placeholder, textarea::placeholder{{color:#9ca3af !important;}}
 
-    /* ============================================================
-       SELECTBOX & MULTISELECT — ARSITEKTUR BASE WEB YANG BENAR
-       ============================================================ */
+    /* ===== SELECTBOX & MULTISELECT — ARSITEKTUR BASE WEB YANG BENAR ===== */
 
     /* --- 1. Bersihkan Wrapper Terluar --- */
     .stSelectbox > div,
@@ -373,15 +442,7 @@ def inject_css():
         color: #{text} !important;
     }}
 
-    /* --- 6. Khusus untuk Sidebar --- */
-    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div:nth-child(1),
-    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div:nth-child(1) {{
-        border: 1.5px solid #{border} !important;
-        border-radius: 10px !important;
-        background-color: #{inp_bg} !important;
-    }}
-
-    /* --- 7. Tag/chip dalam multiselect (nilai yang dipilih) --- */
+    /* --- 6. Tag/chip dalam multiselect (nilai yang dipilih) --- */
     [data-baseweb="tag"] {{
         background: #{bg3} !important;
         border: 1px solid #{border} !important;
@@ -390,7 +451,7 @@ def inject_css():
     }}
     [data-baseweb="tag"] span {{ color: #{text} !important; }}
 
-    /* --- 8. Dropdown option list --- */
+    /* --- 7. Dropdown option list --- */
     [data-baseweb="popover"] {{
         border: none !important;
         box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
@@ -497,9 +558,16 @@ def inject_css():
     @media(max-width:768px){{
         h1{{font-size:1.5rem !important;}}
         h2{{font-size:1.3rem !important;}}
-        .stButton button,.stFormSubmitButton button{{
-            min-height:44px !important; width:100%; font-size:0.95rem !important;
+        
+        /* Tombol sidebar juga dioptimalkan untuk mobile */
+        [data-testid="stSidebar"] .stButton button {{
+            height: 70px !important; /* Sedikit lebih kecil di mobile */
+            font-size: 0.78rem !important;
         }}
+        [data-testid="stSidebar"] .stButton button svg {{
+            font-size: 1.2rem !important;
+        }}
+        
         [data-testid="stMetricValue"]{{font-size:1.2rem !important;}}
         [data-testid="stHorizontalBlock"]>div{{flex:1 1 100% !important;max-width:100% !important;}}
         .stTabs [data-baseweb="tab"]{{font-size:0.78rem !important;padding:0.35rem 0.5rem !important;}}
