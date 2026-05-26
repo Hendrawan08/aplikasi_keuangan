@@ -149,10 +149,21 @@ def inject_css(dark: bool = False):
         card="1e293b"; inp_bg="0f172a"; shadow="rgba(0,0,0,0.4)"
         metric_bg="1e293b"; bal_grad="linear-gradient(135deg,#1a2744 0%,#0f3460 100%)"
     else:
-        bg="f8fafc"; bg2="ffffff"; bg3="f1f5f9"; text="1e293b"; text2="64748b"
-        accent="16a34a"; accent2="15803d"; border="e2e8f0"; sidebar="0f172a"
-        card="ffffff"; inp_bg="f8fafc"; shadow="rgba(0,0,0,0.08)"
-        metric_bg="ffffff"; bal_grad="linear-gradient(135deg,#166534 0%,#16a34a 60%,#22c55e 100%)"
+        # Light mode — kontras tinggi, teks jelas terbaca
+        bg      = "edf0f5"   # abu kebiruan — beda jelas dari kartu putih
+        bg2     = "ffffff"   # kartu & area utama: putih bersih
+        bg3     = "dde3ec"   # abu medium — tab/chip background
+        text    = "111827"   # hampir hitam — kontras maksimal di atas putih
+        text2   = "374151"   # abu gelap — subtitle masih mudah dibaca
+        accent  = "15803d"   # hijau tua — kontras baik di atas putih
+        accent2 = "166534"
+        border  = "9ca3af"   # border abu cukup gelap — terlihat tanpa mengganggu
+        sidebar = "0f172a"
+        card    = "ffffff"
+        inp_bg  = "ffffff"
+        shadow  = "rgba(15,23,42,0.12)"   # bayangan lebih kuat supaya kartu tampak menonjol
+        metric_bg = "ffffff"
+        bal_grad  = "linear-gradient(135deg,#14532d 0%,#15803d 55%,#16a34a 100%)"
 
     st.markdown(f"""
     <style>
@@ -170,7 +181,26 @@ def inject_css(dark: bool = False):
     h4{{color:#{accent} !important;}}
     p,li,span,label{{color:#{text} !important;}}
     .stMarkdown p{{color:#{text} !important;}}
-    small, .stCaption{{color:#{text2} !important;}}
+    small, .stCaption,[data-testid="stCaptionContainer"] p{{color:#{text2} !important;font-weight:500 !important;}}
+    /* Selectbox, radio, checkbox label */
+    .stSelectbox label,.stRadio label,.stCheckbox label,
+    .stNumberInput label,.stTextInput label,.stDateInput label,
+    .stTextArea label,.stFileUploader label{{
+        color:#{text} !important; font-weight:600 !important;
+    }}
+    /* Semua teks dalam form */
+    [data-testid="stForm"] p,
+    [data-testid="stForm"] span,
+    [data-testid="stForm"] label{{color:#{text} !important;}}
+    /* Radio & checkbox options */
+    .stRadio div[data-testid="stMarkdownContainer"] p,
+    .stCheckbox div[data-testid="stMarkdownContainer"] p{{color:#{text} !important; font-weight:500 !important;}}
+    /* Selectbox dropdown text */
+    [data-baseweb="select"] [data-testid="stMarkdownContainer"] p,
+    [data-baseweb="option"]{{color:#{text} !important;}}
+    /* Expander header */
+    [data-testid="stExpander"] summary p,
+    [data-testid="stExpander"] summary span{{color:#{text} !important; font-weight:600 !important;}}
 
     /* ===== BALANCE CARD ===== */
     .balance-card{{
@@ -197,10 +227,10 @@ def inject_css(dark: bool = False):
     /* ===== COMPARISON BAR ===== */
     .cmp-bar-wrap{{
         background:#{card}; border-radius:14px; padding:1rem 1.2rem;
-        box-shadow:0 2px 8px {shadow}; margin-bottom:1rem;
-        border:1px solid #{border};
+        box-shadow:0 4px 16px {shadow}; margin-bottom:1rem;
+        border:1.5px solid #{border};
     }}
-    .cmp-bar-title{{font-size:0.85rem;font-weight:600;color:#{text2};margin-bottom:0.5rem;}}
+    .cmp-bar-title{{font-size:0.85rem;font-weight:700;color:#{text};margin-bottom:0.5rem;}}
     .cmp-bar{{border-radius:8px;height:10px;overflow:hidden;display:flex;margin-bottom:0.4rem;}}
     .cmp-income{{background:#22c55e;transition:width 0.5s;}}
     .cmp-expense{{background:#ef4444;transition:width 0.5s;}}
@@ -214,17 +244,17 @@ def inject_css(dark: bool = False):
         box-shadow:0 2px 8px {shadow}; border:1px solid #{border};
         margin-bottom:0.5rem;
     }}
-    .stat-card .sc-label{{font-size:0.78rem;color:#{text2};margin-bottom:0.2rem;}}
+    .stat-card .sc-label{{font-size:0.78rem;color:#{text2};margin-bottom:0.2rem;font-weight:600;}}
     .stat-card .sc-value{{font-size:1.2rem;font-weight:700;color:#{text};}}
 
     /* ===== TRANSACTION ITEM ===== */
     .tx-item{{
         background:#{card}; border-radius:14px; padding:0.9rem 1rem;
-        box-shadow:0 1px 6px {shadow}; border:1px solid #{border};
-        display:flex; align-items:center; gap:0.8rem; margin-bottom:0.5rem;
+        box-shadow:0 2px 8px {shadow}; border:1.5px solid #{border};
+        display:flex; align-items:center; gap:0.8rem; margin-bottom:0.6rem;
         transition:transform 0.15s,box-shadow 0.15s;
     }}
-    .tx-item:hover{{transform:translateY(-1px);box-shadow:0 4px 12px {shadow};}}
+    .tx-item:hover{{transform:translateY(-2px);box-shadow:0 6px 16px {shadow};border-color:#{accent};}}
     .tx-icon{{
         width:42px;height:42px;border-radius:12px;display:flex;align-items:center;
         justify-content:center;font-size:1.2rem;flex-shrink:0;
@@ -232,7 +262,7 @@ def inject_css(dark: bool = False):
     }}
     .tx-icon.expense{{background:rgba(239,68,68,0.12);}}
     .tx-name{{font-size:0.9rem;font-weight:600;color:#{text};}}
-    .tx-sub{{font-size:0.75rem;color:#{text2};margin-top:1px;}}
+    .tx-sub{{font-size:0.75rem;color:#{text2};margin-top:1px;font-weight:500;}}
     .tx-amount{{font-size:0.95rem;font-weight:700;margin-left:auto;white-space:nowrap;}}
     .tx-amount.income{{color:#16a34a;}}
     .tx-amount.expense{{color:#dc2626;}}
@@ -249,11 +279,11 @@ def inject_css(dark: bool = False):
 
     /* ===== METRICS ===== */
     [data-testid="stMetricValue"]{{font-size:1.4rem !important;color:#{accent} !important;font-weight:700 !important;}}
-    [data-testid="stMetricLabel"]{{font-size:0.82rem !important;color:#{text2} !important;}}
+    [data-testid="stMetricLabel"]{{font-size:0.82rem !important;color:#{text} !important;font-weight:600 !important;}}
     [data-testid="metric-container"]{{
         background:#{metric_bg} !important; border-radius:12px !important;
-        border:1px solid #{border} !important; padding:0.8rem !important;
-        box-shadow:0 2px 6px {shadow} !important;
+        border:1.5px solid #{border} !important; padding:0.8rem !important;
+        box-shadow:0 3px 10px {shadow} !important;
     }}
 
     /* ===== BUTTONS ===== */
@@ -272,7 +302,17 @@ def inject_css(dark: bool = False):
     .stFormSubmitButton button[kind="primaryFormSubmit"],
     [data-testid="stFormSubmitButton"] button{{
         background:linear-gradient(135deg,#{accent},#{accent2}) !important;
-        color:white !important; border:none !important; font-weight:600 !important;
+        color:white !important; border:none !important; font-weight:700 !important;
+        box-shadow:0 2px 8px rgba(21,128,61,0.35) !important;
+    }}
+    /* Regular buttons - pastikan teks terbaca */
+    .stButton button{{
+        color:#{text} !important; font-weight:600 !important;
+        background:#{bg2} !important; border:1.5px solid #{border} !important;
+    }}
+    .stButton button:hover{{
+        background:#{bg3} !important; color:#{accent} !important;
+        border-color:#{accent} !important;
     }}
 
     /* ===== INPUTS ===== */
@@ -280,9 +320,16 @@ def inject_css(dark: bool = False):
     .stDateInput input,.stTimeInput input{{
         font-size:0.95rem !important; padding:0.55rem 0.8rem !important;
         border-radius:10px !important; background:#{inp_bg} !important;
-        color:#{text} !important; border:1px solid #{border} !important;
+        color:#{text} !important; border:1.5px solid #{border} !important;
+        font-weight:500 !important;
     }}
-    input:focus,.stTextInput input:focus{{border-color:#{accent} !important;outline:none !important;}}
+    input:focus,.stTextInput input:focus,.stNumberInput input:focus,
+    .stTextArea textarea:focus{{
+        border-color:#{accent} !important; outline:none !important;
+        box-shadow:0 0 0 3px rgba(21,128,61,0.15) !important;
+    }}
+    /* Placeholder text */
+    input::placeholder, textarea::placeholder{{color:#9ca3af !important;}}
     .stSelectbox>div,[data-baseweb="select"]>div{{
         background:#{inp_bg} !important; border-color:#{border} !important;
         border-radius:10px !important; color:#{text} !important;
@@ -294,13 +341,14 @@ def inject_css(dark: bool = False):
         padding:4px !important; gap:2px !important; border:none !important;
     }}
     .stTabs [data-baseweb="tab"]{{
-        border-radius:9px !important; color:#{text2} !important;
+        border-radius:9px !important; color:#{text} !important;
         font-size:0.85rem !important; padding:0.4rem 0.7rem !important;
         border:none !important; background:transparent !important;
+        font-weight:500 !important;
     }}
     .stTabs [aria-selected="true"]{{
         background:#{bg2} !important; color:#{accent} !important;
-        font-weight:600 !important; box-shadow:0 1px 4px {shadow} !important;
+        font-weight:700 !important; box-shadow:0 1px 4px {shadow} !important;
     }}
 
     /* ===== EXPANDER ===== */
@@ -344,6 +392,29 @@ def inject_css(dark: bool = False):
     ::-webkit-scrollbar{{width:5px;height:5px;}}
     ::-webkit-scrollbar-track{{background:#{bg3};}}
     ::-webkit-scrollbar-thumb{{background:#{border};border-radius:3px;}}
+
+    /* ===== TOOLTIP & POPOVER ===== */
+    [data-baseweb="popover"] *{{color:{text} !important;}}
+
+    /* ===== SECTION HEADER DIVIDER ===== */
+    .section-header{{
+        font-size:0.72rem; font-weight:700; text-transform:uppercase;
+        letter-spacing:1.5px; color:#{text2}; margin:1rem 0 0.5rem;
+        padding-bottom:0.3rem; border-bottom:2px solid #{accent};
+        display:inline-block;
+    }}
+
+    /* ===== WARNING / INFO / ERROR BOX ===== */
+    [data-testid="stAlert"] p{{color:inherit !important;}}
+
+    /* ===== HEALTH SCORE DETAIL ===== */
+    .hs-detail span{{color:#{text} !important;}}
+
+    /* ===== NUMBER INPUT BUTTONS ===== */
+    .stNumberInput button{{
+        background:#{bg3} !important; color:#{text} !important;
+        border:1px solid #{border} !important; border-radius:6px !important;
+    }}
 
     /* ===== MOBILE ===== */
     @media(max-width:768px){{
