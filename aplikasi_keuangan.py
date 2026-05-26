@@ -1247,6 +1247,9 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
+
+    st.markdown("---")
+    
     # ── Hitung notifikasi aktif (exclude dismissed) ──
     _all_notifs    = generate_notifikasi(uid)
     _aktif_notifs  = [n for n in _all_notifs if n["id"] not in st.session_state.notif_dismissed]
