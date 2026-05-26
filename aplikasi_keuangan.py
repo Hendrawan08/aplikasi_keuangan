@@ -1210,33 +1210,45 @@ with st.sidebar:
     # ---- Anggaran ----
     st.subheader("🔒 Kunci Anggaran")
     _now = wib()
-    _bln_bud = st.selectbox("Bulan",list(KAMUS_BULAN.values()),index=_now.month-1,key="sb_bln_bud")
-    _thn_bud = st.selectbox("Tahun",[2025,2026,2027],index=1,key="sb_thn_bud")
+    _bln_bud = st.selectbox("Bulan", list(KAMUS_BULAN.values()), index=_now.month-1, key="sb_bln_bud")
+    _thn_bud = st.selectbox("Tahun", [2025, 2026, 2027], index=1, key="sb_thn_bud")
     _kb      = f"{_bln_bud}_{_thn_bud}"
     _ang     = st.session_state.anggaran_terkunci.get(_kb)
-
+    
     if _ang is not None:
         st.success(f"🔒 {_bln_bud} {_thn_bud}: **{rp(_ang)}**")
+        
+        # Membuka expander untuk opsi anggaran
         with st.expander("⚙️ Opsi Anggaran"):
-            if st.button("🔓 Reset Anggaran", key="rst_bud"):
-                with st.form("frm_rst"):
-                    _k = st.text_input("Ketik RESET")
-                    if st.form_submit_button("Ya, Reset"):
-                        if _k.strip().upper()=="RESET":
-                            st.session_state.anggaran_terkunci.pop(_kb,None)
-                            try:
-                                supabase.table("budgets").delete().eq("user_id",uid).eq("bulan_key",_kb).execute()
-                                st.success("✅ Reset!"); st.rerun()
-                            except Exception as e: st.error(f"Gagal: {e}")
-                        else: st.error("Ketik RESET dengan benar.")
+            st.markdown("⚠️ **Peringatan:** Menghapus anggaran akan membuka kembali kunci untuk bulan ini.")
+            
+            # Form langsung diletakkan di dalam expander agar state tidak hilang saat disubmit
+            with st.form("frm_rst"):
+                _k = st.text_input("Ketik RESET untuk konfirmasi pembatalan:", placeholder="RESET")
+                
+                if st.form_submit_button("Ya, Reset Anggaran", use_container_width=True):
+                    if _k.strip().upper() == "RESET":
+                        # 1. Hapus dari local session state
+                        st.session_state.anggaran_terkunci.pop(_kb, None)
+                        
+                        # 2. Hapus dari Database Supabase
+                        try:
+                            supabase.table("budgets").delete().eq("user_id", uid).eq("bulan_key", _kb).execute()
+                            st.success("✅ Anggaran berhasil di-reset!")
+                            st.rerun()
+                        except Exception as e: 
+                            st.error(f"Gagal menghapus di database: {e}")
+                    else: 
+                        st.error("❌ Validasi gagal. Silakan ketik RESET dengan huruf kapital.")
     else:
         _inp_bud = st.number_input(f"Set Anggaran {_bln_bud} (Rp):",
-                                    min_value=ANGGARAN_MIN,value=ANGGARAN_DEFAULT,step=100_000)
-        if st.button(f"🔐 KUNCI {_bln_bud}"):
-            st.session_state.anggaran_terkunci[_kb]=_inp_bud
-            if not simpan_anggaran(uid,_kb,_inp_bud):
-                st.session_state.anggaran_terkunci.pop(_kb,None)
-            else: st.rerun()
+                                    min_value=ANGGARAN_MIN, value=ANGGARAN_DEFAULT, step=100_000)
+        if st.button(f"🔐 KUNCI {_bln_bud}", use_container_width=True):
+            st.session_state.anggaran_terkunci[_kb] = _inp_bud
+            if not simpan_anggaran(uid, _kb, _inp_bud):
+                st.session_state.anggaran_terkunci.pop(_kb, None)
+            else: 
+                st.rerun()
 
     st.markdown("---")
 
