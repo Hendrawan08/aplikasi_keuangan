@@ -1246,9 +1246,6 @@ with st.sidebar:
         <div class="meta">🗓 Bergabung sejak {_jn}</div>
     </div>
     """, unsafe_allow_html=True)
-
-
-    st.markdown("---")
     
     # ── Hitung notifikasi aktif (exclude dismissed) ──
     _all_notifs    = generate_notifikasi(uid)
