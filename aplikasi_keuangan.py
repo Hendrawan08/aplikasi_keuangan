@@ -40,7 +40,6 @@ import pandas as pd
 import altair as alt
 from datetime import datetime, time, date, timedelta
 import pytz, os
-import hashlib
 
 try:
     from fpdf import FPDF
@@ -177,23 +176,22 @@ def inject_css():
     p,li,span,label{{color:#{text} !important;}}
     .stMarkdown p{{color:#{text} !important;}}
     small, .stCaption,[data-testid="stCaptionContainer"] p{{color:#{text2} !important;font-weight:500 !important;}}
-    
     /* Selectbox, radio, checkbox label */
     .stSelectbox label,.stRadio label,.stCheckbox label,
     .stNumberInput label,.stTextInput label,.stDateInput label,
     .stTextArea label,.stFileUploader label{{
         color:#{text} !important; font-weight:600 !important;
     }}
-    
     /* Semua teks dalam form */
     [data-testid="stForm"] p,
     [data-testid="stForm"] span,
     [data-testid="stForm"] label{{color:#{text} !important;}}
-    
     /* Radio & checkbox options */
     .stRadio div[data-testid="stMarkdownContainer"] p,
     .stCheckbox div[data-testid="stMarkdownContainer"] p{{color:#{text} !important; font-weight:500 !important;}}
-    
+    /* Selectbox dropdown text */
+    [data-baseweb="select"] [data-testid="stMarkdownContainer"] p,
+    [data-baseweb="option"]{{color:#{text} !important;}}
     /* Expander header */
     [data-testid="stExpander"] summary p,
     [data-testid="stExpander"] summary span{{color:#{text} !important; font-weight:600 !important;}}
@@ -294,12 +292,14 @@ def inject_css():
         transform:translateY(-1px); box-shadow:0 4px 12px {shadow};
         border-color:#{accent} !important; color:#{accent} !important;
     }}
+    /* Primary submit button */
     .stFormSubmitButton button[kind="primaryFormSubmit"],
     [data-testid="stFormSubmitButton"] button{{
         background:linear-gradient(135deg,#{accent},#{accent2}) !important;
         color:white !important; border:none !important; font-weight:700 !important;
         box-shadow:0 2px 8px rgba(21,128,61,0.35) !important;
     }}
+    /* Regular buttons - pastikan teks terbaca */
     .stButton button{{
         color:#{text} !important; font-weight:600 !important;
         background:#{bg2} !important; border:1.5px solid #{border} !important;
@@ -322,67 +322,70 @@ def inject_css():
         border-color:#{accent} !important; outline:none !important;
         box-shadow:0 0 0 3px rgba(21,128,61,0.15) !important;
     }}
+    /* Placeholder text */
     input::placeholder, textarea::placeholder{{color:#9ca3af !important;}}
-
     /* ============================================================
-       SELECTBOX & MULTISELECT — ARSITEKTUR BASE WEB YANG BENAR
-       ============================================================ */
+       SELECTBOX & MULTISELECT — FIX DOUBLE BORDER
+       Strategi: border hanya di wrapper terluar (.stSelectbox>div
+       dan .stMultiSelect>div), semua elemen di dalam: border none,
+       box-shadow none, outline none.
+    ============================================================ */
 
-    /* --- 1. Bersihkan Wrapper Terluar --- */
+    /* --- OUTER wrapper: ini satu-satunya yang boleh punya border --- */
     .stSelectbox > div,
     .stMultiSelect > div {{
-        border: none !important;
-        background: transparent !important;
-        box-shadow: none !important;
-    }}
-
-    /* --- 2. Gaya Utama pada Control Container (Kotak Asli Dropdown) --- */
-    .stSelectbox [data-baseweb="select"] > div:nth-child(1),
-    .stMultiSelect [data-baseweb="select"] > div:nth-child(1) {{
         border: 1.5px solid #{border} !important;
         border-radius: 10px !important;
-        background-color: #{inp_bg} !important;
+        background: #{inp_bg} !important;
         box-shadow: none !important;
-        transition: all 0.2s ease-in-out;
     }}
 
-    /* --- 3. Efek Focus (Glow) saat Dropdown Diklik --- */
-    .stSelectbox [data-baseweb="select"] > div:nth-child(1):focus-within,
-    .stMultiSelect [data-baseweb="select"] > div:nth-child(1):focus-within {{
-        border-color: #{accent} !important;
-        box-shadow: 0 0 0 3px rgba(74,222,128,0.2) !important;
-    }}
-
-    /* --- 4. SOLUSI KOTAK TUMPANG TINDIH: Netralkan Elemen Input Internal --- */
-    .stSelectbox [data-baseweb="select"] input,
-    .stMultiSelect [data-baseweb="select"] input {{
-        background: transparent !important;
+    /* --- Hapus SEMUA border/shadow dari elemen dalam (baseweb) --- */
+    .stSelectbox [data-baseweb="select"],
+    .stSelectbox [data-baseweb="select"] > div,
+    .stSelectbox [data-baseweb="select"] > div > div,
+    .stSelectbox [data-baseweb="select"] > div > div > div,
+    .stMultiSelect [data-baseweb="select"],
+    .stMultiSelect [data-baseweb="select"] > div,
+    .stMultiSelect [data-baseweb="select"] > div > div,
+    .stMultiSelect [data-baseweb="select"] > div > div > div {{
         border: none !important;
-        outline: none !important;
+        border-color: transparent !important;
         box-shadow: none !important;
-        padding: 0 !important;
-        margin: 0 !important;
+        outline: none !important;
+        background: transparent !important;
     }}
 
-    /* --- 5. Teks Pilihan dan Ikon Panah --- */
+    /* --- Teks di dalam select --- */
     .stSelectbox [data-baseweb="select"] span,
+    .stSelectbox [data-baseweb="select"] div,
     .stMultiSelect [data-baseweb="select"] span,
-    .stSelectbox [data-baseweb="select"] svg,
-    .stMultiSelect [data-baseweb="select"] svg,
-    [data-baseweb="select"] [data-testid="stMarkdownContainer"] p,
-    [data-baseweb="option"] {{
+    .stMultiSelect [data-baseweb="select"] div {{
         color: #{text} !important;
     }}
 
-    /* --- 6. Khusus untuk Sidebar --- */
-    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div:nth-child(1),
-    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div:nth-child(1) {{
+    /* --- Sidebar: sama, tapi lebih spesifik --- */
+    [data-testid="stSidebar"] .stSelectbox > div,
+    [data-testid="stSidebar"] .stMultiSelect > div {{
         border: 1.5px solid #{border} !important;
         border-radius: 10px !important;
-        background-color: #{inp_bg} !important;
+        background: #{inp_bg} !important;
+        box-shadow: none !important;
+    }}
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"],
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div,
+    [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div > div,
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"],
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div,
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div > div {{
+        border: none !important;
+        border-color: transparent !important;
+        box-shadow: none !important;
+        outline: none !important;
+        background: transparent !important;
     }}
 
-    /* --- 7. Tag/chip dalam multiselect (nilai yang dipilih) --- */
+    /* --- Tag/chip dalam multiselect (nilai yang dipilih) --- */
     [data-baseweb="tag"] {{
         background: #{bg3} !important;
         border: 1px solid #{border} !important;
@@ -391,7 +394,7 @@ def inject_css():
     }}
     [data-baseweb="tag"] span {{ color: #{text} !important; }}
 
-    /* --- 8. Dropdown option list --- */
+    /* --- Dropdown option list --- */
     [data-baseweb="popover"] {{
         border: none !important;
         box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
@@ -411,6 +414,13 @@ def inject_css():
     [data-baseweb="option"][aria-selected="true"] {{
         background: #{bg3} !important;
         color: #{accent} !important;
+    }}
+
+    /* --- Focus state: cukup glow di outer wrapper --- */
+    .stSelectbox > div:focus-within,
+    .stMultiSelect > div:focus-within {{
+        border-color: #{accent} !important;
+        box-shadow: 0 0 0 3px rgba(74,222,128,0.2) !important;
     }}
 
     /* ===== TABS ===== */
@@ -472,7 +482,7 @@ def inject_css():
     ::-webkit-scrollbar-thumb{{background:#{border};border-radius:3px;}}
 
     /* ===== TOOLTIP & POPOVER ===== */
-    [data-baseweb="popover"] *{{color:#{text} !important;}}
+    [data-baseweb="popover"] *{{color:{text} !important;}}
 
     /* ===== SECTION HEADER DIVIDER ===== */
     .section-header{{
@@ -492,6 +502,21 @@ def inject_css():
     .stNumberInput button{{
         background:#{bg3} !important; color:#{text} !important;
         border:1px solid #{border} !important; border-radius:6px !important;
+    }}
+
+    /* ===== NOTIFICATION POPOVER ===== */
+    .notif-item {{
+        padding:0.55rem 0.75rem; border-radius:8px; margin-bottom:0.45rem;
+        font-size:0.83rem; line-height:1.45; border-left:3px solid;
+    }}
+    .notif-error   {{ border-color:#ef4444; background:rgba(239,68,68,0.12); }}
+    .notif-warning {{ border-color:#f59e0b; background:rgba(245,158,11,0.1); }}
+    .notif-info    {{ border-color:#3b82f6; background:rgba(59,130,246,0.1); }}
+    .notif-empty   {{ text-align:center; padding:1.5rem 0.5rem;
+                      color:#94a3b8; font-size:0.85rem; }}
+    /* Bell button styling */
+    button[kind="secondary"][data-testid*="popover"] {{
+        position: relative !important;
     }}
 
     /* ===== MOBILE ===== */
@@ -584,6 +609,7 @@ _DEF = {
     "onboarding_step": 0,
     "tx_form_key": 0,
     "pm_form_key": 0,
+    "notif_dismissed": [],
 }
 for _k, _v in _DEF.items():
     if _k not in st.session_state:
@@ -902,6 +928,127 @@ def buat_pdf(email,bln,thn,df_v,df_pv,budget,target,tot_pglr,tot_msuk,hs,ls):
     return bytes(pdf.output())
 
 # ============================================================
+# PUSAT NOTIFIKASI — GENERATOR
+# ============================================================
+def generate_notifikasi(uid: str) -> list:
+    """
+    Hitung semua notifikasi aktif berdasarkan kondisi keuangan user.
+    Setiap notif: {"id", "icon", "tipe" (error/warning/info), "pesan"}
+    """
+    notifs = []
+    _now    = wib()
+    _kb_now = f"{KAMUS_BULAN[_now.month]}_{_now.year}"
+
+    # ── 1. Belum catat transaksi ≥ 2 hari ──
+    try:
+        _tx_q = ambil_transaksi(uid)
+        if _tx_q:
+            _df_q = pd.DataFrame(_tx_q)
+            _df_q["waktu_transaksi"] = pd.to_datetime(_df_q["waktu_transaksi"], errors="coerce")
+            if _df_q["waktu_transaksi"].dt.tz is None:
+                _df_q["waktu_transaksi"] = _df_q["waktu_transaksi"].dt.tz_localize("UTC")
+            _df_q["waktu_transaksi"] = _df_q["waktu_transaksi"].dt.tz_convert(TZ)
+            _last = _df_q["waktu_transaksi"].dropna().max()
+            if pd.notna(_last):
+                _gap = (_now.date() - _last.date()).days
+                if _gap >= 2:
+                    notifs.append({
+                        "id":   f"no_tx_{_gap}",
+                        "icon": "🔔",
+                        "tipe": "warning",
+                        "pesan": f"Belum mencatat pengeluaran selama **{_gap} hari**. Jangan lupa catat!"
+                    })
+    except Exception:
+        pass
+
+    # ── 2. Anggaran bulan ini belum dikunci ──
+    if _kb_now not in st.session_state.anggaran_terkunci:
+        notifs.append({
+            "id":   "no_budget",
+            "icon": "💡",
+            "tipe": "info",
+            "pesan": f"Anggaran bulan **{KAMUS_BULAN[_now.month]}** belum dikunci. Set di sidebar."
+        })
+
+    # ── 3. Target tabungan belum diset ──
+    if (_kb_now in st.session_state.anggaran_terkunci
+            and _kb_now not in st.session_state.target_tabungan):
+        notifs.append({
+            "id":   "no_target",
+            "icon": "🎯",
+            "tipe": "info",
+            "pesan": "Target tabungan bulan ini belum diset. Yuk tentukan targetmu!"
+        })
+
+    # ── 4. Persentase batas belanja ──
+    _ang_now = st.session_state.anggaran_terkunci.get(_kb_now, 0)
+    _tgt_now = st.session_state.target_tabungan.get(_kb_now, 0)
+    _bts_now = max(0, _ang_now - _tgt_now)
+    if _bts_now > 0:
+        try:
+            _tx_q2 = ambil_transaksi(uid)
+            if _tx_q2:
+                _df_q2 = pd.DataFrame(_tx_q2)
+                _df_q2["nominal"] = pd.to_numeric(_df_q2["nominal"], errors="coerce")
+                _df_q2["waktu_transaksi"] = pd.to_datetime(_df_q2["waktu_transaksi"], errors="coerce")
+                if _df_q2["waktu_transaksi"].dt.tz is None:
+                    _df_q2["waktu_transaksi"] = _df_q2["waktu_transaksi"].dt.tz_localize("UTC")
+                _df_q2["waktu_transaksi"] = _df_q2["waktu_transaksi"].dt.tz_convert(TZ)
+                _df_q2["bulan"] = _df_q2["waktu_transaksi"].dt.month.map(KAMUS_BULAN)
+                _df_q2["tahun"] = _df_q2["waktu_transaksi"].dt.year
+                _df_bln = _df_q2[
+                    (_df_q2["bulan"] == KAMUS_BULAN[_now.month]) &
+                    (_df_q2["tahun"] == _now.year)
+                ]
+                _tot_bln = _df_bln["nominal"].sum()
+                _pct_bln = (_tot_bln / _bts_now) * 100
+                if _pct_bln >= 100:
+                    notifs.append({
+                        "id":   "over_budget",
+                        "icon": "🚨",
+                        "tipe": "error",
+                        "pesan": f"Pengeluaran sudah **{_pct_bln:.0f}%** dari batas! Target tabungan terancam."
+                    })
+                elif _pct_bln >= 80:
+                    notifs.append({
+                        "id":   "near_budget",
+                        "icon": "⚠️",
+                        "tipe": "warning",
+                        "pesan": f"Pengeluaran sudah **{_pct_bln:.0f}%** dari batas belanja bulan ini."
+                    })
+        except Exception:
+            pass
+
+    # ── 5. Hutang / piutang jatuh tempo ≤ 3 hari ──
+    try:
+        for _h in ambil_hutang(uid):
+            if _h.get("status") == "belum_lunas" and _h.get("jatuh_tempo"):
+                try:
+                    _jt   = datetime.fromisoformat(
+                        _h["jatuh_tempo"].replace("Z", "+00:00")
+                    ).astimezone(TZ).date()
+                    _sisa = (_jt - _now.date()).days
+                    if 0 <= _sisa <= 3:
+                        _jenis = "Hutang" if _h["jenis"] == "hutang" else "Piutang"
+                        notifs.append({
+                            "id":   f"jt_{_h['id']}",
+                            "icon": "💸",
+                            "tipe": "warning",
+                            "pesan": (
+                                f"{_jenis} ke **{_h['nama_pihak']}** "
+                                f"({rp(_h['nominal'])}) jatuh tempo "
+                                f"{'hari ini!' if _sisa==0 else f'dalam **{_sisa} hari**!'}"
+                            )
+                        })
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return notifs
+
+
+# ============================================================
 # ONBOARDING WIZARD
 # ============================================================
 def tampilkan_onboarding(uid, email):
@@ -1035,7 +1182,7 @@ if st.session_state.user_aktif is None:
                 st.session_state.toast_kondisi_ditampilkan = False
                 st.rerun()
             except Exception as e:
-                st.error(f"Login gagal: Silahkan periksa Email atau Password anda.")
+                st.error(f"Login gagal: {e}")
     with tab_d:
         em2 = st.text_input("Email Baru", key="reg_em")
         pw2 = st.text_input("Password (min 6 karakter)", type="password", key="reg_pw")
@@ -1088,40 +1235,17 @@ if st.session_state.hapus_sukses:
 # ============================================================
 with st.sidebar:
     # ---- Profil Card ----
-    # Pengamanan pertama: pastikan st.session_state.profil bukan None
-    _pr      = st.session_state.profil or {} 
-    
-    # Pengamanan string: ubah None menjadi "" sebelum di-strip()
-    _nama    = (_pr.get("nama") or "").strip() or email_user.split("@")[0].title()
-    _bio     = (_pr.get("bio") or "").strip() or "Belum ada bio."
-    _lokasi  = (_pr.get("lokasi") or "").strip()
-    _foto    = _pr.get("foto_url") or None
-    _ini     = inisial((_pr.get("nama") or ""), email_user)
-    
-    _jn = "-"
-
+    _pr      = st.session_state.profil
+    _nama    = _pr.get("nama","").strip() or email_user.split("@")[0].title()
+    _bio     = _pr.get("bio","").strip() or "Belum ada bio."
+    _lokasi  = _pr.get("lokasi","").strip()
+    _foto    = _pr.get("foto_url", None)
+    _ini     = inisial(_pr.get("nama",""), email_user)
     try:
-        # 1. Cek apakah tanggal ada di tabel profil dictionary (jika diambil dari database)
-        _raw_date = _pr.get("created_at")
-        
-        # 2. Jika tidak ada di profil, ambil dari objek session pengguna aktif
-        if not _raw_date and st.session_state.user_aktif:
-            # Dukung akses secara dictionary maupun object secara dinamis
-            if isinstance(st.session_state.user_aktif, dict):
-                _raw_date = st.session_state.user_aktif.get("created_at")
-            else:
-                _raw_date = getattr(st.session_state.user_aktif, "created_at", None)
-    
-        # 3. Eksekusi konversi jika data tanggal berhasil ditemukan
-        if _raw_date:
-            # Trik cerdas: Konversi ke string lalu potong 10 karakter pertama (YYYY-MM-DD)
-            # Ini mengabaikan zona waktu atau format jam yang bikin error
-            _tanggal_bersih = str(_raw_date)[:10] 
-            _jn = datetime.strptime(_tanggal_bersih, "%Y-%m-%d").strftime("%d %b %Y")
-            
-    except Exception as e:
-        # (Opsional) Cetak di terminal backend untuk melacak error secara diam-diam
-        print(f"Peringatan - Gagal memproses tanggal: {e}")
+        _jn = datetime.fromisoformat(
+            st.session_state.user_aktif.created_at.replace("Z","+00:00")
+        ).astimezone(TZ).strftime("%d %b %Y")
+    except Exception: _jn="-"
 
     _av_html = (
         f'<img src="{_foto}" style="width:68px;height:68px;border-radius:50%;'
@@ -1149,7 +1273,65 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    _bc1, _bc2 = st.columns(2)
+    # ── Hitung notifikasi aktif (exclude dismissed) ──
+    _all_notifs    = generate_notifikasi(uid)
+    _aktif_notifs  = [n for n in _all_notifs if n["id"] not in st.session_state.notif_dismissed]
+    _n_count       = len(_aktif_notifs)
+    _bell_label    = f"🔔 {_n_count}" if _n_count > 0 else "🔔"
+
+    # ── 3 tombol: Bell | Edit Profil | Logout ──
+    _bc0, _bc1, _bc2 = st.columns([2, 4, 4])
+
+    with _bc0:
+        with st.popover(_bell_label, help="Pusat Notifikasi"):
+            st.markdown(
+                "<div style='font-size:0.95rem;font-weight:700;margin-bottom:0.6rem;'>"
+                "🔔 Pusat Notifikasi</div>",
+                unsafe_allow_html=True
+            )
+
+            if not _aktif_notifs:
+                st.markdown(
+                    "<div class='notif-empty'>✅ Semua beres!<br>Tidak ada notifikasi baru.</div>",
+                    unsafe_allow_html=True
+                )
+            else:
+                # Tombol bersihkan semua
+                if st.button("🧹 Bersihkan Semua", key="notif_clear_all",
+                              use_container_width=True):
+                    st.session_state.notif_dismissed = [n["id"] for n in _all_notifs]
+                    st.rerun()
+
+                st.markdown("---")
+
+                # Render tiap notifikasi
+                _warna_map = {
+                    "error":   "#ef4444",
+                    "warning": "#f59e0b",
+                    "info":    "#3b82f6",
+                }
+                for _notif in _aktif_notifs:
+                    _cls   = f"notif-{_notif['tipe']}"
+                    _warna = _warna_map.get(_notif["tipe"], "#94a3b8")
+
+                    _col_msg, _col_x = st.columns([8, 1])
+                    with _col_msg:
+                        st.markdown(
+                            f"<div class='notif-item {_cls}'>"
+                            f"{_notif['icon']} {_notif['pesan']}"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
+                    with _col_x:
+                        if st.button(
+                            "✕",
+                            key=f"notif_dismiss_{_notif['id']}",
+                            help="Tutup notifikasi ini"
+                        ):
+                            if _notif["id"] not in st.session_state.notif_dismissed:
+                                st.session_state.notif_dismissed.append(_notif["id"])
+                            st.rerun()
+
     with _bc1:
         if st.button("✏️ Edit Profil", use_container_width=True, key="btn_ep"):
             st.session_state.edit_profil_mode = not st.session_state.edit_profil_mode
@@ -1159,6 +1341,7 @@ with st.sidebar:
             except Exception: pass
             for _k,_v in _DEF.items():
                 st.session_state[_k] = _v
+            st.session_state.notif_dismissed = []
             st.rerun()
 
     if st.session_state.edit_profil_mode:
@@ -1170,11 +1353,9 @@ with st.sidebar:
                     if hapus_foto(uid):
                         st.session_state.profil["foto_url"] = None
                         st.success("Foto dihapus."); st.rerun()
-            
             _fu = st.file_uploader("Upload (JPG/PNG maks 2MB)", type=["jpg","jpeg","png","webp"])
             if _fu:
-                if _fu.size > 2*1024*1024: 
-                    st.error("❌ Maks 2MB")
+                if _fu.size > 2*1024*1024: st.error("❌ Maks 2MB")
                 elif st.button("☁️ Upload", key="btn_up_foto"):
                     with st.spinner("Uploading..."):
                         _url = upload_foto(uid, _fu.read(), _fu.type)
@@ -1182,42 +1363,29 @@ with st.sidebar:
                             st.session_state.profil["foto_url"] = _url
                             simpan_profil(uid, {"foto_url":_url})
                             st.success("✅ Foto diupload!"); st.rerun()
-            
             st.markdown("---")
             with st.form("form_profil"):
-                # Menambahkan 'or ""' agar Streamlit tidak crash jika data database bernilai None
-                _in_nama = st.text_input("Nama", value=_pr.get("nama") or "")
-                _in_bio  = st.text_area("Bio", value=_pr.get("bio") or "", max_chars=160, height=80)
-                _in_lok  = st.text_input("Lokasi", value=_pr.get("lokasi") or "")
-                _in_kerj = st.text_input("Pekerjaan", value=_pr.get("pekerjaan") or "")
-                _in_tf   = st.text_input("Target Finansial", value=_pr.get("target_finansial") or "")
-                
+                _in_nama = st.text_input("Nama", value=_pr.get("nama",""))
+                _in_bio  = st.text_area("Bio", value=_pr.get("bio",""), max_chars=160, height=80)
+                _in_lok  = st.text_input("Lokasi", value=_pr.get("lokasi",""))
+                _in_kerj = st.text_input("Pekerjaan", value=_pr.get("pekerjaan",""))
+                _in_tf   = st.text_input("Target Finansial", value=_pr.get("target_finansial",""))
                 st.markdown("**🔒 Ganti Password**")
                 _pw1 = st.text_input("Password Baru (kosongkan jika tidak)", type="password")
                 _pw2 = st.text_input("Konfirmasi Password Baru", type="password")
-                
                 if st.form_submit_button("💾 Simpan", use_container_width=True):
-                    _dp = {
-                        "nama": _in_nama.strip(),
-                        "bio": _in_bio.strip(),
-                        "lokasi": _in_lok.strip(),
-                        "pekerjaan": _in_kerj.strip(),
-                        "target_finansial": _in_tf.strip(),
-                        "foto_url": _pr.get("foto_url")
-                    }
+                    _dp = {"nama":_in_nama.strip(),"bio":_in_bio.strip(),"lokasi":_in_lok.strip(),
+                           "pekerjaan":_in_kerj.strip(),"target_finansial":_in_tf.strip(),
+                           "foto_url":_pr.get("foto_url")}
                     if simpan_profil(uid, _dp):
                         if _pw1:
-                            if _pw1 != _pw2: 
-                                st.error("Password tidak cocok.")
-                            elif len(_pw1) < 6: 
-                                st.error("Min 6 karakter.")
+                            if _pw1!=_pw2: st.error("Password tidak cocok.")
+                            elif len(_pw1)<6: st.error("Min 6 karakter.")
                             else:
                                 try:
-                                    supabase.auth.update_user({"password": _pw1})
+                                    supabase.auth.update_user({"password":_pw1})
                                     st.success("🔒 Password diubah.")
-                                except Exception as _pe: 
-                                    st.error(f"Gagal: {_pe}")
-                        
+                                except Exception as _pe: st.error(f"Gagal: {_pe}")
                         st.session_state.profil.update(_dp)
                         st.session_state.edit_profil_mode = False
                         st.success("✅ Profil disimpan!"); st.rerun()
@@ -1227,45 +1395,33 @@ with st.sidebar:
     # ---- Anggaran ----
     st.subheader("🔒 Kunci Anggaran")
     _now = wib()
-    _bln_bud = st.selectbox("Bulan", list(KAMUS_BULAN.values()), index=_now.month-1, key="sb_bln_bud")
-    _thn_bud = st.selectbox("Tahun", [2025, 2026, 2027], index=1, key="sb_thn_bud")
+    _bln_bud = st.selectbox("Bulan",list(KAMUS_BULAN.values()),index=_now.month-1,key="sb_bln_bud")
+    _thn_bud = st.selectbox("Tahun",[2025,2026,2027],index=1,key="sb_thn_bud")
     _kb      = f"{_bln_bud}_{_thn_bud}"
     _ang     = st.session_state.anggaran_terkunci.get(_kb)
-    
+
     if _ang is not None:
         st.success(f"🔒 {_bln_bud} {_thn_bud}: **{rp(_ang)}**")
-        
-        # Membuka expander untuk opsi anggaran
         with st.expander("⚙️ Opsi Anggaran"):
-            st.markdown("⚠️ **Peringatan:** Menghapus anggaran akan membuka kembali kunci untuk bulan ini.")
-            
-            # Form langsung diletakkan di dalam expander agar state tidak hilang saat disubmit
-            with st.form("frm_rst"):
-                _k = st.text_input("Ketik RESET untuk konfirmasi pembatalan:", placeholder="RESET")
-                
-                if st.form_submit_button("Ya, Reset Anggaran", use_container_width=True):
-                    if _k.strip().upper() == "RESET":
-                        # 1. Hapus dari local session state
-                        st.session_state.anggaran_terkunci.pop(_kb, None)
-                        
-                        # 2. Hapus dari Database Supabase
-                        try:
-                            supabase.table("budgets").delete().eq("user_id", uid).eq("bulan_key", _kb).execute()
-                            st.success("✅ Anggaran berhasil di-reset!")
-                            st.rerun()
-                        except Exception as e: 
-                            st.error(f"Gagal menghapus di database: {e}")
-                    else: 
-                        st.error("❌ Validasi gagal. Silakan ketik RESET dengan huruf kapital.")
+            if st.button("🔓 Reset Anggaran", key="rst_bud"):
+                with st.form("frm_rst"):
+                    _k = st.text_input("Ketik RESET")
+                    if st.form_submit_button("Ya, Reset"):
+                        if _k.strip().upper()=="RESET":
+                            st.session_state.anggaran_terkunci.pop(_kb,None)
+                            try:
+                                supabase.table("budgets").delete().eq("user_id",uid).eq("bulan_key",_kb).execute()
+                                st.success("✅ Reset!"); st.rerun()
+                            except Exception as e: st.error(f"Gagal: {e}")
+                        else: st.error("Ketik RESET dengan benar.")
     else:
         _inp_bud = st.number_input(f"Set Anggaran {_bln_bud} (Rp):",
-                                    min_value=ANGGARAN_MIN, value=ANGGARAN_DEFAULT, step=100_000)
-        if st.button(f"🔐 KUNCI {_bln_bud}", use_container_width=True):
-            st.session_state.anggaran_terkunci[_kb] = _inp_bud
-            if not simpan_anggaran(uid, _kb, _inp_bud):
-                st.session_state.anggaran_terkunci.pop(_kb, None)
-            else: 
-                st.rerun()
+                                    min_value=ANGGARAN_MIN,value=ANGGARAN_DEFAULT,step=100_000)
+        if st.button(f"🔐 KUNCI {_bln_bud}"):
+            st.session_state.anggaran_terkunci[_kb]=_inp_bud
+            if not simpan_anggaran(uid,_kb,_inp_bud):
+                st.session_state.anggaran_terkunci.pop(_kb,None)
+            else: st.rerun()
 
     st.markdown("---")
 
@@ -1467,60 +1623,9 @@ if _is_new:
     tampilkan_onboarding(uid, email_user)
 
 # ============================================================
-# IN-APP NOTIFIKASI CERDAS
+# NOTIFIKASI — ditampilkan via bell 🔔 di sidebar
+# (tidak ada blok warna di halaman utama)
 # ============================================================
-def tampilkan_notifikasi():
-    _notifs = []
-    _now = wib()
-    _kb_now = f"{KAMUS_BULAN[_now.month]}_{_now.year}"
-
-    # 1. Belum catat hari ini
-    if not df.empty:
-        _last = df["waktu_transaksi"].max().date()
-        _gap  = (_now.date()-_last).days
-        if _gap>=2:
-            _notifs.append(("🔔","warning",f"Kamu belum mencatat pengeluaran selama **{_gap} hari**. Jangan lupa catat!"))
-
-    # 2. Anggaran belum dikunci bulan ini
-    if _kb_now not in st.session_state.anggaran_terkunci:
-        _notifs.append(("💡","info",f"Anggaran bulan **{KAMUS_BULAN[_now.month]}** belum dikunci. Set di sidebar kiri."))
-
-    # 3. Target tabungan belum diset
-    if _kb_now in st.session_state.anggaran_terkunci and _kb_now not in st.session_state.target_tabungan:
-        _notifs.append(("🎯","info","Target tabungan bulan ini belum diset. Yuk tentukan targetmu!"))
-
-    # 4. 80%+ anggaran terpakai
-    _ang_now = st.session_state.anggaran_terkunci.get(_kb_now,0)
-    _tgt_now = st.session_state.target_tabungan.get(_kb_now,0)
-    _bts_now = max(0, _ang_now-_tgt_now)
-    if not df.empty and _bts_now>0:
-        _df_now = df[(df["bulan"]==KAMUS_BULAN[_now.month])&(df["tahun"]==_now.year)]
-        _tot_now = _df_now["nominal"].sum()
-        _pct = (_tot_now/_bts_now)*100
-        if _pct>=100:
-            _notifs.append(("🚨","error",f"**DARURAT!** Pengeluaran sudah **{_pct:.0f}%** dari batas. Target tabungan terancam!"))
-        elif _pct>=80:
-            _notifs.append(("⚠️","warning",f"Pengeluaran sudah **{_pct:.0f}%** dari batas belanja bulan ini."))
-
-    # 5. Hutang jatuh tempo dalam 3 hari
-    _hutang_data = ambil_hutang(uid)
-    for _h in _hutang_data:
-        if _h.get("status")=="belum_lunas" and _h.get("jatuh_tempo"):
-            try:
-                _jt = datetime.fromisoformat(_h["jatuh_tempo"].replace("Z","+00:00")).astimezone(TZ).date()
-                _sisa = (_jt - _now.date()).days
-                if 0<=_sisa<=3:
-                    _notifs.append(("💸","warning",
-                        f"{'Hutang' if _h['jenis']=='hutang' else 'Piutang'} ke **{_h['nama_pihak']}** "
-                        f"sebesar {rp(_h['nominal'])} jatuh tempo dalam **{_sisa} hari**!"))
-            except Exception: pass
-
-    for _ic,_tp,_msg in _notifs:
-        if _tp=="error": st.error(f"{_ic} {_msg}")
-        elif _tp=="warning": st.warning(f"{_ic} {_msg}")
-        else: st.info(f"{_ic} {_msg}")
-
-tampilkan_notifikasi()
 
 # ============================================================
 # FILTER PERIODE
