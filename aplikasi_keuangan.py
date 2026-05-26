@@ -142,28 +142,22 @@ CHANGELOG = [
 # ============================================================
 # CSS — LIGHT & DARK MODE
 # ============================================================
-def inject_css(dark: bool = False):
-    if dark:
-        bg="0f172a"; bg2="1e293b"; bg3="334155"; text="e2e8f0"; text2="94a3b8"
-        accent="4ade80"; accent2="16a34a"; border="475569"; sidebar="080f1e"
-        card="1e293b"; inp_bg="0f172a"; shadow="rgba(0,0,0,0.4)"
-        metric_bg="1e293b"; bal_grad="linear-gradient(135deg,#1a2744 0%,#0f3460 100%)"
-    else:
-        # Light mode — kontras tinggi, teks jelas terbaca
-        bg      = "edf0f5"   # abu kebiruan — beda jelas dari kartu putih
-        bg2     = "ffffff"   # kartu & area utama: putih bersih
-        bg3     = "dde3ec"   # abu medium — tab/chip background
-        text    = "111827"   # hampir hitam — kontras maksimal di atas putih
-        text2   = "374151"   # abu gelap — subtitle masih mudah dibaca
-        accent  = "15803d"   # hijau tua — kontras baik di atas putih
-        accent2 = "166534"
-        border  = "9ca3af"   # border abu cukup gelap — terlihat tanpa mengganggu
-        sidebar = "0f172a"
-        card    = "ffffff"
-        inp_bg  = "ffffff"
-        shadow  = "rgba(15,23,42,0.12)"   # bayangan lebih kuat supaya kartu tampak menonjol
-        metric_bg = "ffffff"
-        bal_grad  = "linear-gradient(135deg,#14532d 0%,#15803d 55%,#16a34a 100%)"
+def inject_css():
+    # Dark mode only — konsisten dan profesional
+    bg      = "0f172a"
+    bg2     = "1e293b"
+    bg3     = "334155"
+    text    = "e2e8f0"
+    text2   = "94a3b8"
+    accent  = "4ade80"
+    accent2 = "16a34a"
+    border  = "475569"
+    sidebar = "080f1e"
+    card    = "1e293b"
+    inp_bg  = "0f172a"
+    shadow  = "rgba(0,0,0,0.4)"
+    metric_bg = "1e293b"
+    bal_grad  = "linear-gradient(135deg,#1a2744 0%,#0f3460 100%)"
 
     st.markdown(f"""
     <style>
@@ -330,9 +324,30 @@ def inject_css(dark: bool = False):
     }}
     /* Placeholder text */
     input::placeholder, textarea::placeholder{{color:#9ca3af !important;}}
-    .stSelectbox>div,[data-baseweb="select"]>div{{
-        background:#{inp_bg} !important; border-color:#{border} !important;
-        border-radius:10px !important; color:#{text} !important;
+    /* Selectbox — hapus double border */
+    .stSelectbox>div{{border:none !important; background:transparent !important;}}
+    [data-baseweb="select"]{{
+        border:1.5px solid #{border} !important;
+        border-radius:10px !important; background:#{inp_bg} !important;
+    }}
+    [data-baseweb="select"]>div{{
+        border:none !important; background:transparent !important;
+        color:#{text} !important;
+    }}
+    [data-baseweb="select"]>div>div{{
+        border:none !important; background:transparent !important;
+        color:#{text} !important;
+    }}
+    /* Dropdown option list */
+    [data-baseweb="popover"] [data-baseweb="menu"]{{
+        background:#{bg2} !important; border:1.5px solid #{border} !important;
+        border-radius:10px !important;
+    }}
+    [data-baseweb="option"]{{
+        background:#{bg2} !important; color:#{text} !important;
+    }}
+    [data-baseweb="option"]:hover{{
+        background:#{bg3} !important; color:#{accent} !important;
     }}
 
     /* ===== TABS ===== */
@@ -480,7 +495,6 @@ supabase = init_supabase()
 # ============================================================
 _DEF = {
     "user_aktif": None,
-    "dark_mode": False,
     "anggaran_terkunci": {},
     "muat_anggaran_sukses": False,
     "target_tabungan": {},
@@ -936,7 +950,7 @@ def tampilkan_onboarding(uid, email):
 # AUTH GATE
 # ============================================================
 if st.session_state.user_aktif is None:
-    inject_css(False)
+    inject_css()
     st.markdown("<h1 style='text-align:center;color:#2E7D32;'>📊 DanaPintar AI</h1>",
                 unsafe_allow_html=True)
     st.markdown("<p style='text-align:center;color:#64748b;'>Sistem Keuangan Cerdas berbasis AI</p>",
@@ -973,27 +987,16 @@ if st.session_state.user_aktif is None:
 # ============================================================
 # INJECT CSS (setelah login, berdasarkan dark mode)
 # ============================================================
-inject_css(st.session_state.dark_mode)
+inject_css()
 
 # ============================================================
 # HEADER
 # ============================================================
-_dm_icon = "☀️" if st.session_state.dark_mode else "🌙"
-_dm_lbl  = "Light" if st.session_state.dark_mode else "Dark"
-
-_hc1, _hc2 = st.columns([4,1])
-with _hc1:
-    st.markdown(
-        "<h1 style='margin-bottom:2px;letter-spacing:-0.5px;'>📊 DanaPintar AI</h1>",
-        unsafe_allow_html=True
-    )
-    st.caption("✦ Sistem Keuangan Cerdas · AI Chat · Multi-Wallet · Target Tabungan")
-with _hc2:
-    if st.button(f"{_dm_icon}", key="toggle_dark", use_container_width=True,
-                  help=f"Ganti ke {_dm_lbl} Mode"):
-        st.session_state.dark_mode = not st.session_state.dark_mode
-        st.rerun()
-
+st.markdown(
+    "<h1 style='margin-bottom:2px;letter-spacing:-0.5px;'>📊 DanaPintar AI</h1>",
+    unsafe_allow_html=True
+)
+st.caption("✦ Sistem Keuangan Cerdas · AI Chat · Multi-Wallet · Target Tabungan")
 st.markdown("---")
 
 # ============================================================
