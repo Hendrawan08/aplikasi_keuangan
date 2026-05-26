@@ -1034,7 +1034,7 @@ if st.session_state.user_aktif is None:
                 st.session_state.toast_kondisi_ditampilkan = False
                 st.rerun()
             except Exception as e:
-                st.error(f"Login gagal: {e}")
+                st.error(f"Login gagal: Silahkan periksa Email atau Password anda.")
     with tab_d:
         em2 = st.text_input("Email Baru", key="reg_em")
         pw2 = st.text_input("Password (min 6 karakter)", type="password", key="reg_pw")
