@@ -252,7 +252,7 @@ def inject_css():
     .tx-icon{{
         width:42px;height:42px;border-radius:12px;display:flex;align-items:center;
         justify-content:center;font-size:1.2rem;flex-shrink:0;
-        background:rgba({('74,222,128' if dark else '22,163,74')},0.15);
+        background:rgba(74,222,128,0.15);
     }}
     .tx-icon.expense{{background:rgba(239,68,68,0.12);}}
     .tx-name{{font-size:0.9rem;font-weight:600;color:#{text};}}
