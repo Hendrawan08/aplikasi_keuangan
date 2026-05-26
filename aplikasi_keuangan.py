@@ -1149,17 +1149,24 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    _bc1, _bc2 = st.columns(2)
+    # MENGUBAH MENJADI 3 KOLOM: Kolom baru (_bc0) diletakkan di paling kiri untuk Lonceng Notifikasi
+    _bc0, _bc1, _bc2 = st.columns(3)
+    
+    with _bc0:
+        # Mengeksekusi fungsi Lonceng Popover yang sudah kita buat sebelumnya
+        tampilkan_notifikasi()
+    
     with _bc1:
         if st.button("✏️ Edit Profil", use_container_width=True, key="btn_ep"):
             st.session_state.edit_profil_mode = not st.session_state.edit_profil_mode
+    
     with _bc2:
         if st.button("🚪 Logout", use_container_width=True, key="logout_btn"):
             try: 
                 supabase.auth.sign_out()
             except Exception: 
                 pass
-            for _k,_v in _DEF.items():
+            for _k, _v in _DEF.items():
                 st.session_state[_k] = _v
             st.rerun()
 
@@ -1469,27 +1476,30 @@ if _is_new:
     tampilkan_onboarding(uid, email_user)
 
 # ============================================================
-# IN-APP NOTIFIKASI CERDAS (DIPERBARUI)
+# IN-APP NOTIFIKASI CERDAS: PUSAT NOTIFIKASI POPOVER (🔔)
 # ============================================================
 def get_hash(text):
-    """Fungsi pembantu untuk membuat ID unik dari teks pesan"""
     return hashlib.md5(text.encode()).hexdigest()
 
 def tampilkan_notifikasi():
-    # 1. Injeksi Animasi CSS (Fade-In Halus)
+    # 1. Animasi halus khusus untuk isi dalam Popover
     st.markdown("""
     <style>
     @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(-10px); }
+        from { opacity: 0; transform: translateY(-5px); }
         to { opacity: 1; transform: translateY(0); }
     }
-    .stAlert, .notif-anim {
-        animation: fadeIn 0.4s ease-out;
+    .notif-card {
+        animation: fadeIn 0.3s ease-out;
+        padding: 10px; 
+        border-radius: 8px; 
+        font-size: 13px; 
+        line-height: 1.4;
+        margin-bottom: 5px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-    # 2. Persiapan Memori untuk mengingat notifikasi yang ditutup
     if "notif_ditutup" not in st.session_state:
         st.session_state.notif_ditutup = set()
 
@@ -1497,45 +1507,37 @@ def tampilkan_notifikasi():
     _now = wib()
     _kb_now = f"{KAMUS_BULAN[_now.month]}_{_now.year}"
 
-    # Evaluasi Kondisi & Bobot Prioritas:
-    # 1 (Darurat/Merah), 2 (Peringatan/Kuning), 3 (Info/Biru)
-
-    # [Kondisi 1] Belum catat hari ini (Prioritas 2)
+    # --- [ LOGIKA EVALUASI KONDISI ANGGARAN & HUTANG ] ---
+    # (Logika pengumpulan _notifs tetap sama dengan versi sebelumnya untuk akurasi data)
     if not df.empty:
         _last = df["waktu_transaksi"].max().date()
         _gap  = (_now.date() - _last).days
         if _gap >= 2:
-            _msg = f"Kamu belum mencatat pengeluaran selama **{_gap} hari**. Jangan lupa catat!"
+            _msg = f"Belum mencatat pengeluaran selama **{_gap} hari**."
             _notifs.append({"id": get_hash(f"gap_{_gap}"), "icon": "🔔", "tipe": "warning", "msg": _msg, "prio": 2})
 
-    # [Kondisi 2] Anggaran belum dikunci (Prioritas 3)
     if _kb_now not in st.session_state.anggaran_terkunci:
-        _msg = f"Anggaran bulan **{KAMUS_BULAN[_now.month]}** belum dikunci. Set di sidebar kiri."
+        _msg = f"Anggaran bulan **{KAMUS_BULAN[_now.month]}** belum dikunci."
         _notifs.append({"id": get_hash(f"ang_{_kb_now}"), "icon": "💡", "tipe": "info", "msg": _msg, "prio": 3})
 
-    # [Kondisi 3] Target tabungan belum diset (Prioritas 3)
     if _kb_now in st.session_state.anggaran_terkunci and _kb_now not in st.session_state.target_tabungan:
-        _msg = "Target tabungan bulan ini belum diset. Yuk tentukan targetmu!"
+        _msg = "Target tabungan bulan ini belum diset."
         _notifs.append({"id": get_hash(f"tgt_{_kb_now}"), "icon": "🎯", "tipe": "info", "msg": _msg, "prio": 3})
 
-    # [Kondisi 4] Anggaran terpakai (Prioritas 1 atau 2)
     _ang_now = st.session_state.anggaran_terkunci.get(_kb_now, 0)
     _tgt_now = st.session_state.target_tabungan.get(_kb_now, 0)
     _bts_now = max(0, _ang_now - _tgt_now)
-    
     if not df.empty and _bts_now > 0:
         _df_now = df[(df["bulan"] == KAMUS_BULAN[_now.month]) & (df["tahun"] == _now.year)]
         _tot_now = _df_now["nominal"].sum()
         _pct = (_tot_now / _bts_now) * 100
-        
         if _pct >= 100:
-            _msg = f"**DARURAT!** Pengeluaran sudah **{_pct:.0f}%** dari batas. Target tabungan terancam!"
+            _msg = f"**DARURAT!** Pengeluaran **{_pct:.0f}%** melebihi batas belanja!"
             _notifs.append({"id": get_hash(f"over_{_kb_now}"), "icon": "🚨", "tipe": "error", "msg": _msg, "prio": 1})
         elif _pct >= 80:
-            _msg = f"Pengeluaran sudah **{_pct:.0f}%** dari batas belanja bulan ini."
+            _msg = f"Pengeluaran sudah mencapai **{_pct:.0f}%** dari batas."
             _notifs.append({"id": get_hash(f"warn_{_kb_now}"), "icon": "⚠️", "tipe": "warning", "msg": _msg, "prio": 2})
 
-    # [Kondisi 5] Hutang jatuh tempo (Prioritas 1 atau 2)
     _hutang_data = ambil_hutang(uid)
     for _h in _hutang_data:
         if _h.get("status") == "belum_lunas" and _h.get("jatuh_tempo"):
@@ -1546,49 +1548,57 @@ def tampilkan_notifikasi():
                     _prio = 1 if _sisa == 0 else 2
                     _tipe = "error" if _sisa == 0 else "warning"
                     _jp = "Hutang" if _h['jenis'] == 'hutang' else 'Piutang'
-                    _msg = f"{_jp} ke **{_h['nama_pihak']}** sebesar {rp(_h['nominal'])} jatuh tempo dalam **{_sisa} hari**!"
+                    _msg = f"{_jp} **{_h['nama_pihak']}** ({rp(_h['nominal'])}) JT dalam **{_sisa} hari**!"
                     _notifs.append({"id": get_hash(f"hut_{_h['id']}"), "icon": "💸", "tipe": _tipe, "msg": _msg, "prio": _prio})
-            except Exception: 
-                pass
+            except Exception: pass
 
-    # 3. Filter notifikasi yang BELUM ditutup pengguna
+    # --- [ FILTER & AKSI RENDER ] ---
     _notifs_aktif = [n for n in _notifs if n["id"] not in st.session_state.notif_ditutup]
-
-    # 4. Urutkan berdasarkan prioritas (1 paling atas)
     _notifs_aktif = sorted(_notifs_aktif, key=lambda x: x["prio"])
+    _jumlah_notif = len(_notifs_aktif)
 
-    # 5. Render UI Notifikasi
-    if _notifs_aktif:
-        st.markdown("<div class='notif-anim'>", unsafe_allow_html=True)
+    # Label dinamis dengan counter angka
+    _label_tombol = f"🔔 Notifikasi ({_jumlah_notif})" if _jumlah_notif > 0 else "🔔 Notifikasi"
+
+    # Membuat container Popover murni dari Streamlit
+    with st.popover(_label_tombol, use_container_width=True):
+        st.markdown("#### 📑 Pusat Peringatan Akun")
+        st.markdown("---")
         
-        # Tombol "Bebaskan Layar" jika notifikasi > 1
-        if len(_notifs_aktif) > 1:
-            col_kosong, col_clear = st.columns([0.75, 0.25])
-            with col_clear:
-                if st.button("🧹 Hapus Semua", use_container_width=True, key="btn_clear_all"):
+        if _jumlah_notif == 0:
+            st.write("🎉 **Semua Berjalan Lancar!** Tidak ada tugas atau peringatan finansial saat ini.")
+        else:
+            if _jumlah_notif > 1:
+                if st.button("🧹 Tandai Semua Sudah Dibaca", use_container_width=True, key="pop_clear_all"):
                     for n in _notifs_aktif:
                         st.session_state.notif_ditutup.add(n["id"])
                     st.rerun()
+                st.markdown("---")
 
-        # Render setiap notifikasi
-        for n in _notifs_aktif:
-            # Proporsi kolom: 92% untuk pesan, 8% untuk tombol silang
-            col_msg, col_btn = st.columns([0.92, 0.08], vertical_alignment="center")
-            
-            with col_msg:
-                if n["tipe"] == "error": st.error(f"{n['icon']} {n['msg']}")
-                elif n["tipe"] == "warning": st.warning(f"{n['icon']} {n['msg']}")
-                else: st.info(f"{n['icon']} {n['msg']}")
-            
-            with col_btn:
-                if st.button("✖", key=f"tutup_{n['id']}", help="Tutup notifikasi"):
-                    st.session_state.notif_ditutup.add(n["id"])
-                    st.rerun()
-        
-        st.markdown("</div><br>", unsafe_allow_html=True)
+            # Render kartu kustom mini di dalam popover
+            for n in _notifs_aktif:
+                # Menentukan warna kustom tipis ala dashboard premium (bukan blok tebal)
+                if n["tipe"] == "error":
+                    _bg, _border, _text = "#fff0f0", "#ff4d4f", "#a61d24"
+                elif n["tipe"] == "warning":
+                    _bg, _border, _text = "#fffbe6", "#ffe58f", "#d46b08"
+                else:
+                    _bg, _border, _text = "#e6f7ff", "#91d5ff", "#0050b3"
 
-# Jalankan fungsinya
-tampilkan_notifikasi()
+                # Pembagian kolom internal popover (90% teks kartu, 10% tombol silang)
+                _col_card, _col_close = st.columns([0.88, 0.12], vertical_alignment="center")
+                
+                with _col_card:
+                    st.markdown(f"""
+                    <div class="notif-card" style="background-color: {_bg}; border-left: 4px solid {_border}; color: {_text};">
+                        {n['icon']} {n['msg']}
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                with _col_close:
+                    if st.button("✖", key=f"pop_cls_{n['id']}", help="Abaikan"):
+                        st.session_state.notif_ditutup.add(n["id"])
+                        st.rerun()
 
 # ============================================================
 # FILTER PERIODE
