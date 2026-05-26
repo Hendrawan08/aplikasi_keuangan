@@ -176,22 +176,23 @@ def inject_css():
     p,li,span,label{{color:#{text} !important;}}
     .stMarkdown p{{color:#{text} !important;}}
     small, .stCaption,[data-testid="stCaptionContainer"] p{{color:#{text2} !important;font-weight:500 !important;}}
+    
     /* Selectbox, radio, checkbox label */
     .stSelectbox label,.stRadio label,.stCheckbox label,
     .stNumberInput label,.stTextInput label,.stDateInput label,
     .stTextArea label,.stFileUploader label{{
         color:#{text} !important; font-weight:600 !important;
     }}
+    
     /* Semua teks dalam form */
     [data-testid="stForm"] p,
     [data-testid="stForm"] span,
     [data-testid="stForm"] label{{color:#{text} !important;}}
+    
     /* Radio & checkbox options */
     .stRadio div[data-testid="stMarkdownContainer"] p,
     .stCheckbox div[data-testid="stMarkdownContainer"] p{{color:#{text} !important; font-weight:500 !important;}}
-    /* Selectbox dropdown text */
-    [data-baseweb="select"] [data-testid="stMarkdownContainer"] p,
-    [data-baseweb="option"]{{color:#{text} !important;}}
+    
     /* Expander header */
     [data-testid="stExpander"] summary p,
     [data-testid="stExpander"] summary span{{color:#{text} !important; font-weight:600 !important;}}
@@ -292,14 +293,12 @@ def inject_css():
         transform:translateY(-1px); box-shadow:0 4px 12px {shadow};
         border-color:#{accent} !important; color:#{accent} !important;
     }}
-    /* Primary submit button */
     .stFormSubmitButton button[kind="primaryFormSubmit"],
     [data-testid="stFormSubmitButton"] button{{
         background:linear-gradient(135deg,#{accent},#{accent2}) !important;
         color:white !important; border:none !important; font-weight:700 !important;
         box-shadow:0 2px 8px rgba(21,128,61,0.35) !important;
     }}
-    /* Regular buttons - pastikan teks terbaca */
     .stButton button{{
         color:#{text} !important; font-weight:600 !important;
         background:#{bg2} !important; border:1.5px solid #{border} !important;
@@ -322,69 +321,67 @@ def inject_css():
         border-color:#{accent} !important; outline:none !important;
         box-shadow:0 0 0 3px rgba(21,128,61,0.15) !important;
     }}
-    /* Placeholder text */
     input::placeholder, textarea::placeholder{{color:#9ca3af !important;}}
+
     /* ============================================================
-   SELECTBOX & MULTISELECT — ARSITEKTUR BASE WEB YANG BENAR
-   Strategi: Pindahkan border ke Control Container bawaan,
-   bersihkan wrapper luar, dan netralkan input tersembunyi.
-   ============================================================ */
+       SELECTBOX & MULTISELECT — ARSITEKTUR BASE WEB YANG BENAR
+       ============================================================ */
 
     /* --- 1. Bersihkan Wrapper Terluar --- */
-    /* Pastikan wrapper utama tidak memiliki gaya yang mengganggu layout label */
     .stSelectbox > div,
-    .stMultiSelect > div {
+    .stMultiSelect > div {{
         border: none !important;
         background: transparent !important;
         box-shadow: none !important;
-    }
-    
+    }}
+
     /* --- 2. Gaya Utama pada Control Container (Kotak Asli Dropdown) --- */
-    /* Target elemen pertama di dalam baseweb select */
     .stSelectbox [data-baseweb="select"] > div:nth-child(1),
-    .stMultiSelect [data-baseweb="select"] > div:nth-child(1) {
+    .stMultiSelect [data-baseweb="select"] > div:nth-child(1) {{
         border: 1.5px solid #{border} !important;
         border-radius: 10px !important;
         background-color: #{inp_bg} !important;
         box-shadow: none !important;
         transition: all 0.2s ease-in-out;
-    }
-    
+    }}
+
     /* --- 3. Efek Focus (Glow) saat Dropdown Diklik --- */
     .stSelectbox [data-baseweb="select"] > div:nth-child(1):focus-within,
-    .stMultiSelect [data-baseweb="select"] > div:nth-child(1):focus-within {
+    .stMultiSelect [data-baseweb="select"] > div:nth-child(1):focus-within {{
         border-color: #{accent} !important;
         box-shadow: 0 0 0 3px rgba(74,222,128,0.2) !important;
-    }
-    
+    }}
+
     /* --- 4. SOLUSI KOTAK TUMPANG TINDIH: Netralkan Elemen Input Internal --- */
-    /* Ini secara spesifik membunuh kotak hantu yang menimpa teks "Mei" & "2026" */
     .stSelectbox [data-baseweb="select"] input,
-    .stMultiSelect [data-baseweb="select"] input {
+    .stMultiSelect [data-baseweb="select"] input {{
         background: transparent !important;
         border: none !important;
         outline: none !important;
         box-shadow: none !important;
         padding: 0 !important;
         margin: 0 !important;
-    }
-    
+    }}
+
     /* --- 5. Teks Pilihan dan Ikon Panah --- */
     .stSelectbox [data-baseweb="select"] span,
     .stMultiSelect [data-baseweb="select"] span,
     .stSelectbox [data-baseweb="select"] svg,
-    .stMultiSelect [data-baseweb="select"] svg {
+    .stMultiSelect [data-baseweb="select"] svg,
+    [data-baseweb="select"] [data-testid="stMarkdownContainer"] p,
+    [data-baseweb="option"] {{
         color: #{text} !important;
-    }
-    
-    /* --- (Opsional) Khusus untuk Sidebar --- */
+    }}
+
+    /* --- 6. Khusus untuk Sidebar --- */
     [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div:nth-child(1),
-    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div:nth-child(1) {
+    [data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div:nth-child(1) {{
         border: 1.5px solid #{border} !important;
         border-radius: 10px !important;
         background-color: #{inp_bg} !important;
-    }
-    /* --- Tag/chip dalam multiselect (nilai yang dipilih) --- */
+    }}
+
+    /* --- 7. Tag/chip dalam multiselect (nilai yang dipilih) --- */
     [data-baseweb="tag"] {{
         background: #{bg3} !important;
         border: 1px solid #{border} !important;
@@ -393,7 +390,7 @@ def inject_css():
     }}
     [data-baseweb="tag"] span {{ color: #{text} !important; }}
 
-    /* --- Dropdown option list --- */
+    /* --- 8. Dropdown option list --- */
     [data-baseweb="popover"] {{
         border: none !important;
         box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
@@ -413,13 +410,6 @@ def inject_css():
     [data-baseweb="option"][aria-selected="true"] {{
         background: #{bg3} !important;
         color: #{accent} !important;
-    }}
-
-    /* --- Focus state: cukup glow di outer wrapper --- */
-    .stSelectbox > div:focus-within,
-    .stMultiSelect > div:focus-within {{
-        border-color: #{accent} !important;
-        box-shadow: 0 0 0 3px rgba(74,222,128,0.2) !important;
     }}
 
     /* ===== TABS ===== */
@@ -481,7 +471,7 @@ def inject_css():
     ::-webkit-scrollbar-thumb{{background:#{border};border-radius:3px;}}
 
     /* ===== TOOLTIP & POPOVER ===== */
-    [data-baseweb="popover"] *{{color:{text} !important;}}
+    [data-baseweb="popover"] *{{color:#{text} !important;}}
 
     /* ===== SECTION HEADER DIVIDER ===== */
     .section-header{{
