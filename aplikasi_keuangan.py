@@ -1097,12 +1097,30 @@ with st.sidebar:
     _foto    = _pr.get("foto_url") or None
     _ini     = inisial((_pr.get("nama") or ""), email_user)
     
+    _jn = "-"
+
     try:
-        _jn = datetime.fromisoformat(
-            st.session_state.user_aktif.created_at.replace("Z","+00:00")
-        ).astimezone(TZ).strftime("%d %b %Y")
-    except Exception: 
-        _jn="-"
+        # 1. Cek apakah tanggal ada di tabel profil dictionary (jika diambil dari database)
+        _raw_date = _pr.get("created_at")
+        
+        # 2. Jika tidak ada di profil, ambil dari objek session pengguna aktif
+        if not _raw_date and st.session_state.user_aktif:
+            # Dukung akses secara dictionary maupun object secara dinamis
+            if isinstance(st.session_state.user_aktif, dict):
+                _raw_date = st.session_state.user_aktif.get("created_at")
+            else:
+                _raw_date = getattr(st.session_state.user_aktif, "created_at", None)
+    
+        # 3. Eksekusi konversi jika data tanggal berhasil ditemukan
+        if _raw_date:
+            # Trik cerdas: Konversi ke string lalu potong 10 karakter pertama (YYYY-MM-DD)
+            # Ini mengabaikan zona waktu atau format jam yang bikin error
+            _tanggal_bersih = str(_raw_date)[:10] 
+            _jn = datetime.strptime(_tanggal_bersih, "%Y-%m-%d").strftime("%d %b %Y")
+            
+    except Exception as e:
+        # (Opsional) Cetak di terminal backend untuk melacak error secara diam-diam
+        print(f"Peringatan - Gagal memproses tanggal: {e}")
 
     _av_html = (
         f'<img src="{_foto}" style="width:68px;height:68px;border-radius:50%;'
