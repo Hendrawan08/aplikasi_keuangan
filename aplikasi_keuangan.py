@@ -1,32 +1,57 @@
 # ============================================================
-# DanaPintar AI Premium — v3.0.0
+# DanaPintar AI Premium — v4.0.0
 # Author : Hendrawan Lotanto
 # ============================================================
 #
-# SQL BARU — Jalankan di Supabase SQL Editor:
+# SQL BARU — Jalankan di Supabase SQL Editor sebelum update:
 #
-# -- RLS semua tabel (universal, anti type mismatch)
-# -- Sudah dijalankan sebelumnya via chat.
+# -- Financial Goals
+# CREATE TABLE financial_goals (
+#   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+#   user_id UUID NOT NULL,
+#   nama TEXT NOT NULL,
+#   target_nominal BIGINT NOT NULL,
+#   terkumpul BIGINT DEFAULT 0,
+#   deadline DATE,
+#   kategori TEXT DEFAULT 'Tabungan',
+#   ikon TEXT DEFAULT '🎯',
+#   created_at TIMESTAMPTZ DEFAULT now()
+# );
+# ALTER TABLE financial_goals ENABLE ROW LEVEL SECURITY;
+# CREATE POLICY "fg_sel" ON financial_goals FOR SELECT USING (auth.uid()::text=user_id::text);
+# CREATE POLICY "fg_ins" ON financial_goals FOR INSERT WITH CHECK (auth.uid()::text=user_id::text);
+# CREATE POLICY "fg_upd" ON financial_goals FOR UPDATE USING (auth.uid()::text=user_id::text);
+# CREATE POLICY "fg_del" ON financial_goals FOR DELETE USING (auth.uid()::text=user_id::text);
 #
-# -- Policies Multi-Wallet
-# ALTER TABLE wallets ENABLE ROW LEVEL SECURITY;
-# CREATE POLICY "w_sel" ON wallets FOR SELECT USING (auth.uid()::text=user_id::text);
-# CREATE POLICY "w_ins" ON wallets FOR INSERT WITH CHECK (auth.uid()::text=user_id::text);
-# CREATE POLICY "w_upd" ON wallets FOR UPDATE USING (auth.uid()::text=user_id::text);
-# CREATE POLICY "w_del" ON wallets FOR DELETE USING (auth.uid()::text=user_id::text);
+# -- Custom Kategori
+# CREATE TABLE custom_kategori (
+#   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+#   user_id UUID NOT NULL,
+#   nama TEXT NOT NULL,
+#   tipe TEXT NOT NULL,
+#   ikon TEXT DEFAULT '📌'
+# );
+# ALTER TABLE custom_kategori ENABLE ROW LEVEL SECURITY;
+# CREATE POLICY "ck_sel" ON custom_kategori FOR SELECT USING (auth.uid()::text=user_id::text);
+# CREATE POLICY "ck_ins" ON custom_kategori FOR INSERT WITH CHECK (auth.uid()::text=user_id::text);
+# CREATE POLICY "ck_del" ON custom_kategori FOR DELETE USING (auth.uid()::text=user_id::text);
 #
-# -- Policies Budget Kategori
-# ALTER TABLE budget_kategori ENABLE ROW LEVEL SECURITY;
-# CREATE POLICY "bk_sel" ON budget_kategori FOR SELECT USING (auth.uid()::text=user_id::text);
-# CREATE POLICY "bk_ins" ON budget_kategori FOR INSERT WITH CHECK (auth.uid()::text=user_id::text);
-# CREATE POLICY "bk_del" ON budget_kategori FOR DELETE USING (auth.uid()::text=user_id::text);
-#
-# -- Policies Hutang Piutang
-# ALTER TABLE hutang_piutang ENABLE ROW LEVEL SECURITY;
-# CREATE POLICY "hp_sel" ON hutang_piutang FOR SELECT USING (auth.uid()::text=user_id::text);
-# CREATE POLICY "hp_ins" ON hutang_piutang FOR INSERT WITH CHECK (auth.uid()::text=user_id::text);
-# CREATE POLICY "hp_upd" ON hutang_piutang FOR UPDATE USING (auth.uid()::text=user_id::text);
-# CREATE POLICY "hp_del" ON hutang_piutang FOR DELETE USING (auth.uid()::text=user_id::text);
+# -- Net Worth History
+# CREATE TABLE networth_history (
+#   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+#   user_id UUID NOT NULL,
+#   bulan_key TEXT NOT NULL,
+#   total_aset BIGINT DEFAULT 0,
+#   total_liabilitas BIGINT DEFAULT 0,
+#   catatan_aset JSONB DEFAULT '[]',
+#   catatan_liabilitas JSONB DEFAULT '[]',
+#   recorded_at TIMESTAMPTZ DEFAULT now()
+# );
+# ALTER TABLE networth_history ENABLE ROW LEVEL SECURITY;
+# CREATE POLICY "nw_sel" ON networth_history FOR SELECT USING (auth.uid()::text=user_id::text);
+# CREATE POLICY "nw_ins" ON networth_history FOR INSERT WITH CHECK (auth.uid()::text=user_id::text);
+# CREATE POLICY "nw_upd" ON networth_history FOR UPDATE USING (auth.uid()::text=user_id::text);
+# CREATE POLICY "nw_del" ON networth_history FOR DELETE USING (auth.uid()::text=user_id::text);
 #
 # SECRETS — .streamlit/secrets.toml:
 # SUPABASE_URL = "https://..."
@@ -39,6 +64,9 @@ from supabase import create_client, Client
 import pandas as pd
 import altair as alt
 from datetime import datetime, time, date, timedelta
+import calendar as cal_lib
+import json
+import io
 import pytz, os
 
 try:
@@ -71,11 +99,11 @@ KAMUS_BULAN = {
     5:"Mei",6:"Juni",7:"Juli",8:"Agustus",
     9:"September",10:"Oktober",11:"November",12:"Desember"
 }
-KATEGORI_PENGELUARAN = [
+KATEGORI_PENGELUARAN_DEFAULT = [
     "Makanan","Transportasi","Hiburan/Gaya Hidup",
     "Kebutuhan Rumah/Kesehatan","Tagihan Wajib","Lain-lain"
 ]
-KATEGORI_PEMASUKAN = [
+KATEGORI_PEMASUKAN_DEFAULT = [
     "Gaji","Freelance","Bisnis","Investasi",
     "Hadiah/Bonus","Passive Income","Lain-lain"
 ]
@@ -83,8 +111,26 @@ FREKUENSI_BERULANG = ["Bulanan","Mingguan","2 Mingguan"]
 TIPE_WALLET       = ["💵 Cash","🏦 Bank","📱 E-Wallet","📈 Investasi","💳 Kartu Kredit"]
 ANGGARAN_MIN      = 10_000
 ANGGARAN_DEFAULT  = 1_000_000
+GOAL_IKON_LIST    = ["🎯","🏠","🚗","✈️","📱","💍","🎓","💊","🐾","🛒","🎸","💻","📷","⛵","🏋️"]
+ASET_TIPE_LIST    = ["Tabungan Bank","Investasi","Properti","Kendaraan","Emas/Logam Mulia","Lainnya"]
+LIAB_TIPE_LIST    = ["KPR","Kredit Kendaraan","Kartu Kredit","Pinjaman Personal","Hutang Usaha","Lainnya"]
 
 CHANGELOG = [
+    {
+        "versi": "4.0.0", "tanggal": "Mei 2026",
+        "fitur": [
+            "🎯 Financial Goals — target finansial jangka pendek/panjang dengan progress bar",
+            "📥 Import CSV Mutasi Bank — upload mutasi, mapping kolom, bulk import transaksi",
+            "📅 Kalender Heatmap — visualisasi pengeluaran per hari dalam grid kalender",
+            "🏷️ Custom Kategori — tambah kategori pengeluaran/pemasukan sendiri",
+            "💎 Net Worth Tracker — pantau aset & liabilitas + tren net worth bulanan",
+            "📋 Pagination Transaksi — tampil 5 dulu, tombol 'Tampilkan Lebih Banyak'",
+        ],
+        "perbaikan": [
+            "Performa lebih baik pada list transaksi panjang",
+            "UX lebih bersih pada halaman utama",
+        ]
+    },
     {
         "versi": "3.0.0", "tanggal": "Mei 2026",
         "fitur": [
@@ -93,12 +139,11 @@ CHANGELOG = [
             "🔔 Notifikasi in-app cerdas saat login",
             "🔍 Search & filter transaksi (kata kunci, kategori, sifat, tanggal)",
             "🎉 Onboarding wizard untuk user baru",
-            "📋 Halaman Changelog (halaman ini)",
+            "📋 Halaman Changelog",
             "📂 Budget per kategori — alokasi anggaran per pos pengeluaran",
             "💸 Pelacakan Hutang & Piutang",
             "👛 Multi-Wallet — kelola Cash, Bank, E-Wallet, dll",
-            "🌙 Dark Mode — toggle tema gelap/terang",
-            "📱 UX Mobile lebih responsif",
+            "🌙 Dark Mode",
         ],
         "perbaikan": [
             "Guard negatif pada batas_belanja",
@@ -109,19 +154,16 @@ CHANGELOG = [
     {
         "versi": "2.0.0", "tanggal": "April 2026",
         "fitur": [
-            "💵 Income Tracking — catat pemasukan",
-            "🔄 Recurring Templates — transaksi berulang otomatis",
+            "💵 Income Tracking",
+            "🔄 Recurring Templates",
             "🤖 DanaBot — AI Chat keuangan (Google Gemini)",
-            "🏅 Financial Health Score (0–100)",
-            "📄 Export laporan PDF bulanan",
-            "🏆 Gamifikasi & badge pencapaian",
+            "🏅 Financial Health Score",
+            "📄 Export laporan PDF",
+            "🏆 Gamifikasi & badge",
             "↔️ Dashboard komparatif 2 bulan",
-            "👤 Profil lengkap — foto, nama, bio, lokasi",
+            "👤 Profil lengkap",
         ],
-        "perbaikan": [
-            "API key dipindah ke st.secrets",
-            "Fix security: user_id validation pada semua delete",
-        ]
+        "perbaikan": ["API key ke st.secrets","Fix security user_id validation"]
     },
     {
         "versi": "1.0.0", "tanggal": "Maret 2026",
@@ -140,10 +182,9 @@ CHANGELOG = [
 
 
 # ============================================================
-# CSS — LIGHT & DARK MODE
+# CSS
 # ============================================================
 def inject_css():
-    # Dark mode only — konsisten dan profesional
     bg      = "0f172a"
     bg2     = "1e293b"
     bg3     = "334155"
@@ -161,43 +202,28 @@ def inject_css():
 
     st.markdown(f"""
     <style>
-    /* ===== GLOBAL ===== */
     html,body,[data-testid="stAppViewContainer"]{{
         background:#{bg} !important; color:#{text} !important; font-size:16px;
     }}
     [data-testid="stSidebar"]{{background:#{sidebar} !important;}}
     [data-testid="stSidebar"] *{{color:#e2e8f0 !important;}}
     [data-testid="stSidebar"] .stMarkdown p{{color:#e2e8f0 !important;}}
-
-    /* ===== TYPOGRAPHY ===== */
     h1,h2,h3,h4{{color:#{text} !important; font-weight:700 !important;}}
     h1{{font-size:1.8rem !important;}}
     h4{{color:#{accent} !important;}}
     p,li,span,label{{color:#{text} !important;}}
     .stMarkdown p{{color:#{text} !important;}}
     small, .stCaption,[data-testid="stCaptionContainer"] p{{color:#{text2} !important;font-weight:500 !important;}}
-    
-    /* Selectbox, radio, checkbox label */
     .stSelectbox label,.stRadio label,.stCheckbox label,
     .stNumberInput label,.stTextInput label,.stDateInput label,
-    .stTextArea label,.stFileUploader label{{
-        color:#{text} !important; font-weight:600 !important;
-    }}
-    
-    /* Semua teks dalam form */
-    [data-testid="stForm"] p,
-    [data-testid="stForm"] span,
-    [data-testid="stForm"] label{{color:#{text} !important;}}
-    
-    /* Radio & checkbox options */
+    .stTextArea label,.stFileUploader label{{color:#{text} !important; font-weight:600 !important;}}
+    [data-testid="stForm"] p,[data-testid="stForm"] span,[data-testid="stForm"] label{{color:#{text} !important;}}
     .stRadio div[data-testid="stMarkdownContainer"] p,
     .stCheckbox div[data-testid="stMarkdownContainer"] p{{color:#{text} !important; font-weight:500 !important;}}
-    
-    /* Expander header */
     [data-testid="stExpander"] summary p,
     [data-testid="stExpander"] summary span{{color:#{text} !important; font-weight:600 !important;}}
 
-    /* ===== BALANCE CARD ===== */
+    /* BALANCE CARD */
     .balance-card{{
         background:{bal_grad};
         border-radius:20px; padding:1.5rem 1.5rem 1.2rem; color:white;
@@ -210,16 +236,13 @@ def inject_css():
     }}
     .balance-card .label{{font-size:0.75rem;opacity:0.75;text-transform:uppercase;letter-spacing:1px;}}
     .balance-card .amount{{font-size:2.2rem;font-weight:800;margin:0.3rem 0;}}
-    .balance-card .sub-card{{
-        background:rgba(255,255,255,0.15); border-radius:12px;
-        padding:0.7rem 1rem; flex:1;
-    }}
+    .balance-card .sub-card{{background:rgba(255,255,255,0.15);border-radius:12px;padding:0.7rem 1rem;flex:1;}}
     .balance-card .sub-label{{font-size:0.78rem;opacity:0.8;}}
     .balance-card .sub-amount{{font-size:1rem;font-weight:700;}}
     .income-color{{color:#bbf7d0 !important;}}
     .expense-color{{color:#fca5a5 !important;}}
 
-    /* ===== COMPARISON BAR ===== */
+    /* COMPARISON BAR */
     .cmp-bar-wrap{{
         background:#{card}; border-radius:14px; padding:1rem 1.2rem;
         box-shadow:0 4px 16px {shadow}; margin-bottom:1rem;
@@ -233,16 +256,15 @@ def inject_css():
     .cmp-income-lbl{{color:#16a34a;font-weight:600;}}
     .cmp-expense-lbl{{color:#dc2626;font-weight:600;}}
 
-    /* ===== CARDS ===== */
+    /* CARDS */
     .stat-card{{
         background:#{card}; border-radius:14px; padding:1rem 1.1rem;
-        box-shadow:0 2px 8px {shadow}; border:1px solid #{border};
-        margin-bottom:0.5rem;
+        box-shadow:0 2px 8px {shadow}; border:1px solid #{border}; margin-bottom:0.5rem;
     }}
     .stat-card .sc-label{{font-size:0.78rem;color:#{text2};margin-bottom:0.2rem;font-weight:600;}}
     .stat-card .sc-value{{font-size:1.2rem;font-weight:700;color:#{text};}}
 
-    /* ===== TRANSACTION ITEM ===== */
+    /* TRANSACTION ITEM */
     .tx-item{{
         background:#{card}; border-radius:14px; padding:0.9rem 1rem;
         box-shadow:0 2px 8px {shadow}; border:1.5px solid #{border};
@@ -250,11 +272,8 @@ def inject_css():
         transition:transform 0.15s,box-shadow 0.15s;
     }}
     .tx-item:hover{{transform:translateY(-2px);box-shadow:0 6px 16px {shadow};border-color:#{accent};}}
-    .tx-icon{{
-        width:42px;height:42px;border-radius:12px;display:flex;align-items:center;
-        justify-content:center;font-size:1.2rem;flex-shrink:0;
-        background:rgba(74,222,128,0.15);
-    }}
+    .tx-icon{{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;
+        justify-content:center;font-size:1.2rem;flex-shrink:0;background:rgba(74,222,128,0.15);}}
     .tx-icon.expense{{background:rgba(239,68,68,0.12);}}
     .tx-name{{font-size:0.9rem;font-weight:600;color:#{text};}}
     .tx-sub{{font-size:0.75rem;color:#{text2};margin-top:1px;font-weight:500;}}
@@ -262,17 +281,46 @@ def inject_css():
     .tx-amount.income{{color:#16a34a;}}
     .tx-amount.expense{{color:#dc2626;}}
 
-    /* ===== SEARCH CHIP FILTER ===== */
-    .chip-wrap{{display:flex;gap:0.4rem;flex-wrap:wrap;margin:0.4rem 0;}}
-    .chip{{
-        display:inline-flex;align-items:center;gap:4px;
-        background:#{bg3};border:1px solid #{border};border-radius:20px;
-        padding:0.3rem 0.75rem;font-size:0.82rem;color:#{text2};
-        cursor:pointer;transition:all 0.15s;
+    /* GOAL CARD */
+    .goal-card{{
+        background:#{card}; border-radius:16px; padding:1.1rem 1.2rem;
+        border:1.5px solid #{border}; margin-bottom:0.8rem;
+        box-shadow:0 3px 12px {shadow};
     }}
-    .chip.active{{background:#{accent};color:white;border-color:#{accent};}}
+    .goal-title{{font-size:1rem;font-weight:700;color:#{text};}}
+    .goal-sub{{font-size:0.78rem;color:#{text2};margin-top:2px;}}
+    .goal-pct{{font-size:0.85rem;font-weight:700;}}
+    .goal-bar-bg{{background:#{bg3};border-radius:8px;height:10px;margin:0.5rem 0;}}
+    .goal-bar-fill{{height:10px;border-radius:8px;transition:width 0.5s;}}
 
-    /* ===== METRICS ===== */
+    /* HEATMAP CALENDAR */
+    .cal-grid{{
+        display:grid;grid-template-columns:repeat(7,1fr);gap:4px;
+        margin-bottom:1rem;
+    }}
+    .cal-header{{
+        text-align:center;font-size:0.72rem;font-weight:700;
+        color:#{text2};padding:4px 0;
+    }}
+    .cal-cell{{
+        border-radius:6px;aspect-ratio:1;display:flex;align-items:center;
+        justify-content:center;font-size:0.72rem;font-weight:600;
+        cursor:default;transition:transform 0.1s;
+    }}
+    .cal-cell:hover{{transform:scale(1.15);}}
+    .cal-empty{{background:transparent;}}
+    .cal-today{{outline:2px solid #{accent};outline-offset:1px;}}
+
+    /* NET WORTH CARD */
+    .nw-card{{
+        background:linear-gradient(135deg,#1a2744,#0f3460);
+        border-radius:16px;padding:1.2rem 1.4rem;color:white;
+        margin-bottom:0.8rem;box-shadow:0 4px 16px {shadow};
+    }}
+    .nw-title{{font-size:0.75rem;opacity:0.7;text-transform:uppercase;letter-spacing:1px;}}
+    .nw-amount{{font-size:2rem;font-weight:800;margin:0.3rem 0;}}
+
+    /* METRICS */
     [data-testid="stMetricValue"]{{font-size:1.4rem !important;color:#{accent} !important;font-weight:700 !important;}}
     [data-testid="stMetricLabel"]{{font-size:0.82rem !important;color:#{text} !important;font-weight:600 !important;}}
     [data-testid="metric-container"]{{
@@ -281,7 +329,7 @@ def inject_css():
         box-shadow:0 3px 10px {shadow} !important;
     }}
 
-    /* ===== BUTTONS ===== */
+    /* BUTTONS */
     .stButton button,.stFormSubmitButton button{{
         font-size:0.92rem !important; padding:0.55rem 1.1rem !important;
         border-radius:10px !important; transition:all 0.2s ease;
@@ -308,7 +356,7 @@ def inject_css():
         border-color:#{accent} !important;
     }}
 
-    /* ===== INPUTS ===== */
+    /* INPUTS */
     input,textarea,.stTextInput input,.stNumberInput input,
     .stDateInput input,.stTimeInput input{{
         font-size:0.95rem !important; padding:0.55rem 0.8rem !important;
@@ -323,96 +371,53 @@ def inject_css():
     }}
     input::placeholder, textarea::placeholder{{color:#9ca3af !important;}}
 
-    /* ============================================================
-       SELECTBOX & MULTISELECT — ARSITEKTUR BASE WEB YANG BENAR
-       ============================================================ */
-
-    /* --- 1. Bersihkan Wrapper Terluar --- */
-    .stSelectbox > div,
-    .stMultiSelect > div {{
-        border: none !important;
-        background: transparent !important;
-        box-shadow: none !important;
+    /* SELECTBOX */
+    .stSelectbox > div,.stMultiSelect > div {{
+        border: none !important; background: transparent !important; box-shadow: none !important;
     }}
-
-    /* --- 2. Gaya Utama pada Control Container (Kotak Asli Dropdown) --- */
     .stSelectbox [data-baseweb="select"] > div:nth-child(1),
     .stMultiSelect [data-baseweb="select"] > div:nth-child(1) {{
-        border: 1.5px solid #{border} !important;
-        border-radius: 10px !important;
-        background-color: #{inp_bg} !important;
-        box-shadow: none !important;
-        transition: all 0.2s ease-in-out;
+        border: 1.5px solid #{border} !important; border-radius: 10px !important;
+        background-color: #{inp_bg} !important; box-shadow: none !important;
     }}
-
-    /* --- 3. Efek Focus (Glow) saat Dropdown Diklik --- */
     .stSelectbox [data-baseweb="select"] > div:nth-child(1):focus-within,
     .stMultiSelect [data-baseweb="select"] > div:nth-child(1):focus-within {{
         border-color: #{accent} !important;
         box-shadow: 0 0 0 3px rgba(74,222,128,0.2) !important;
     }}
-
-    /* --- 4. SOLUSI KOTAK TUMPANG TINDIH: Netralkan Elemen Input Internal --- */
     .stSelectbox [data-baseweb="select"] input,
     .stMultiSelect [data-baseweb="select"] input {{
-        background: transparent !important;
-        border: none !important;
-        outline: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-        margin: 0 !important;
+        background: transparent !important; border: none !important;
+        outline: none !important; box-shadow: none !important;
+        padding: 0 !important; margin: 0 !important;
     }}
-
-    /* --- 5. Teks Pilihan dan Ikon Panah --- */
     .stSelectbox [data-baseweb="select"] span,
     .stMultiSelect [data-baseweb="select"] span,
     .stSelectbox [data-baseweb="select"] svg,
     .stMultiSelect [data-baseweb="select"] svg,
     [data-baseweb="select"] [data-testid="stMarkdownContainer"] p,
-    [data-baseweb="option"] {{
-        color: #{text} !important;
-    }}
-
-    /* --- 6. Khusus untuk Sidebar --- */
+    [data-baseweb="option"] {{color: #{text} !important;}}
     [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div:nth-child(1),
     [data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div:nth-child(1) {{
-        border: 1.5px solid #{border} !important;
-        border-radius: 10px !important;
+        border: 1.5px solid #{border} !important; border-radius: 10px !important;
         background-color: #{inp_bg} !important;
     }}
-
-    /* --- 7. Tag/chip dalam multiselect (nilai yang dipilih) --- */
     [data-baseweb="tag"] {{
-        background: #{bg3} !important;
-        border: 1px solid #{border} !important;
-        border-radius: 6px !important;
-        color: #{text} !important;
+        background: #{bg3} !important; border: 1px solid #{border} !important;
+        border-radius: 6px !important; color: #{text} !important;
     }}
     [data-baseweb="tag"] span {{ color: #{text} !important; }}
-
-    /* --- 8. Dropdown option list --- */
-    [data-baseweb="popover"] {{
-        border: none !important;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
-    }}
+    [data-baseweb="popover"] {{border: none !important; box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;}}
     [data-baseweb="popover"] [data-baseweb="menu"] {{
-        background: #{bg2} !important;
-        border: 1.5px solid #{border} !important;
-        border-radius: 10px !important;
-        overflow: hidden !important;
+        background: #{bg2} !important; border: 1.5px solid #{border} !important;
+        border-radius: 10px !important; overflow: hidden !important;
     }}
-    [data-baseweb="option"] {{
-        background: #{bg2} !important;
-        color: #{text} !important;
-        font-size: 0.9rem !important;
-    }}
-    [data-baseweb="option"]:hover,
-    [data-baseweb="option"][aria-selected="true"] {{
-        background: #{bg3} !important;
-        color: #{accent} !important;
+    [data-baseweb="option"] {{background: #{bg2} !important; color: #{text} !important; font-size: 0.9rem !important;}}
+    [data-baseweb="option"]:hover,[data-baseweb="option"][aria-selected="true"] {{
+        background: #{bg3} !important; color: #{accent} !important;
     }}
 
-    /* ===== TABS ===== */
+    /* TABS */
     .stTabs [data-baseweb="tab-list"]{{
         background:#{bg3} !important; border-radius:12px !important;
         padding:4px !important; gap:2px !important; border:none !important;
@@ -420,27 +425,26 @@ def inject_css():
     .stTabs [data-baseweb="tab"]{{
         border-radius:9px !important; color:#{text} !important;
         font-size:0.85rem !important; padding:0.4rem 0.7rem !important;
-        border:none !important; background:transparent !important;
-        font-weight:500 !important;
+        border:none !important; background:transparent !important; font-weight:500 !important;
     }}
     .stTabs [aria-selected="true"]{{
         background:#{bg2} !important; color:#{accent} !important;
         font-weight:700 !important; box-shadow:0 1px 4px {shadow} !important;
     }}
 
-    /* ===== EXPANDER ===== */
+    /* EXPANDER */
     [data-testid="stExpander"]{{
         background:#{card} !important; border:1px solid #{border} !important;
         border-radius:12px !important; overflow:hidden !important;
     }}
     [data-testid="stExpanderToggleIcon"]{{color:#{text2} !important;}}
 
-    /* ===== DATAFRAME ===== */
+    /* DATAFRAME */
     .stDataFrame{{font-size:0.88rem !important;}}
     [data-testid="stDataFrame"] th{{background:#{bg3} !important; color:#{text2} !important;}}
     [data-testid="stDataFrame"] td{{color:#{text} !important;}}
 
-    /* ===== SIDEBAR PROFILE ===== */
+    /* PROFILE */
     .pro-card{{
         background:linear-gradient(135deg,#1B5E20,#2E7D32,#388E3C);
         border-radius:18px; padding:1.1rem 1rem 0.9rem; margin-bottom:0.5rem;
@@ -455,45 +459,36 @@ def inject_css():
     .badge-member{{display:inline-block;background:rgba(255,255,255,0.2);
         border-radius:20px;padding:1px 8px;font-size:0.68rem;font-weight:600;}}
 
-    /* ===== ONBOARDING ===== */
+    /* ONBOARDING */
     .ob-card{{
         background:linear-gradient(135deg,#1B5E20,#16a34a);
         border-radius:20px;padding:1.8rem;color:white;text-align:center;
         margin-bottom:1.5rem;box-shadow:0 8px 32px rgba(22,163,74,0.25);
     }}
 
-    /* ===== SUCCESS / INFO BANNERS ===== */
-    [data-testid="stAlert"]{{border-radius:12px !important;}}
+    /* CSV IMPORT */
+    .import-preview{{
+        background:#{bg2}; border-radius:10px; padding:0.8rem 1rem;
+        border:1.5px solid #{border}; margin-bottom:0.5rem;
+    }}
 
-    /* ===== SCROLLBAR ===== */
+    [data-testid="stAlert"]{{border-radius:12px !important;}}
     ::-webkit-scrollbar{{width:5px;height:5px;}}
     ::-webkit-scrollbar-track{{background:#{bg3};}}
     ::-webkit-scrollbar-thumb{{background:#{border};border-radius:3px;}}
-
-    /* ===== TOOLTIP & POPOVER ===== */
     [data-baseweb="popover"] *{{color:#{text} !important;}}
-
-    /* ===== SECTION HEADER DIVIDER ===== */
     .section-header{{
         font-size:0.72rem; font-weight:700; text-transform:uppercase;
         letter-spacing:1.5px; color:#{text2}; margin:1rem 0 0.5rem;
-        padding-bottom:0.3rem; border-bottom:2px solid #{accent};
-        display:inline-block;
+        padding-bottom:0.3rem; border-bottom:2px solid #{accent}; display:inline-block;
     }}
-
-    /* ===== WARNING / INFO / ERROR BOX ===== */
     [data-testid="stAlert"] p{{color:inherit !important;}}
-
-    /* ===== HEALTH SCORE DETAIL ===== */
     .hs-detail span{{color:#{text} !important;}}
-
-    /* ===== NUMBER INPUT BUTTONS ===== */
     .stNumberInput button{{
         background:#{bg3} !important; color:#{text} !important;
         border:1px solid #{border} !important; border-radius:6px !important;
     }}
 
-    /* ===== MOBILE ===== */
     @media(max-width:768px){{
         h1{{font-size:1.5rem !important;}}
         h2{{font-size:1.3rem !important;}}
@@ -568,6 +563,13 @@ _DEF = {
     "muat_wallets_sukses": False,
     "budget_kategori": {},
     "muat_bk_sukses": False,
+    "custom_kat_pglr": [],
+    "custom_kat_msuk": [],
+    "muat_custom_kat_sukses": False,
+    "financial_goals": [],
+    "muat_goals_sukses": False,
+    "networth_history": [],
+    "muat_nw_sukses": False,
     "simpan_sukses": False,
     "pesan_toast": "",
     "hapus_sukses": False,
@@ -584,10 +586,17 @@ _DEF = {
     "tx_form_key": 0,
     "pm_form_key": 0,
     "notif_dismissed": [],
+    # Pagination
+    "tx_show_count": 5,
+    # Import CSV
+    "csv_import_df": None,
+    "csv_import_mapping": {},
+    "csv_import_preview": False,
 }
 for _k, _v in _DEF.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
+
 
 # ============================================================
 # HELPERS
@@ -615,6 +624,17 @@ def inisial(nama: str, email: str) -> str:
     t = nama.strip() if nama and nama.strip() else email
     b = t.split()
     return (b[0][0]+b[1][0]).upper() if len(b)>=2 else t[:2].upper()
+
+def get_kategori_pengeluaran():
+    """Return default + custom kategori pengeluaran."""
+    custom = [k["nama"] for k in st.session_state.custom_kat_pglr]
+    return KATEGORI_PENGELUARAN_DEFAULT + [c for c in custom if c not in KATEGORI_PENGELUARAN_DEFAULT]
+
+def get_kategori_pemasukan():
+    """Return default + custom kategori pemasukan."""
+    custom = [k["nama"] for k in st.session_state.custom_kat_msuk]
+    return KATEGORI_PEMASUKAN_DEFAULT + [c for c in custom if c not in KATEGORI_PEMASUKAN_DEFAULT]
+
 
 # ============================================================
 # DB — PROFIL
@@ -660,6 +680,7 @@ def hapus_foto(uid):
     except Exception as e:
         st.error(f"Gagal hapus foto: {e}"); return False
 
+
 # ============================================================
 # DB — ANGGARAN & TABUNGAN
 # ============================================================
@@ -695,6 +716,7 @@ def simpan_tabungan(uid, bk, target):
     except Exception as e:
         st.error(f"Gagal simpan target: {e}"); return False
 
+
 # ============================================================
 # DB — BUDGET KATEGORI
 # ============================================================
@@ -717,6 +739,38 @@ def simpan_bk(uid, bk, kat, nominal):
         return True
     except Exception as e:
         st.error(f"Gagal simpan budget kategori: {e}"); return False
+
+
+# ============================================================
+# DB — CUSTOM KATEGORI
+# ============================================================
+def muat_custom_kat(uid, paksa=False):
+    if not paksa and st.session_state.muat_custom_kat_sukses: return
+    try:
+        r = supabase.table("custom_kategori").select("*").eq("user_id", uid).execute()
+        data = r.data or []
+        st.session_state.custom_kat_pglr = [d for d in data if d["tipe"] == "pengeluaran"]
+        st.session_state.custom_kat_msuk = [d for d in data if d["tipe"] == "pemasukan"]
+        st.session_state.muat_custom_kat_sukses = True
+    except Exception:
+        st.session_state.muat_custom_kat_sukses = True
+
+def simpan_custom_kat(uid, nama, tipe, ikon="📌"):
+    try:
+        supabase.table("custom_kategori").insert({
+            "user_id": uid, "nama": nama, "tipe": tipe, "ikon": ikon
+        }).execute()
+        return True
+    except Exception as e:
+        st.error(f"Gagal simpan kategori: {e}"); return False
+
+def hapus_custom_kat(uid, kid):
+    try:
+        supabase.table("custom_kategori").delete().eq("id", kid).eq("user_id", uid).execute()
+        return True
+    except Exception as e:
+        st.error(f"Gagal hapus kategori: {e}"); return False
+
 
 # ============================================================
 # DB — WALLETS
@@ -746,6 +800,79 @@ def hapus_wallet(uid, wid):
     except Exception as e:
         st.error(f"Gagal hapus wallet: {e}"); return False
 
+
+# ============================================================
+# DB — FINANCIAL GOALS
+# ============================================================
+def muat_goals(uid, paksa=False):
+    if not paksa and st.session_state.muat_goals_sukses: return
+    try:
+        r = supabase.table("financial_goals").select("*").eq("user_id", uid).order("created_at", desc=False).execute()
+        st.session_state.financial_goals = r.data or []
+        st.session_state.muat_goals_sukses = True
+    except Exception:
+        st.session_state.muat_goals_sukses = True
+
+def simpan_goal(uid, nama, target, terkumpul=0, deadline=None, kategori="Tabungan", ikon="🎯"):
+    try:
+        payload = {
+            "user_id": uid, "nama": nama, "target_nominal": int(target),
+            "terkumpul": int(terkumpul), "kategori": kategori, "ikon": ikon
+        }
+        if deadline:
+            payload["deadline"] = deadline.isoformat()
+        supabase.table("financial_goals").insert(payload).execute()
+        return True
+    except Exception as e:
+        st.error(f"Gagal simpan goal: {e}"); return False
+
+def update_goal_terkumpul(uid, gid, terkumpul_baru):
+    try:
+        supabase.table("financial_goals").update({
+            "terkumpul": int(terkumpul_baru)
+        }).eq("id", gid).eq("user_id", uid).execute()
+        return True
+    except Exception as e:
+        st.error(f"Gagal update goal: {e}"); return False
+
+def hapus_goal(uid, gid):
+    try:
+        supabase.table("financial_goals").delete().eq("id", gid).eq("user_id", uid).execute()
+        return True
+    except Exception as e:
+        st.error(f"Gagal hapus goal: {e}"); return False
+
+
+# ============================================================
+# DB — NET WORTH
+# ============================================================
+def muat_networth(uid, paksa=False):
+    if not paksa and st.session_state.muat_nw_sukses: return
+    try:
+        r = supabase.table("networth_history").select("*").eq("user_id", uid).order("recorded_at", desc=False).execute()
+        st.session_state.networth_history = r.data or []
+        st.session_state.muat_nw_sukses = True
+    except Exception:
+        st.session_state.muat_nw_sukses = True
+
+def simpan_networth(uid, bulan_key, total_aset, total_liabilitas, catatan_aset, catatan_liabilitas):
+    try:
+        # Hapus existing untuk bulan ini dulu
+        supabase.table("networth_history").delete().eq("user_id", uid).eq("bulan_key", bulan_key).execute()
+        supabase.table("networth_history").insert({
+            "user_id": uid,
+            "bulan_key": bulan_key,
+            "total_aset": int(total_aset),
+            "total_liabilitas": int(total_liabilitas),
+            "catatan_aset": json.dumps(catatan_aset),
+            "catatan_liabilitas": json.dumps(catatan_liabilitas),
+            "recorded_at": wib().isoformat()
+        }).execute()
+        return True
+    except Exception as e:
+        st.error(f"Gagal simpan net worth: {e}"); return False
+
+
 # ============================================================
 # DB — TRANSAKSI
 # ============================================================
@@ -770,8 +897,7 @@ def ambil_hutang(uid):
     try:
         r = supabase.table("hutang_piutang").select("*").eq("user_id",uid).order("tanggal",desc=False).execute()
         return r.data or []
-    except Exception as e:
-        return []
+    except Exception: return []
 
 @st.cache_data(ttl=30)
 def ambil_recurring(uid):
@@ -780,12 +906,12 @@ def ambil_recurring(uid):
         return r.data or []
     except Exception: return []
 
+
 # ============================================================
 # FINANCIAL HEALTH SCORE
 # ============================================================
 def health_score(total_pglr, budget, target, sukarela, df_view, df_all):
     s, d = 0, {}
-    # Rasio Tabungan (40)
     if budget > 0 and target > 0:
         batas = max(0, budget-target)
         s1 = 40 if total_pglr<=batas else max(0, 40-int(((total_pglr-batas)/budget)*80))
@@ -793,18 +919,15 @@ def health_score(total_pglr, budget, target, sukarela, df_view, df_all):
         s1 = max(0, int((1-total_pglr/budget)*40))
     else: s1 = 20
     s+=s1; d["Rasio Tabungan"]=s1
-    # Konsistensi (20)
     if not df_view.empty and "waktu_transaksi" in df_view.columns:
         s2 = int(min(1.0, df_view["waktu_transaksi"].dt.date.nunique()/15)*20)
     else: s2=0
     s+=s2; d["Konsistensi Catat"]=s2
-    # Porsi Sukarela (20)
     if budget > 0 and not df_view.empty:
         r = sukarela/budget
         s3 = 20 if r<=0.3 else (12 if r<=0.5 else max(0,int((1-r)*20)))
     else: s3=10
     s+=s3; d["Porsi Sukarela"]=s3
-    # Tren (20)
     s4=10
     if not df_all.empty and not df_view.empty and "bulan" in df_view.columns:
         try:
@@ -822,6 +945,7 @@ def label_hs(s):
     elif s>=60: return "💛 Sehat","#F57F17","#FFFDE7"
     elif s>=40: return "🟠 Perlu Perhatian","#E65100","#FFF3E0"
     else: return "🔴 Kritis","#B71C1C","#FFEBEE"
+
 
 # ============================================================
 # GAMIFIKASI
@@ -858,6 +982,7 @@ def cek_badges(df_all, budget_dict, target_dict):
                     badges.append(("💎","Big Saver",f"Target ≥20% di {bl}")); break
             except Exception: pass
     return badges
+
 
 # ============================================================
 # PDF GENERATOR
@@ -901,19 +1026,76 @@ def buat_pdf(email,bln,thn,df_v,df_pv,budget,target,tot_pglr,tot_msuk,hs,ls):
     pdf.cell(0,5,"(c) 2026 DanaPintar AI  --  Hendrawan Lotanto",align="C")
     return bytes(pdf.output())
 
+
 # ============================================================
-# PUSAT NOTIFIKASI — GENERATOR
+# KALENDER HEATMAP RENDERER
+# ============================================================
+def render_heatmap(df_month, bulan_idx, tahun):
+    """Render HTML kalender heatmap untuk bulan tertentu."""
+    # Hitung total per tanggal
+    daily = {}
+    if not df_month.empty and "waktu_transaksi" in df_month.columns:
+        grp = df_month.groupby(df_month["waktu_transaksi"].dt.day)["nominal"].sum()
+        daily = grp.to_dict()
+
+    max_val = max(daily.values()) if daily else 1
+
+    def heat_color(val):
+        if val == 0: return "#1e293b","#94a3b8"
+        ratio = val / max_val
+        if ratio < 0.25:   return "#14532d","#86efac"
+        elif ratio < 0.5:  return "#166534","#4ade80"
+        elif ratio < 0.75: return "#b45309","#fcd34d"
+        else:              return "#991b1b","#fca5a5"
+
+    # Nama hari
+    hari = ["Sen","Sel","Rab","Kam","Jum","Sab","Min"]
+    _, days_in_month = cal_lib.monthrange(tahun, bulan_idx)
+    first_weekday = cal_lib.monthrange(tahun, bulan_idx)[0]  # 0=Mon
+    today = wib().date()
+
+    headers = "".join([f'<div class="cal-header">{h}</div>' for h in hari])
+
+    cells = ""
+    # Empty cells sebelum tanggal 1
+    for _ in range(first_weekday):
+        cells += '<div class="cal-cell cal-empty"></div>'
+
+    for day in range(1, days_in_month + 1):
+        val   = daily.get(day, 0)
+        bg, fg = heat_color(val)
+        is_today = (date(tahun, bulan_idx, day) == today)
+        today_cls = " cal-today" if is_today else ""
+        tooltip = f"Rp {val:,.0f}" if val > 0 else "Tidak ada"
+        cells += (
+            f'<div class="cal-cell{today_cls}" '
+            f'style="background:{bg};color:{fg};" '
+            f'title="{day}: {tooltip}">{day}</div>'
+        )
+
+    html = f"""
+    <div style="margin-bottom:0.5rem;">
+        <div class="cal-grid">{headers}{cells}</div>
+        <div style="display:flex;gap:0.8rem;flex-wrap:wrap;font-size:0.72rem;color:#94a3b8;margin-top:0.3rem;">
+            <span><span style="background:#14532d;color:#86efac;border-radius:4px;padding:1px 6px;">●</span> Rendah</span>
+            <span><span style="background:#166534;color:#4ade80;border-radius:4px;padding:1px 6px;">●</span> Sedang</span>
+            <span><span style="background:#b45309;color:#fcd34d;border-radius:4px;padding:1px 6px;">●</span> Tinggi</span>
+            <span><span style="background:#991b1b;color:#fca5a5;border-radius:4px;padding:1px 6px;">●</span> Sangat Tinggi</span>
+            <span>⬜ Tidak ada transaksi</span>
+        </div>
+    </div>
+    """
+    return html
+
+
+# ============================================================
+# PUSAT NOTIFIKASI
 # ============================================================
 def generate_notifikasi(uid: str) -> list:
-    """
-    Hitung semua notifikasi aktif berdasarkan kondisi keuangan user.
-    Setiap notif: {"id", "icon", "tipe" (error/warning/info), "pesan"}
-    """
     notifs = []
     _now    = wib()
     _kb_now = f"{KAMUS_BULAN[_now.month]}_{_now.year}"
 
-    # ── 1. Belum catat transaksi ≥ 2 hari ──
     try:
         _tx_q = ambil_transaksi(uid)
         if _tx_q:
@@ -926,35 +1108,19 @@ def generate_notifikasi(uid: str) -> list:
             if pd.notna(_last):
                 _gap = (_now.date() - _last.date()).days
                 if _gap >= 2:
-                    notifs.append({
-                        "id":   f"no_tx_{_gap}",
-                        "icon": "🔔",
-                        "tipe": "warning",
-                        "pesan": f"Belum mencatat pengeluaran selama **{_gap} hari**. Jangan lupa catat!"
-                    })
-    except Exception:
-        pass
+                    notifs.append({"id":f"no_tx_{_gap}","icon":"🔔","tipe":"warning",
+                        "pesan":f"Belum mencatat pengeluaran selama **{_gap} hari**. Jangan lupa catat!"})
+    except Exception: pass
 
-    # ── 2. Anggaran bulan ini belum dikunci ──
     if _kb_now not in st.session_state.anggaran_terkunci:
-        notifs.append({
-            "id":   "no_budget",
-            "icon": "💡",
-            "tipe": "info",
-            "pesan": f"Anggaran bulan **{KAMUS_BULAN[_now.month]}** belum dikunci. Set di sidebar."
-        })
+        notifs.append({"id":"no_budget","icon":"💡","tipe":"info",
+            "pesan":f"Anggaran bulan **{KAMUS_BULAN[_now.month]}** belum dikunci. Set di sidebar."})
 
-    # ── 3. Target tabungan belum diset ──
     if (_kb_now in st.session_state.anggaran_terkunci
             and _kb_now not in st.session_state.target_tabungan):
-        notifs.append({
-            "id":   "no_target",
-            "icon": "🎯",
-            "tipe": "info",
-            "pesan": "Target tabungan bulan ini belum diset. Yuk tentukan targetmu!"
-        })
+        notifs.append({"id":"no_target","icon":"🎯","tipe":"info",
+            "pesan":"Target tabungan bulan ini belum diset. Yuk tentukan targetmu!"})
 
-    # ── 4. Persentase batas belanja ──
     _ang_now = st.session_state.anggaran_terkunci.get(_kb_now, 0)
     _tgt_now = st.session_state.target_tabungan.get(_kb_now, 0)
     _bts_now = max(0, _ang_now - _tgt_now)
@@ -970,54 +1136,37 @@ def generate_notifikasi(uid: str) -> list:
                 _df_q2["waktu_transaksi"] = _df_q2["waktu_transaksi"].dt.tz_convert(TZ)
                 _df_q2["bulan"] = _df_q2["waktu_transaksi"].dt.month.map(KAMUS_BULAN)
                 _df_q2["tahun"] = _df_q2["waktu_transaksi"].dt.year
-                _df_bln = _df_q2[
-                    (_df_q2["bulan"] == KAMUS_BULAN[_now.month]) &
-                    (_df_q2["tahun"] == _now.year)
-                ]
+                _df_bln = _df_q2[(_df_q2["bulan"]==KAMUS_BULAN[_now.month])&(_df_q2["tahun"]==_now.year)]
                 _tot_bln = _df_bln["nominal"].sum()
                 _pct_bln = (_tot_bln / _bts_now) * 100
                 if _pct_bln >= 100:
-                    notifs.append({
-                        "id":   "over_budget",
-                        "icon": "🚨",
-                        "tipe": "error",
-                        "pesan": f"Pengeluaran sudah **{_pct_bln:.0f}%** dari batas! Target tabungan terancam."
-                    })
+                    notifs.append({"id":"over_budget","icon":"🚨","tipe":"error",
+                        "pesan":f"Pengeluaran sudah **{_pct_bln:.0f}%** dari batas! Target tabungan terancam."})
                 elif _pct_bln >= 80:
-                    notifs.append({
-                        "id":   "near_budget",
-                        "icon": "⚠️",
-                        "tipe": "warning",
-                        "pesan": f"Pengeluaran sudah **{_pct_bln:.0f}%** dari batas belanja bulan ini."
-                    })
-        except Exception:
-            pass
+                    notifs.append({"id":"near_budget","icon":"⚠️","tipe":"warning",
+                        "pesan":f"Pengeluaran sudah **{_pct_bln:.0f}%** dari batas belanja bulan ini."})
+        except Exception: pass
 
-    # ── 5. Hutang / piutang jatuh tempo ≤ 3 hari ──
     try:
         for _h in ambil_hutang(uid):
             if _h.get("status") == "belum_lunas" and _h.get("jatuh_tempo"):
                 try:
-                    _jt   = datetime.fromisoformat(
-                        _h["jatuh_tempo"].replace("Z", "+00:00")
-                    ).astimezone(TZ).date()
+                    _jt   = datetime.fromisoformat(_h["jatuh_tempo"].replace("Z","+00:00")).astimezone(TZ).date()
                     _sisa = (_jt - _now.date()).days
                     if 0 <= _sisa <= 3:
-                        _jenis = "Hutang" if _h["jenis"] == "hutang" else "Piutang"
-                        notifs.append({
-                            "id":   f"jt_{_h['id']}",
-                            "icon": "💸",
-                            "tipe": "warning",
-                            "pesan": (
-                                f"{_jenis} ke **{_h['nama_pihak']}** "
-                                f"({rp(_h['nominal'])}) jatuh tempo "
-                                f"{'hari ini!' if _sisa==0 else f'dalam **{_sisa} hari**!'}"
-                            )
-                        })
-                except Exception:
-                    pass
-    except Exception:
-        pass
+                        _jenis = "Hutang" if _h["jenis"]=="hutang" else "Piutang"
+                        notifs.append({"id":f"jt_{_h['id']}","icon":"💸","tipe":"warning",
+                            "pesan":(f"{_jenis} ke **{_h['nama_pihak']}** ({rp(_h['nominal'])}) "
+                                     f"jatuh tempo {'hari ini!' if _sisa==0 else f'dalam **{_sisa} hari**!'}")})
+                except Exception: pass
+    except Exception: pass
+
+    # Notif goal hampir tercapai
+    for g in st.session_state.financial_goals:
+        pct = (g.get("terkumpul",0) / g["target_nominal"] * 100) if g["target_nominal"] > 0 else 0
+        if 80 <= pct < 100:
+            notifs.append({"id":f"goal_{g['id']}","icon":"🎯","tipe":"info",
+                "pesan":f"Goal **{g['nama']}** sudah {pct:.0f}%! Hampir tercapai."})
 
     return notifs
 
@@ -1026,16 +1175,9 @@ def generate_notifikasi(uid: str) -> list:
 # ONBOARDING WIZARD
 # ============================================================
 def tampilkan_onboarding(uid, email):
-    st.markdown("""
-    <style>
-    .ob-card {
-        background: linear-gradient(135deg,#1B5E20,#2E7D32);
-        border-radius:20px; padding:2rem; color:white;
-        text-align:center; margin-bottom:1.5rem;
-        box-shadow:0 8px 32px rgba(46,125,50,0.3);
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    st.markdown("""<style>.ob-card{background:linear-gradient(135deg,#1B5E20,#2E7D32);
+    border-radius:20px;padding:2rem;color:white;text-align:center;margin-bottom:1.5rem;
+    box-shadow:0 8px 32px rgba(46,125,50,0.3);}</style>""", unsafe_allow_html=True)
 
     step = st.session_state.onboarding_step
     total_steps = 4
@@ -1044,10 +1186,10 @@ def tampilkan_onboarding(uid, email):
     <div class="ob-card">
         <div style="font-size:3rem">🎉</div>
         <h2 style="color:white;margin:0.5rem 0">Selamat Datang di DanaPintar AI!</h2>
-        <p style="opacity:0.85">Halo, <strong>{email.split('@')[0].title()}</strong>! 
+        <p style="opacity:0.85">Halo, <strong>{email.split('@')[0].title()}</strong>!
         Yuk setup akun keuanganmu dalam {total_steps} langkah mudah.</p>
         <div style="background:rgba(255,255,255,0.2);border-radius:10px;height:8px;margin-top:1rem;">
-            <div style="background:white;width:{int((step/total_steps)*100)}%;height:8px;border-radius:10px;transition:width 0.3s;"></div>
+            <div style="background:white;width:{int((step/total_steps)*100)}%;height:8px;border-radius:10px;"></div>
         </div>
         <p style="font-size:0.85rem;opacity:0.7;margin-top:0.5rem">Langkah {step+1} dari {total_steps}</p>
     </div>
@@ -1063,82 +1205,60 @@ def tampilkan_onboarding(uid, email):
                 if ob_nama.strip():
                     simpan_profil(uid, {"nama":ob_nama.strip(),"lokasi":ob_lokasi.strip(),"pekerjaan":ob_pekerjaan.strip()})
                     st.session_state.profil.update({"nama":ob_nama.strip(),"lokasi":ob_lokasi.strip()})
-                    st.session_state.onboarding_step = 1
-                    st.rerun()
-                else:
-                    st.error("Nama tidak boleh kosong.")
-
+                    st.session_state.onboarding_step = 1; st.rerun()
+                else: st.error("Nama tidak boleh kosong.")
     elif step == 1:
         st.markdown("### 💰 Langkah 2 — Set Anggaran Bulan Ini")
-        _now = wib()
-        _bln = KAMUS_BULAN[_now.month]
-        _thn = _now.year
+        _now = wib(); _bln = KAMUS_BULAN[_now.month]; _thn = _now.year
         with st.form("ob_step2"):
-            ob_budget = st.number_input(
-                f"Berapa anggaran belanjamu bulan {_bln} {_thn}? (Rp)",
-                min_value=ANGGARAN_MIN, value=ANGGARAN_DEFAULT, step=100_000
-            )
-            st.caption("💡 Ini adalah total uang yang boleh kamu belanjakan bulan ini.")
+            ob_budget = st.number_input(f"Anggaran {_bln} {_thn} (Rp)",
+                min_value=ANGGARAN_MIN, value=ANGGARAN_DEFAULT, step=100_000)
+            st.caption("💡 Total uang yang boleh dibelanjakan bulan ini.")
             if st.form_submit_button("Lanjut ➡️", use_container_width=True):
                 _k = f"{_bln}_{_thn}"
                 if simpan_anggaran(uid, _k, ob_budget):
                     st.session_state.anggaran_terkunci[_k] = ob_budget
-                    st.session_state.onboarding_step = 2
-                    st.rerun()
-
+                    st.session_state.onboarding_step = 2; st.rerun()
     elif step == 2:
         st.markdown("### 🎯 Langkah 3 — Target Tabungan")
-        _now = wib()
-        _bln = KAMUS_BULAN[_now.month]
-        _thn = _now.year
-        _k   = f"{_bln}_{_thn}"
-        _bud = st.session_state.anggaran_terkunci.get(_k, ANGGARAN_DEFAULT)
+        _now = wib(); _bln = KAMUS_BULAN[_now.month]; _thn = _now.year
+        _k = f"{_bln}_{_thn}"; _bud = st.session_state.anggaran_terkunci.get(_k, ANGGARAN_DEFAULT)
         with st.form("ob_step3"):
-            ob_target = st.number_input(
-                f"Berapa target tabunganmu bulan {_bln}? (Rp)",
-                min_value=0, max_value=int(_bud), value=int(_bud*0.2), step=50_000
-            )
-            st.caption(f"💡 Disarankan minimal 20% dari anggaran (~{rp(_bud*0.2)})")
+            ob_target = st.number_input(f"Target tabungan {_bln} (Rp)",
+                min_value=0, max_value=int(_bud), value=int(_bud*0.2), step=50_000)
+            st.caption(f"💡 Disarankan minimal 20% (~{rp(_bud*0.2)})")
             if st.form_submit_button("Lanjut ➡️", use_container_width=True):
                 if simpan_tabungan(uid, _k, ob_target):
                     st.session_state.target_tabungan[_k] = ob_target
-                    st.session_state.onboarding_step = 3
-                    st.rerun()
-
+                    st.session_state.onboarding_step = 3; st.rerun()
     elif step == 3:
         st.markdown("### 👛 Langkah 4 — Tambah Wallet Pertama")
         with st.form("ob_step4"):
             ob_walet_nama = st.text_input("Nama wallet:", value="Dompet Utama")
             ob_walet_tipe = st.selectbox("Tipe:", TIPE_WALLET)
             ob_saldo      = st.number_input("Saldo awal (Rp):", min_value=0, value=0, step=50_000)
-            st.caption("💡 Bisa dilewati dan ditambah nanti.")
             c1, c2 = st.columns(2)
             skip = c1.form_submit_button("Lewati ⏭️", use_container_width=True)
             ok   = c2.form_submit_button("Selesai 🎉", use_container_width=True)
-
             if ok:
                 if ob_walet_nama.strip():
                     simpan_wallet(uid, ob_walet_nama.strip(), ob_walet_tipe, ob_saldo)
                     st.cache_data.clear()
                 st.session_state.onboarding_selesai = True
-                st.session_state.onboarding_step    = 0
-                st.rerun()
+                st.session_state.onboarding_step    = 0; st.rerun()
             if skip:
                 st.session_state.onboarding_selesai = True
-                st.session_state.onboarding_step    = 0
-                st.rerun()
-
+                st.session_state.onboarding_step    = 0; st.rerun()
     st.stop()
+
 
 # ============================================================
 # AUTH GATE
 # ============================================================
 if st.session_state.user_aktif is None:
     inject_css()
-    st.markdown("<h1 style='text-align:center;color:#2E7D32;'>📊 DanaPintar AI</h1>",
-                unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center;color:#64748b;'>Sistem Keuangan Cerdas berbasis AI</p>",
-                unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;color:#2E7D32;'>📊 DanaPintar AI</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;color:#64748b;'>Sistem Keuangan Cerdas berbasis AI</p>", unsafe_allow_html=True)
     st.markdown("---")
     tab_l, tab_d = st.tabs(["🔑 Masuk","📝 Daftar"])
     with tab_l:
@@ -1148,15 +1268,12 @@ if st.session_state.user_aktif is None:
             try:
                 r = supabase.auth.sign_in_with_password({"email":em,"password":pw})
                 st.session_state.user_aktif = r.user
-                muat_anggaran(r.user.id, True)
-                muat_tabungan(r.user.id, True)
-                muat_profil(r.user.id, True)
-                muat_wallets(r.user.id, True)
-                muat_bk(r.user.id, True)
-                st.session_state.toast_kondisi_ditampilkan = False
-                st.rerun()
-            except Exception as e:
-                st.error(f"Login gagal: {e}")
+                muat_anggaran(r.user.id, True); muat_tabungan(r.user.id, True)
+                muat_profil(r.user.id, True); muat_wallets(r.user.id, True)
+                muat_bk(r.user.id, True); muat_custom_kat(r.user.id, True)
+                muat_goals(r.user.id, True); muat_networth(r.user.id, True)
+                st.session_state.toast_kondisi_ditampilkan = False; st.rerun()
+            except Exception as e: st.error(f"Login gagal: {e}")
     with tab_d:
         em2 = st.text_input("Email Baru", key="reg_em")
         pw2 = st.text_input("Password (min 6 karakter)", type="password", key="reg_pw")
@@ -1164,23 +1281,16 @@ if st.session_state.user_aktif is None:
             try:
                 supabase.auth.sign_up({"email":em2,"password":pw2})
                 st.success("Akun berhasil dibuat! Silakan masuk.")
-            except Exception as e:
-                st.error(f"Pendaftaran gagal: {e}")
+            except Exception as e: st.error(f"Pendaftaran gagal: {e}")
     st.stop()
 
-# ============================================================
-# INJECT CSS (setelah login, berdasarkan dark mode)
-# ============================================================
 inject_css()
 
 # ============================================================
 # HEADER
 # ============================================================
-st.markdown(
-    "<h1 style='margin-bottom:2px;letter-spacing:-0.5px;'>📊 DanaPintar AI</h1>",
-    unsafe_allow_html=True
-)
-st.caption("✦ Sistem Keuangan Cerdas · AI Chat · Multi-Wallet · Target Tabungan")
+st.markdown("<h1 style='margin-bottom:2px;letter-spacing:-0.5px;'>📊 DanaPintar AI</h1>", unsafe_allow_html=True)
+st.caption("✦ Sistem Keuangan Cerdas · AI Chat · Multi-Wallet · Goals · Net Worth")
 st.markdown("---")
 
 # ============================================================
@@ -1189,11 +1299,14 @@ st.markdown("---")
 uid        = st.session_state.user_aktif.id
 email_user = st.session_state.user_aktif.email
 
-if not st.session_state.muat_anggaran_sukses:  muat_anggaran(uid, True)
-if not st.session_state.muat_tabungan_sukses:  muat_tabungan(uid, True)
-if not st.session_state.muat_profil_sukses:    muat_profil(uid, True)
-if not st.session_state.muat_wallets_sukses:   muat_wallets(uid, True)
-if not st.session_state.muat_bk_sukses:        muat_bk(uid, True)
+if not st.session_state.muat_anggaran_sukses:    muat_anggaran(uid, True)
+if not st.session_state.muat_tabungan_sukses:    muat_tabungan(uid, True)
+if not st.session_state.muat_profil_sukses:      muat_profil(uid, True)
+if not st.session_state.muat_wallets_sukses:     muat_wallets(uid, True)
+if not st.session_state.muat_bk_sukses:          muat_bk(uid, True)
+if not st.session_state.muat_custom_kat_sukses:  muat_custom_kat(uid, True)
+if not st.session_state.muat_goals_sukses:       muat_goals(uid, True)
+if not st.session_state.muat_nw_sukses:          muat_networth(uid, True)
 
 # Toast
 if st.session_state.simpan_sukses:
@@ -1208,7 +1321,6 @@ if st.session_state.hapus_sukses:
 # SIDEBAR
 # ============================================================
 with st.sidebar:
-    # ---- Profil Card ----
     _pr      = st.session_state.profil
     _nama    = _pr.get("nama","").strip() or email_user.split("@")[0].title()
     _bio     = _pr.get("bio","").strip() or "Belum ada bio."
@@ -1216,19 +1328,16 @@ with st.sidebar:
     _foto    = _pr.get("foto_url", None)
     _ini     = inisial(_pr.get("nama",""), email_user)
     try:
-        _jn = datetime.fromisoformat(
-            st.session_state.user_aktif.created_at.replace("Z","+00:00")
-        ).astimezone(TZ).strftime("%d %b %Y")
+        _jn = datetime.fromisoformat(st.session_state.user_aktif.created_at.replace("Z","+00:00"))\
+              .astimezone(TZ).strftime("%d %b %Y")
     except Exception: _jn="-"
 
-    _av_html = (
-        f'<img src="{_foto}" style="width:68px;height:68px;border-radius:50%;'
-        f'object-fit:cover;border:3px solid rgba(255,255,255,0.6);">'
-        if _foto else
-        f'<div style="width:68px;height:68px;border-radius:50%;background:rgba(255,255,255,0.25);'
-        f'display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;'
-        f'color:white;border:3px solid rgba(255,255,255,0.5);">{_ini}</div>'
-    )
+    _av_html = (f'<img src="{_foto}" style="width:68px;height:68px;border-radius:50%;'
+                f'object-fit:cover;border:3px solid rgba(255,255,255,0.6);">'
+                if _foto else
+                f'<div style="width:68px;height:68px;border-radius:50%;background:rgba(255,255,255,0.25);'
+                f'display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;'
+                f'color:white;border:3px solid rgba(255,255,255,0.5);">{_ini}</div>')
     _lok_html = f'<div style="font-size:0.76rem;opacity:0.8;">📍 {_lokasi}</div>' if _lokasi else ""
 
     st.markdown(f"""
@@ -1247,65 +1356,30 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Hitung notifikasi aktif (exclude dismissed) ──
-    _all_notifs    = generate_notifikasi(uid)
-    _aktif_notifs  = [n for n in _all_notifs if n["id"] not in st.session_state.notif_dismissed]
-    _n_count       = len(_aktif_notifs)
-    _bell_label    = f"🔔 {_n_count}" if _n_count > 0 else "🔔"
+    _all_notifs   = generate_notifikasi(uid)
+    _aktif_notifs = [n for n in _all_notifs if n["id"] not in st.session_state.notif_dismissed]
+    _n_count      = len(_aktif_notifs)
+    _bell_label   = f"🔔 {_n_count}" if _n_count > 0 else "🔔"
 
-    # ── 3 tombol: Bell | Edit Profil | Logout ──
     _bc0, _bc1, _bc2 = st.columns([2, 4, 4])
-
     with _bc0:
         with st.popover(_bell_label, help="Pusat Notifikasi"):
-            st.markdown(
-                "<div style='font-size:0.95rem;font-weight:700;margin-bottom:0.6rem;'>"
-                "🔔 Pusat Notifikasi</div>",
-                unsafe_allow_html=True
-            )
-
+            st.markdown("<div style='font-size:0.95rem;font-weight:700;margin-bottom:0.6rem;'>🔔 Pusat Notifikasi</div>", unsafe_allow_html=True)
             if not _aktif_notifs:
-                st.markdown(
-                    "<div class='notif-empty'>✅ Semua beres!<br>Tidak ada notifikasi baru.</div>",
-                    unsafe_allow_html=True
-                )
+                st.markdown("✅ Semua beres! Tidak ada notifikasi baru.")
             else:
-                # Tombol bersihkan semua
-                if st.button("🧹 Bersihkan Semua", key="notif_clear_all",
-                              use_container_width=True):
-                    st.session_state.notif_dismissed = [n["id"] for n in _all_notifs]
-                    st.rerun()
-
+                if st.button("🧹 Bersihkan Semua", key="notif_clear_all", use_container_width=True):
+                    st.session_state.notif_dismissed = [n["id"] for n in _all_notifs]; st.rerun()
                 st.markdown("---")
-
-                # Render tiap notifikasi
-                _warna_map = {
-                    "error":   "#ef4444",
-                    "warning": "#f59e0b",
-                    "info":    "#3b82f6",
-                }
                 for _notif in _aktif_notifs:
-                    _cls   = f"notif-{_notif['tipe']}"
-                    _warna = _warna_map.get(_notif["tipe"], "#94a3b8")
-
                     _col_msg, _col_x = st.columns([8, 1])
                     with _col_msg:
-                        st.markdown(
-                            f"<div class='notif-item {_cls}'>"
-                            f"{_notif['icon']} {_notif['pesan']}"
-                            f"</div>",
-                            unsafe_allow_html=True
-                        )
+                        st.markdown(f"{_notif['icon']} {_notif['pesan']}")
                     with _col_x:
-                        if st.button(
-                            "✕",
-                            key=f"notif_dismiss_{_notif['id']}",
-                            help="Tutup notifikasi ini"
-                        ):
+                        if st.button("✕", key=f"notif_dismiss_{_notif['id']}"):
                             if _notif["id"] not in st.session_state.notif_dismissed:
                                 st.session_state.notif_dismissed.append(_notif["id"])
                             st.rerun()
-
     with _bc1:
         if st.button("✏️ Edit Profil", use_container_width=True, key="btn_ep"):
             st.session_state.edit_profil_mode = not st.session_state.edit_profil_mode
@@ -1315,8 +1389,7 @@ with st.sidebar:
             except Exception: pass
             for _k,_v in _DEF.items():
                 st.session_state[_k] = _v
-            st.session_state.notif_dismissed = []
-            st.rerun()
+            st.session_state.notif_dismissed = []; st.rerun()
 
     if st.session_state.edit_profil_mode:
         with st.expander("✏️ Edit Profil", expanded=True):
@@ -1325,8 +1398,7 @@ with st.sidebar:
                 st.image(_foto, width=70)
                 if st.button("🗑️ Hapus Foto", key="hps_foto"):
                     if hapus_foto(uid):
-                        st.session_state.profil["foto_url"] = None
-                        st.success("Foto dihapus."); st.rerun()
+                        st.session_state.profil["foto_url"] = None; st.success("Foto dihapus."); st.rerun()
             _fu = st.file_uploader("Upload (JPG/PNG maks 2MB)", type=["jpg","jpeg","png","webp"])
             if _fu:
                 if _fu.size > 2*1024*1024: st.error("❌ Maks 2MB")
@@ -1335,8 +1407,7 @@ with st.sidebar:
                         _url = upload_foto(uid, _fu.read(), _fu.type)
                         if _url:
                             st.session_state.profil["foto_url"] = _url
-                            simpan_profil(uid, {"foto_url":_url})
-                            st.success("✅ Foto diupload!"); st.rerun()
+                            simpan_profil(uid, {"foto_url":_url}); st.success("✅ Foto diupload!"); st.rerun()
             st.markdown("---")
             with st.form("form_profil"):
                 _in_nama = st.text_input("Nama", value=_pr.get("nama",""))
@@ -1390,7 +1461,7 @@ with st.sidebar:
                         else: st.error("Ketik RESET dengan benar.")
     else:
         _inp_bud = st.number_input(f"Set Anggaran {_bln_bud} (Rp):",
-                                    min_value=ANGGARAN_MIN,value=ANGGARAN_DEFAULT,step=100_000)
+            min_value=ANGGARAN_MIN,value=ANGGARAN_DEFAULT,step=100_000)
         if st.button(f"🔐 KUNCI {_bln_bud}"):
             st.session_state.anggaran_terkunci[_kb]=_inp_bud
             if not simpan_anggaran(uid,_kb,_inp_bud):
@@ -1402,9 +1473,9 @@ with st.sidebar:
     # ---- Target Tabungan ----
     st.subheader("💰 Target Tabungan")
     if _ang is not None:
-        _tgt = st.session_state.target_tabungan.get(_kb)
-        if _tgt is not None:
-            st.success(f"🎯 {_bln_bud}: **{rp(_tgt)}**")
+        _tgt_sb = st.session_state.target_tabungan.get(_kb)
+        if _tgt_sb is not None:
+            st.success(f"🎯 {_bln_bud}: **{rp(_tgt_sb)}**")
             if st.button("🔄 Ubah Target", key="ubah_tgt"):
                 st.session_state.target_tabungan.pop(_kb,None)
                 try: supabase.table("savings_goals").delete().eq("user_id",uid).eq("bulan_key",_kb).execute()
@@ -1412,7 +1483,7 @@ with st.sidebar:
                 st.rerun()
         else:
             _inp_tgt = st.number_input(f"Target {_bln_bud} (Rp):",
-                                        min_value=0,max_value=int(_ang),value=0,step=50_000)
+                min_value=0,max_value=int(_ang),value=0,step=50_000)
             if st.button("💾 Simpan Target"):
                 st.session_state.target_tabungan[_kb]=_inp_tgt
                 if not simpan_tabungan(uid,_kb,_inp_tgt):
@@ -1427,15 +1498,14 @@ with st.sidebar:
     st.subheader("📂 Budget per Kategori")
     if _ang is not None:
         _bk_data = st.session_state.budget_kategori.get(_kb,{})
+        _kat_pglr_all = get_kategori_pengeluaran()
         with st.expander(f"Set Budget Kategori {_bln_bud}"):
             with st.form("frm_bk"):
                 _bk_inputs = {}
-                for _kat in KATEGORI_PENGELUARAN:
+                for _kat in _kat_pglr_all:
                     _bk_inputs[_kat] = st.number_input(
-                        _kat, min_value=0,
-                        value=int(_bk_data.get(_kat,0)), step=50_000,
-                        key=f"bk_{_kat}"
-                    )
+                        _kat, min_value=0, value=int(_bk_data.get(_kat,0)),
+                        step=50_000, key=f"bk_{_kat}")
                 if st.form_submit_button("💾 Simpan Budget Kategori", use_container_width=True):
                     _ok = True
                     for _k2,_v2 in _bk_inputs.items():
@@ -1453,11 +1523,12 @@ with st.sidebar:
     st.subheader("✍️ Catat Pengeluaran")
     _wallets_list = st.session_state.wallets
     _wallet_opts  = ["— Tanpa Wallet —"] + [f"{w['tipe']} {w['nama']}" for w in _wallets_list]
+    _kat_pglr_all = get_kategori_pengeluaran()
 
     with st.form(f"frm_tx_{st.session_state.tx_form_key}"):
         _in_cat   = st.text_input("Nama Transaksi:", placeholder="Contoh: Beli Tissue")
         _in_nom   = st.number_input("Nominal (Rp):", min_value=0, value=0, step=1_000)
-        _in_kat   = st.selectbox("Kategori:", KATEGORI_PENGELUARAN)
+        _in_kat   = st.selectbox("Kategori:", _kat_pglr_all)
         _in_sft   = st.radio("Sifat:", ["Wajib","Sukarela"])
         _in_wlt   = st.selectbox("Wallet:", _wallet_opts)
         _in_tgl   = st.date_input("Tanggal", value=wib().date(), format="DD/MM/YYYY")
@@ -1499,6 +1570,7 @@ with st.sidebar:
                     st.session_state.jam_input     = wib().hour
                     st.session_state.menit_input   = wib().minute
                     st.session_state.tx_form_key  += 1
+                    st.session_state.tx_show_count = 5  # reset pagination
                     st.rerun()
             except Exception as _e: st.error(f"Error: {_e}")
 
@@ -1506,10 +1578,11 @@ with st.sidebar:
 
     # ---- Form Catat Pemasukan ----
     st.subheader("💵 Catat Pemasukan")
+    _kat_msuk_all = get_kategori_pemasukan()
     with st.form(f"frm_pm_{st.session_state.pm_form_key}"):
         _in_smb = st.text_input("Sumber:", placeholder="Contoh: Gaji Bulanan")
         _in_npm = st.number_input("Nominal (Rp):", min_value=0, value=0, step=100_000)
-        _in_kpm = st.selectbox("Kategori:", KATEGORI_PEMASUKAN)
+        _in_kpm = st.selectbox("Kategori:", _kat_msuk_all)
         _in_wpm = st.selectbox("Wallet:", _wallet_opts, key="wlt_pm")
         _in_tpm = st.date_input("Tanggal", value=wib().date(), format="DD/MM/YYYY", key="tgl_pm")
         _sub_pm = st.form_submit_button("💾 Simpan Pemasukan")
@@ -1519,7 +1592,7 @@ with st.sidebar:
         elif _in_npm<=0: st.error("Nominal harus >0.")
         else:
             try:
-                _dtp = datetime(_in_tpm.year,_in_tpm.month,_in_tpm.day,12,0)
+                _dtp   = datetime(_in_tpm.year,_in_tpm.month,_in_tpm.day,12,0)
                 _iso_p = TZ.localize(_dtp).astimezone(pytz.UTC).isoformat()
                 _wid_p = None
                 if _in_wpm != "— Tanpa Wallet —":
@@ -1533,8 +1606,7 @@ with st.sidebar:
                     st.cache_data.clear()
                     st.session_state.simpan_sukses = True
                     st.session_state.pesan_toast   = f"💵 '{_in_smb.strip()}' dicatat!"
-                    st.session_state.pm_form_key  += 1
-                    st.rerun()
+                    st.session_state.pm_form_key  += 1; st.rerun()
             except Exception as _e: st.error(f"Error: {_e}")
 
     st.markdown("---")
@@ -1546,16 +1618,14 @@ with st.sidebar:
         with st.expander(f"📋 {len(_recs)} template aktif"):
             for _rc in _recs:
                 _rc1,_rc2 = st.columns([4,1])
-                with _rc1:
-                    st.caption(f"**{_rc['catatan']}** — {rp(_rc['nominal'])} ({_rc.get('frekuensi','?')})")
+                with _rc1: st.caption(f"**{_rc['catatan']}** — {rp(_rc['nominal'])} ({_rc.get('frekuensi','?')})")
                 with _rc2:
                     if st.button("❌", key=f"del_rc_{_rc['id']}"):
                         supabase.table("recurring_templates").delete()\
                             .eq("id",_rc["id"]).eq("user_id",uid).execute()
                         st.cache_data.clear(); st.rerun()
         if st.button("⚡ Generate Bulan Ini", key="gen_rc"):
-            _sk = wib()
-            _ok_rc = 0
+            _sk = wib(); _ok_rc = 0
             for _rc in _recs:
                 try:
                     _wt = TZ.localize(datetime(_sk.year,_sk.month,1,8,0)).astimezone(pytz.UTC).isoformat()
@@ -1567,6 +1637,7 @@ with st.sidebar:
             if _ok_rc: st.cache_data.clear(); st.success(f"✅ {_ok_rc} transaksi digenerate!"); st.rerun()
     else:
         st.info("Belum ada template berulang.")
+
 
 # ============================================================
 # LOAD DATA
@@ -1597,11 +1668,6 @@ if _is_new:
     tampilkan_onboarding(uid, email_user)
 
 # ============================================================
-# NOTIFIKASI — ditampilkan via bell 🔔 di sidebar
-# (tidak ada blok warna di halaman utama)
-# ============================================================
-
-# ============================================================
 # FILTER PERIODE
 # ============================================================
 st.markdown("### 🗓️ Filter Periode")
@@ -1629,7 +1695,6 @@ _bts      = max(0.0, _bud-_tgt)
 _sisa_ang = _bud-_tot_pglr
 _net      = _tot_msuk-_tot_pglr
 _sukarela = _dfv[_dfv["sifat"]=="Sukarela"]["nominal"].sum() if not _dfv.empty else 0.0
-_sisa_bts = _bts-_tot_pglr
 
 if not st.session_state.toast_kondisi_ditampilkan and _bts>0:
     _p = (_tot_pglr/_bts)*100
@@ -1658,8 +1723,8 @@ with _hsc1:
 with _hsc2:
     _mx = {"Rasio Tabungan":40,"Konsistensi Catat":20,"Porsi Sukarela":20,"Tren Pengeluaran":20}
     for _k2,_p2 in _hd.items():
-        _m2  = _mx[_k2]; _pct2=_p2/_m2
-        _bc2 = "#2E7D32" if _pct2>=0.7 else ("#F57F17" if _pct2>=0.4 else "#B71C1C")
+        _m2=_mx[_k2]; _pct2=_p2/_m2
+        _bc2="#2E7D32" if _pct2>=0.7 else ("#F57F17" if _pct2>=0.4 else "#B71C1C")
         st.markdown(f"""
         <div style="margin-bottom:0.6rem;">
             <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
@@ -1673,7 +1738,7 @@ with _hsc2:
 st.markdown("---")
 
 # ============================================================
-# BALANCE CARD + COMPARISON BAR
+# BALANCE CARD
 # ============================================================
 _net_color  = "#bbf7d0" if _net >= 0 else "#fca5a5"
 _net_label  = "Surplus" if _net >= 0 else "Defisit"
@@ -1713,7 +1778,6 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Metric baris detail
 _mc1,_mc2,_mc3,_mc4 = st.columns(4)
 _mc1.metric("Anggaran",        rp(_bud))
 _mc2.metric("Target Tabungan", rp(_tgt))
@@ -1727,29 +1791,29 @@ st.markdown("---")
 # ============================================================
 # TABS UTAMA
 # ============================================================
-_TABS = ["📋 Pengeluaran","💵 Pemasukan","💸 Hutang/Piutang",
-         "👛 Wallet","📊 Visualisasi","🧠 Analisis AI","🤖 Chat AI","📋 Changelog"]
-_t1,_t2,_t3,_t4,_t5,_t6,_t7,_t8 = st.tabs(_TABS)
+_TABS = ["📋 Pengeluaran","💵 Pemasukan","💸 Hutang/Piutang","👛 Wallet",
+         "🎯 Goals","💎 Net Worth","📥 Import CSV","🏷️ Kategori",
+         "📊 Visualisasi","🧠 Analisis AI","🤖 Chat AI","📋 Changelog"]
+_t1,_t2,_t3,_t4,_t5,_t6,_t7,_t8,_t9,_t10,_t11,_t12 = st.tabs(_TABS)
 
 
 # ============================================================
-# TAB 1 — PENGELUARAN
+# TAB 1 — PENGELUARAN (dengan pagination)
 # ============================================================
 with _t1:
     st.markdown("#### 📋 Lembar Pengeluaran")
 
-    # --- Search & Filter ---
     with st.expander("🔍 Search & Filter", expanded=False):
         _sf1,_sf2 = st.columns(2)
-        _search = _sf1.text_input("🔍 Cari kata kunci:", placeholder="Nama transaksi...", key="srch_tx")
-        _flt_kat = _sf2.multiselect("Filter Kategori:", KATEGORI_PENGELUARAN, key="flt_kat")
+        _search  = _sf1.text_input("🔍 Cari kata kunci:", placeholder="Nama transaksi...", key="srch_tx")
+        _kat_pglr_all_flt = get_kategori_pengeluaran()
+        _flt_kat = _sf2.multiselect("Filter Kategori:", _kat_pglr_all_flt, key="flt_kat")
         _sf3,_sf4,_sf5 = st.columns(3)
-        _flt_sft = _sf3.selectbox("Sifat:", ["Semua","Wajib","Sukarela"], key="flt_sft")
+        _flt_sft    = _sf3.selectbox("Sifat:", ["Semua","Wajib","Sukarela"], key="flt_sft")
         _flt_tgl_min = _sf4.date_input("Dari Tanggal:", value=None, key="flt_tgl1")
         _flt_tgl_max = _sf5.date_input("Sampai Tanggal:", value=None, key="flt_tgl2")
         _sort_by = st.selectbox("Urutkan:", ["Terbaru","Terlama","Nominal Terbesar","Nominal Terkecil"], key="srt_tx")
 
-    # Terapkan filter
     _dfv_flt = _dfv.copy() if not _dfv.empty else pd.DataFrame()
     if not _dfv_flt.empty:
         if _search:
@@ -1769,7 +1833,6 @@ with _t1:
         _sc,_sa = _sort_map[_sort_by]
         _dfv_flt = _dfv_flt.sort_values(_sc, ascending=_sa)
 
-    # Ikon per kategori
     _KAT_ICON = {
         "Makanan":"🍽️","Transportasi":"🚗","Hiburan/Gaya Hidup":"🎮",
         "Kebutuhan Rumah/Kesehatan":"🏠","Tagihan Wajib":"📋","Lain-lain":"📦"
@@ -1781,17 +1844,16 @@ with _t1:
         _dfv_flt["Tanggal"] = _dfv_flt["waktu_transaksi"].apply(
             lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}")
 
-        st.caption(f"Menampilkan **{len(_dfv_flt)}** transaksi" +
-                   (f" (dari {len(_dfv)} total)" if len(_dfv_flt)!=len(_dfv) else ""))
+        _total_flt  = len(_dfv_flt)
+        _show_count = st.session_state.tx_show_count
+        _dfv_show   = _dfv_flt.head(_show_count)
 
-        # Tampilkan sebagai card list (max 50 untuk performa)
-        _show_limit = 50
-        _dfv_show = _dfv_flt.head(_show_limit)
-        if len(_dfv_flt) > _show_limit:
-            st.info(f"Menampilkan {_show_limit} dari {len(_dfv_flt)} transaksi. Gunakan filter untuk mempersempit.")
+        st.caption(f"Menampilkan **{min(_show_count, _total_flt)}** dari **{_total_flt}** transaksi"
+                   + (f" (filter aktif)" if _search or _flt_kat else ""))
 
+        # ── CARD LIST (paginated) ──
         for _, _row in _dfv_show.iterrows():
-            _ikon = _KAT_ICON.get(str(_row.get("kategori","")), "💳")
+            _ikon   = _KAT_ICON.get(str(_row.get("kategori","")), "📌")
             _tgl_str = f"{int(_row.get('tanggal',1))} {str(_row.get('bulan',''))[:3]} · {_row['Jam Catat']}"
             st.markdown(f"""
             <div class="tx-item">
@@ -1804,28 +1866,33 @@ with _t1:
             </div>
             """, unsafe_allow_html=True)
 
-        # Tabel untuk select + aksi (tersembunyi tapi fungsional)
+        # ── Tombol Tampilkan Lebih Banyak / Sembunyikan ──
+        if _total_flt > _show_count:
+            _sisa = _total_flt - _show_count
+            if st.button(f"⬇️ Tampilkan {min(_sisa, 10)} lagi  ({_sisa} tersisa)", use_container_width=True, key="btn_more_tx"):
+                st.session_state.tx_show_count += 10; st.rerun()
+        elif _show_count > 5 and _total_flt > 0:
+            if st.button("⬆️ Sembunyikan", use_container_width=True, key="btn_less_tx"):
+                st.session_state.tx_show_count = 5; st.rerun()
+
+        # ── Tabel untuk edit/hapus ──
+        st.markdown("---")
         st.markdown("**Pilih transaksi untuk edit/hapus:**")
         _dt_show = _dfv_flt[["Tanggal","catatan","nominal","kategori","sifat","Jam Catat"]].copy()
         _dt_show.columns = ["Tanggal","Deskripsi","Nominal (Rp)","Kategori","Sifat","Waktu"]
         _sel = st.dataframe(_dt_show, use_container_width=True, hide_index=True,
-                             selection_mode="multi-row", on_select="rerun", key="tbl_tx",
-                             height=200)
+                             selection_mode="multi-row", on_select="rerun", key="tbl_tx", height=200)
         _sel_idx = _sel.selection.rows
 
         _ba1,_ba2,_ba3 = st.columns(3)
-
-        # EDIT
         with _ba1:
             if st.button("✏️ Edit Terpilih", key="btn_edit_tx"):
                 if len(_sel_idx)==1:
                     _ri = _dfv_flt.iloc[_sel_idx[0]]
                     st.session_state.edit_tx_id   = _ri["id"]
                     st.session_state.edit_tx_data = _ri.to_dict()
-                elif len(_sel_idx)==0: st.warning("Pilih 1 baris untuk diedit.")
-                else: st.warning("Hanya bisa edit 1 transaksi sekaligus.")
-
-        # HAPUS dengan konfirmasi
+                elif len(_sel_idx)==0: st.warning("Pilih 1 baris.")
+                else: st.warning("Hanya bisa edit 1 transaksi.")
         with _ba2:
             if st.button("🗑️ Hapus Terpilih", key="btn_hps_tx"):
                 if _sel_idx:
@@ -1834,76 +1901,63 @@ with _t1:
                         st.session_state.hapus_konfirmasi_ids  = _dfv_flt.iloc[_valid]["id"].tolist()
                         st.session_state.hapus_konfirmasi_tipe = "transaksi"
                 else: st.warning("Pilih minimal 1 baris.")
-
-        # UNDUH
         with _ba3:
             _csv = _dt_show.to_csv(index=False).encode("utf-8")
-            st.download_button("📥 CSV", _csv,
-                f"pengeluaran_{_pil_bln}_{_pil_thn}.csv","text/csv")
+            st.download_button("📥 CSV", _csv, f"pengeluaran_{_pil_bln}_{_pil_thn}.csv","text/csv")
 
-        # ---- Konfirmasi Hapus ----
-        if (st.session_state.hapus_konfirmasi_ids
-                and st.session_state.hapus_konfirmasi_tipe=="transaksi"):
+        # ── Konfirmasi Hapus ──
+        if (st.session_state.hapus_konfirmasi_ids and st.session_state.hapus_konfirmasi_tipe=="transaksi"):
             _n = len(st.session_state.hapus_konfirmasi_ids)
             st.warning(f"⚠️ Kamu akan menghapus **{_n} transaksi** secara permanen. Lanjutkan?")
             _kc1,_kc2 = st.columns(2)
             if _kc1.button("✅ Ya, Hapus Sekarang", key="konfirm_ya", use_container_width=True):
                 try:
                     for _tid in st.session_state.hapus_konfirmasi_ids:
-                        supabase.table("transaksi").delete()\
-                            .eq("id",_tid).eq("user_id",uid).execute()
+                        supabase.table("transaksi").delete().eq("id",_tid).eq("user_id",uid).execute()
                     st.cache_data.clear()
                     st.session_state.hapus_sukses = True
                     st.session_state.pesan_toast  = f"🗑️ {_n} transaksi dihapus."
                     st.session_state.hapus_konfirmasi_ids  = []
-                    st.session_state.hapus_konfirmasi_tipe = ""
-                    st.rerun()
+                    st.session_state.hapus_konfirmasi_tipe = ""; st.rerun()
                 except Exception as _e: st.error(f"Gagal hapus: {_e}")
             if _kc2.button("❌ Batal", key="konfirm_batal", use_container_width=True):
                 st.session_state.hapus_konfirmasi_ids  = []
-                st.session_state.hapus_konfirmasi_tipe = ""
-                st.rerun()
+                st.session_state.hapus_konfirmasi_tipe = ""; st.rerun()
 
-        # ---- Form Edit Transaksi ----
+        # ── Form Edit ──
         if st.session_state.edit_tx_id:
             st.markdown("---")
             st.markdown("#### ✏️ Edit Transaksi")
             _ed = st.session_state.edit_tx_data
+            _kat_pglr_all_e = get_kategori_pengeluaran()
             with st.form("frm_edit_tx"):
-                _e_cat  = st.text_input("Nama:", value=str(_ed.get("catatan","")))
-                _e_nom  = st.number_input("Nominal (Rp):", min_value=0,
-                                           value=int(_ed.get("nominal",0)), step=1_000)
-                _e_kat  = st.selectbox("Kategori:", KATEGORI_PENGELUARAN,
-                    index=KATEGORI_PENGELUARAN.index(_ed["kategori"])
-                    if _ed.get("kategori") in KATEGORI_PENGELUARAN else 0)
-                _e_sft  = st.radio("Sifat:", ["Wajib","Sukarela"],
-                    index=0 if _ed.get("sifat")=="Wajib" else 1)
+                _e_cat = st.text_input("Nama:", value=str(_ed.get("catatan","")))
+                _e_nom = st.number_input("Nominal (Rp):", min_value=0, value=int(_ed.get("nominal",0)), step=1_000)
+                _e_kat = st.selectbox("Kategori:", _kat_pglr_all_e,
+                    index=_kat_pglr_all_e.index(_ed["kategori"]) if _ed.get("kategori") in _kat_pglr_all_e else 0)
+                _e_sft = st.radio("Sifat:", ["Wajib","Sukarela"], index=0 if _ed.get("sifat")=="Wajib" else 1)
                 _c_save,_c_cancel = st.columns(2)
-                _save   = _c_save.form_submit_button("💾 Simpan Perubahan", use_container_width=True)
+                _save   = _c_save.form_submit_button("💾 Simpan", use_container_width=True)
                 _cancel = _c_cancel.form_submit_button("❌ Batal", use_container_width=True)
-
             if _save:
                 if not _e_cat.strip(): st.error("Nama tidak boleh kosong.")
                 elif _e_nom<=0: st.error("Nominal harus >0.")
                 else:
                     try:
                         supabase.table("transaksi").update({
-                            "catatan":_e_cat.strip(),"nominal":_e_nom,
-                            "kategori":_e_kat,"sifat":_e_sft
+                            "catatan":_e_cat.strip(),"nominal":_e_nom,"kategori":_e_kat,"sifat":_e_sft
                         }).eq("id",st.session_state.edit_tx_id).eq("user_id",uid).execute()
                         st.cache_data.clear()
                         st.session_state.edit_tx_id   = None
                         st.session_state.edit_tx_data = {}
                         st.session_state.simpan_sukses = True
-                        st.session_state.pesan_toast   = "✏️ Transaksi berhasil diupdate!"
-                        st.rerun()
+                        st.session_state.pesan_toast   = "✏️ Transaksi berhasil diupdate!"; st.rerun()
                     except Exception as _e: st.error(f"Gagal update: {_e}")
             if _cancel:
                 st.session_state.edit_tx_id   = None
-                st.session_state.edit_tx_data = {}
-                st.rerun()
+                st.session_state.edit_tx_data = {}; st.rerun()
 
-        # Budget per kategori progress bars
+        # ── Budget per kategori progress ──
         _bk_now = st.session_state.budget_kategori.get(f"{_pil_bln}_{_pil_thn}",{})
         if _bk_now and not _dfv.empty:
             st.markdown("---")
@@ -1941,8 +1995,6 @@ with _t2:
         _dfpv2 = _dfpv.copy()
         _dfpv2["Tanggal"] = _dfpv2["waktu_pemasukan"].apply(
             lambda t: f"{t.day} {KAMUS_BULAN[t.month]} {t.year}")
-
-        # Card list pemasukan
         for _, _prow in _dfpv2.iterrows():
             _pikon = _KAT_ICON_PM.get(str(_prow.get("kategori","")), "💵")
             st.markdown(f"""
@@ -1960,8 +2012,7 @@ with _t2:
         _dps = _dfpv2[["Tanggal","sumber","nominal","kategori"]].copy()
         _dps.columns = ["Tanggal","Sumber","Nominal (Rp)","Kategori"]
         _sp = st.dataframe(_dps, use_container_width=True, hide_index=True,
-                            selection_mode="multi-row", on_select="rerun", key="tbl_pm",
-                            height=180)
+                            selection_mode="multi-row", on_select="rerun", key="tbl_pm", height=180)
 
         _pb1,_pb2 = st.columns(2)
         with _pb1:
@@ -1973,33 +2024,27 @@ with _t2:
                         st.session_state.hapus_konfirmasi_ids  = _dfpv2.iloc[_vp]["id"].tolist()
                         st.session_state.hapus_konfirmasi_tipe = "pemasukan"
                 else: st.warning("Pilih minimal 1 baris.")
-
         with _pb2:
             _csvp = _dps.to_csv(index=False).encode("utf-8")
-            st.download_button("📥 CSV", _csvp,
-                f"pemasukan_{_pil_bln}_{_pil_thn}.csv","text/csv")
+            st.download_button("📥 CSV", _csvp, f"pemasukan_{_pil_bln}_{_pil_thn}.csv","text/csv")
 
-        if (st.session_state.hapus_konfirmasi_ids
-                and st.session_state.hapus_konfirmasi_tipe=="pemasukan"):
+        if (st.session_state.hapus_konfirmasi_ids and st.session_state.hapus_konfirmasi_tipe=="pemasukan"):
             _np = len(st.session_state.hapus_konfirmasi_ids)
             st.warning(f"⚠️ Hapus **{_np} pemasukan** secara permanen?")
             _kp1,_kp2 = st.columns(2)
             if _kp1.button("✅ Ya, Hapus", key="kfm_pm_ya", use_container_width=True):
                 try:
                     for _pid in st.session_state.hapus_konfirmasi_ids:
-                        supabase.table("pemasukan").delete()\
-                            .eq("id",_pid).eq("user_id",uid).execute()
+                        supabase.table("pemasukan").delete().eq("id",_pid).eq("user_id",uid).execute()
                     st.cache_data.clear()
                     st.session_state.hapus_sukses = True
                     st.session_state.pesan_toast  = f"🗑️ {_np} pemasukan dihapus."
                     st.session_state.hapus_konfirmasi_ids  = []
-                    st.session_state.hapus_konfirmasi_tipe = ""
-                    st.rerun()
+                    st.session_state.hapus_konfirmasi_tipe = ""; st.rerun()
                 except Exception as _e: st.error(f"Gagal: {_e}")
             if _kp2.button("❌ Batal", key="kfm_pm_batal", use_container_width=True):
                 st.session_state.hapus_konfirmasi_ids  = []
-                st.session_state.hapus_konfirmasi_tipe = ""
-                st.rerun()
+                st.session_state.hapus_konfirmasi_tipe = ""; st.rerun()
 
         st.markdown("**Rincian per Kategori**")
         _kpm = _dfpv2.groupby("kategori")["nominal"].sum().reset_index()
@@ -2017,18 +2062,16 @@ with _t3:
     _hp_data = ambil_hutang(uid)
     _df_hp   = pd.DataFrame(_hp_data) if _hp_data else pd.DataFrame()
 
-    # Form tambah
     with st.expander("➕ Tambah Hutang / Piutang", expanded=False):
         with st.form("frm_hp"):
-            _hp_jenis   = st.radio("Jenis:", ["hutang","piutang"],
-                                    format_func=lambda x:"💸 Saya Berhutang" if x=="hutang" else "💰 Orang Lain Berhutang ke Saya")
-            _hp_nama    = st.text_input("Nama Pihak:", placeholder="Contoh: Budi")
-            _hp_nom     = st.number_input("Nominal (Rp):", min_value=0, value=0, step=10_000)
-            _hp_ket     = st.text_input("Keterangan:", placeholder="Contoh: Pinjam beli makan")
-            _hp_tgl     = st.date_input("Tanggal Pinjam:", value=wib().date(), format="DD/MM/YYYY")
-            _hp_jt      = st.date_input("Jatuh Tempo:", value=None, format="DD/MM/YYYY")
-            _sub_hp     = st.form_submit_button("💾 Simpan", use_container_width=True)
-
+            _hp_jenis = st.radio("Jenis:", ["hutang","piutang"],
+                                  format_func=lambda x:"💸 Saya Berhutang" if x=="hutang" else "💰 Orang Lain Berhutang ke Saya")
+            _hp_nama  = st.text_input("Nama Pihak:", placeholder="Contoh: Budi")
+            _hp_nom   = st.number_input("Nominal (Rp):", min_value=0, value=0, step=10_000)
+            _hp_ket   = st.text_input("Keterangan:", placeholder="Contoh: Pinjam beli makan")
+            _hp_tgl   = st.date_input("Tanggal Pinjam:", value=wib().date(), format="DD/MM/YYYY")
+            _hp_jt    = st.date_input("Jatuh Tempo:", value=None, format="DD/MM/YYYY")
+            _sub_hp   = st.form_submit_button("💾 Simpan", use_container_width=True)
         if _sub_hp:
             if not _hp_nama.strip(): st.error("Nama tidak boleh kosong.")
             elif _hp_nom<=0: st.error("Nominal harus >0.")
@@ -2043,12 +2086,10 @@ with _t3:
                         "nominal":_hp_nom,"keterangan":_hp_ket.strip(),
                         "tanggal":_tgl_iso,"jatuh_tempo":_jt_iso,"status":"belum_lunas"
                     }).execute()
-                    st.cache_data.clear()
-                    st.success("✅ Berhasil disimpan!"); st.rerun()
+                    st.cache_data.clear(); st.success("✅ Berhasil disimpan!"); st.rerun()
                 except Exception as _e: st.error(f"Error: {_e}")
 
     if not _df_hp.empty:
-        # Ringkasan
         _tot_hutang  = _df_hp[(_df_hp["jenis"]=="hutang") &(_df_hp["status"]=="belum_lunas")]["nominal"].sum()
         _tot_piutang = _df_hp[(_df_hp["jenis"]=="piutang")&(_df_hp["status"]=="belum_lunas")]["nominal"].sum()
         _mhp = st.columns(3)
@@ -2059,7 +2100,6 @@ with _t3:
             delta_color="normal" if _tot_piutang>=_tot_hutang else "inverse")
 
         _hp_tab1,_hp_tab2 = st.tabs(["💸 Hutang Saya","💰 Piutang Saya"])
-
         for _ht,_ht_label in [(_hp_tab1,"hutang"),(_hp_tab2,"piutang")]:
             with _ht:
                 _df_ht = _df_hp[_df_hp["jenis"]==_ht_label].copy()
@@ -2082,14 +2122,12 @@ with _t3:
                             st.markdown(
                                 f"**{_row['nama_pihak']}** — {rp(_row['nominal'])}\n\n"
                                 f"<small style='color:#64748b'>{_row.get('keterangan','')}{_jt_str}</small>",
-                                unsafe_allow_html=True
-                            )
+                                unsafe_allow_html=True)
                         with _hpc[1]:
                             st.markdown(
                                 f"<span style='color:{_stat_col};font-weight:600;font-size:0.85rem;'>"
                                 f"{'✅ Lunas' if _row['status']=='lunas' else '🔴 Belum'}</span>",
-                                unsafe_allow_html=True
-                            )
+                                unsafe_allow_html=True)
                         with _hpc[2]:
                             if _row["status"]=="belum_lunas":
                                 if st.button("✅ Lunas", key=f"lns_{_row['id']}"):
@@ -2099,28 +2137,23 @@ with _t3:
                             else:
                                 if st.button("🗑️", key=f"del_hp_{_row['id']}"):
                                     st.session_state.hapus_konfirmasi_ids  = [_row["id"]]
-                                    st.session_state.hapus_konfirmasi_tipe = "hutang"
-                                    st.rerun()
+                                    st.session_state.hapus_konfirmasi_tipe = "hutang"; st.rerun()
                         st.markdown("---")
                 else:
-                    st.info(f"Tidak ada {'hutang' if _ht_label=='hutang' else 'piutang'} yang tercatat.")
+                    st.info(f"Tidak ada {'hutang' if _ht_label=='hutang' else 'piutang'}.")
 
-        if (st.session_state.hapus_konfirmasi_ids
-                and st.session_state.hapus_konfirmasi_tipe=="hutang"):
+        if (st.session_state.hapus_konfirmasi_ids and st.session_state.hapus_konfirmasi_tipe=="hutang"):
             st.warning("⚠️ Hapus catatan ini secara permanen?")
             _kh1,_kh2 = st.columns(2)
             if _kh1.button("✅ Ya", key="kfm_hp_ya"):
                 for _hid in st.session_state.hapus_konfirmasi_ids:
-                    supabase.table("hutang_piutang").delete()\
-                        .eq("id",_hid).eq("user_id",uid).execute()
+                    supabase.table("hutang_piutang").delete().eq("id",_hid).eq("user_id",uid).execute()
                 st.cache_data.clear()
                 st.session_state.hapus_konfirmasi_ids  = []
-                st.session_state.hapus_konfirmasi_tipe = ""
-                st.rerun()
+                st.session_state.hapus_konfirmasi_tipe = ""; st.rerun()
             if _kh2.button("❌ Batal", key="kfm_hp_batal"):
                 st.session_state.hapus_konfirmasi_ids  = []
-                st.session_state.hapus_konfirmasi_tipe = ""
-                st.rerun()
+                st.session_state.hapus_konfirmasi_tipe = ""; st.rerun()
     else:
         st.info("Belum ada catatan hutang/piutang.")
 
@@ -2147,12 +2180,10 @@ with _t4:
 
     if _wts:
         for _w in _wts:
-            _wid2 = _w["id"]
-            # Hitung saldo estimasi
+            _wid2  = _w["id"]
             _tx_w  = df[df["wallet_id"]==_wid2]["nominal"].sum() if (not df.empty and "wallet_id" in df.columns) else 0
             _pm_w  = df_pm[df_pm["wallet_id"]==_wid2]["nominal"].sum() if (not df_pm.empty and "wallet_id" in df_pm.columns) else 0
             _saldo_est = float(_w.get("saldo_awal",0)) + _pm_w - _tx_w
-
             _wc2 = _w.get("warna","#2E7D32")
             st.markdown(f"""
             <div style="background:linear-gradient(135deg,{_wc2}dd,{_wc2}88);border-radius:14px;
@@ -2170,23 +2201,521 @@ with _t4:
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
-            _wc_col1,_wc_col2 = st.columns([4,1])
+            _,_wc_col2 = st.columns([4,1])
             with _wc_col2:
                 if st.button("🗑️ Hapus", key=f"del_w_{_wid2}"):
                     if hapus_wallet(uid, _wid2):
                         st.session_state.muat_wallets_sukses = False
                         muat_wallets(uid, True); st.rerun()
     else:
-        st.info("Belum ada wallet. Tambahkan wallet pertamamu di atas.")
+        st.info("Belum ada wallet.")
 
 
 # ============================================================
-# TAB 5 — VISUALISASI
+# TAB 5 — FINANCIAL GOALS
 # ============================================================
 with _t5:
+    st.markdown("#### 🎯 Financial Goals")
+    st.caption("Tetapkan target finansial jangka pendek dan panjang, pantau progress-nya.")
+
+    with st.expander("➕ Tambah Goal Baru", expanded=False):
+        with st.form("frm_goal"):
+            _gc1,_gc2 = st.columns([3,1])
+            _g_nama  = _gc1.text_input("Nama Goal:", placeholder="Contoh: Beli Laptop, DP Rumah")
+            _g_ikon  = _gc2.selectbox("Ikon:", GOAL_IKON_LIST)
+            _g_target = st.number_input("Target Nominal (Rp):", min_value=1000, value=5_000_000, step=100_000)
+            _g_terkumpul = st.number_input("Dana Terkumpul Saat Ini (Rp):", min_value=0, value=0, step=100_000)
+            _g_kat   = st.selectbox("Kategori Goal:", ["Darurat","Elektronik","Properti","Kendaraan",
+                                                         "Liburan","Pendidikan","Kesehatan","Lainnya"])
+            _g_deadline = st.date_input("Target Tanggal Tercapai:", value=None, format="DD/MM/YYYY")
+            _sub_goal = st.form_submit_button("💾 Simpan Goal", use_container_width=True)
+        if _sub_goal:
+            if not _g_nama.strip(): st.error("Nama tidak boleh kosong.")
+            else:
+                if simpan_goal(uid, _g_nama.strip(), _g_target, _g_terkumpul, _g_deadline, _g_kat, _g_ikon):
+                    st.session_state.muat_goals_sukses = False
+                    muat_goals(uid, True)
+                    st.success("✅ Goal berhasil disimpan!"); st.rerun()
+
+    goals = st.session_state.financial_goals
+    if goals:
+        # Ringkasan
+        _total_goals = len(goals)
+        _tercapai = sum(1 for g in goals if g.get("terkumpul",0) >= g["target_nominal"])
+        _gc1,_gc2,_gc3 = st.columns(3)
+        _gc1.metric("Total Goals", _total_goals)
+        _gc2.metric("Sudah Tercapai", _tercapai)
+        _gc3.metric("Sedang Berjalan", _total_goals-_tercapai)
+        st.markdown("---")
+
+        for _g in goals:
+            _terkumpul = _g.get("terkumpul", 0)
+            _target    = _g["target_nominal"]
+            _pct       = min(100, (_terkumpul / _target * 100)) if _target > 0 else 0
+            _sisa_goal = max(0, _target - _terkumpul)
+            _pct_clr   = "#2E7D32" if _pct >= 100 else ("#3b82f6" if _pct >= 50 else "#f59e0b")
+            _done_badge = ' <span style="background:#16a34a;color:white;border-radius:12px;padding:1px 8px;font-size:0.72rem;">✅ Tercapai</span>' if _pct >= 100 else ""
+
+            # Hitung sisa hari jika ada deadline
+            _deadline_str = ""
+            if _g.get("deadline"):
+                try:
+                    _dl = date.fromisoformat(_g["deadline"])
+                    _sisa_hari = (_dl - wib().date()).days
+                    if _sisa_hari > 0:
+                        _deadline_str = f"⏳ {_sisa_hari} hari lagi"
+                    elif _sisa_hari == 0:
+                        _deadline_str = "⏰ Deadline hari ini!"
+                    else:
+                        _deadline_str = f"⚠️ Lewat {abs(_sisa_hari)} hari"
+                except Exception: pass
+
+            st.markdown(f"""
+            <div class="goal-card">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                    <div>
+                        <div class="goal-title">{_g['ikon']} {_g['nama']}{_done_badge}</div>
+                        <div class="goal-sub">{_g.get('kategori','—')} {('· ' + _deadline_str) if _deadline_str else ''}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="goal-pct" style="color:{_pct_clr};">{_pct:.1f}%</div>
+                    </div>
+                </div>
+                <div class="goal-bar-bg">
+                    <div class="goal-bar-fill" style="background:{_pct_clr};width:{_pct:.1f}%;"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:#94a3b8;">
+                    <span>Terkumpul: <strong style="color:#e2e8f0">{rp(_terkumpul)}</strong></span>
+                    <span>Target: <strong style="color:#e2e8f0">{rp(_target)}</strong></span>
+                    <span>Sisa: <strong style="color:{_pct_clr}">{rp(_sisa_goal)}</strong></span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Tombol update + hapus
+            _gca, _gcb, _gcc = st.columns([3, 2, 1])
+            with _gca:
+                _new_terkumpul = st.number_input(
+                    f"Update dana (Rp):", min_value=0, value=int(_terkumpul),
+                    step=50_000, key=f"upd_goal_{_g['id']}", label_visibility="collapsed")
+            with _gcb:
+                if st.button("💾 Update Dana", key=f"btn_upd_goal_{_g['id']}", use_container_width=True):
+                    if update_goal_terkumpul(uid, _g["id"], _new_terkumpul):
+                        st.session_state.muat_goals_sukses = False
+                        muat_goals(uid, True)
+                        st.session_state.simpan_sukses = True
+                        st.session_state.pesan_toast   = f"✅ Goal '{_g['nama']}' diupdate!"
+                        st.rerun()
+            with _gcc:
+                if st.button("🗑️", key=f"del_goal_{_g['id']}", help="Hapus goal ini"):
+                    if hapus_goal(uid, _g["id"]):
+                        st.session_state.muat_goals_sukses = False
+                        muat_goals(uid, True); st.rerun()
+
+            st.markdown("")  # spacing
+    else:
+        st.info("Belum ada goals. Tambahkan goal finansialmu di atas!")
+        st.markdown("""
+        **💡 Contoh goals yang bisa kamu set:**
+        - 🏠 DP Rumah (Rp 50.000.000 dalam 2 tahun)
+        - 📱 Ganti HP baru (Rp 8.000.000 dalam 6 bulan)
+        - ✈️ Liburan Bali (Rp 5.000.000 dalam 3 bulan)
+        - 🎓 Kursus Online (Rp 2.000.000 dalam 1 bulan)
+        - 💊 Dana Darurat (Rp 30.000.000 dalam 12 bulan)
+        """)
+
+
+# ============================================================
+# TAB 6 — NET WORTH TRACKER
+# ============================================================
+with _t6:
+    st.markdown("#### 💎 Net Worth Tracker")
+    st.caption("Pantau kekayaan bersih kamu dari waktu ke waktu. Net Worth = Total Aset — Total Liabilitas.")
+
+    _now_nw = wib()
+    _kb_nw  = f"{KAMUS_BULAN[_now_nw.month]}_{_now_nw.year}"
+
+    # ── Cari snapshot bulan ini kalau ada ──
+    _nw_history = st.session_state.networth_history
+    _latest_nw  = next((n for n in reversed(_nw_history) if n["bulan_key"]==_kb_nw), None)
+
+    _aset_items  = json.loads(_latest_nw["catatan_aset"])       if _latest_nw and _latest_nw.get("catatan_aset") else []
+    _liab_items  = json.loads(_latest_nw["catatan_liabilitas"]) if _latest_nw and _latest_nw.get("catatan_liabilitas") else []
+    _total_aset  = _latest_nw["total_aset"]       if _latest_nw else 0
+    _total_liab  = _latest_nw["total_liabilitas"] if _latest_nw else 0
+    _net_worth   = _total_aset - _total_liab
+
+    # ── Summary card ──
+    _nw_clr = "#4ade80" if _net_worth >= 0 else "#f87171"
+    st.markdown(f"""
+    <div class="nw-card">
+        <div class="nw-title">💎 NET WORTH — {KAMUS_BULAN[_now_nw.month]} {_now_nw.year}</div>
+        <div class="nw-amount" style="color:{_nw_clr};">{rp(_net_worth)}</div>
+        <div style="display:flex;gap:1.5rem;margin-top:0.8rem;font-size:0.85rem;">
+            <div><span style="opacity:0.7;">Total Aset</span><br>
+                 <strong style="color:#bbf7d0;">{rp(_total_aset)}</strong></div>
+            <div><span style="opacity:0.7;">Total Liabilitas</span><br>
+                 <strong style="color:#fca5a5;">{rp(_total_liab)}</strong></div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Input Aset & Liabilitas ──
+    with st.expander(f"📝 Update Net Worth — {KAMUS_BULAN[_now_nw.month]} {_now_nw.year}", expanded=not bool(_latest_nw)):
+        st.markdown("**💰 Aset Kamu**")
+        st.caption("Masukkan semua aset yang kamu miliki saat ini.")
+
+        _aset_rows = []
+        if "nw_aset_count" not in st.session_state:
+            st.session_state.nw_aset_count = max(len(_aset_items), 1)
+        if "nw_liab_count" not in st.session_state:
+            st.session_state.nw_liab_count = max(len(_liab_items), 1)
+
+        _nc1, _nc2 = st.columns([1, 1])
+        with _nc1:
+            if st.button("➕ Tambah Baris Aset", key="add_aset_row"):
+                st.session_state.nw_aset_count += 1; st.rerun()
+        with _nc2:
+            if st.button("➕ Tambah Baris Liabilitas", key="add_liab_row"):
+                st.session_state.nw_liab_count += 1; st.rerun()
+
+        _aset_total_input = 0
+        st.markdown("**Aset:**")
+        for _i in range(st.session_state.nw_aset_count):
+            _prev_nama = _aset_items[_i]["nama"] if _i < len(_aset_items) else ""
+            _prev_nom  = _aset_items[_i]["nominal"] if _i < len(_aset_items) else 0
+            _prev_tipe = _aset_items[_i].get("tipe", ASET_TIPE_LIST[0]) if _i < len(_aset_items) else ASET_TIPE_LIST[0]
+            _ai1,_ai2,_ai3 = st.columns([2,2,2])
+            _a_nama = _ai1.text_input("Nama Aset", value=_prev_nama, key=f"a_nama_{_i}", placeholder="Contoh: Tabungan BCA")
+            _a_tipe = _ai2.selectbox("Tipe", ASET_TIPE_LIST, index=ASET_TIPE_LIST.index(_prev_tipe) if _prev_tipe in ASET_TIPE_LIST else 0, key=f"a_tipe_{_i}")
+            _a_nom  = _ai3.number_input("Nilai (Rp)", min_value=0, value=int(_prev_nom), step=100_000, key=f"a_nom_{_i}")
+            if _a_nama.strip() and _a_nom > 0:
+                _aset_rows.append({"nama":_a_nama.strip(), "tipe":_a_tipe, "nominal":_a_nom})
+                _aset_total_input += _a_nom
+
+        st.markdown(f"**Total Aset: {rp(_aset_total_input)}**")
+        st.markdown("---")
+
+        _liab_rows  = []
+        _liab_total_input = 0
+        st.markdown("**Liabilitas (Hutang):**")
+        for _i in range(st.session_state.nw_liab_count):
+            _prev_nama = _liab_items[_i]["nama"] if _i < len(_liab_items) else ""
+            _prev_nom  = _liab_items[_i]["nominal"] if _i < len(_liab_items) else 0
+            _prev_tipe = _liab_items[_i].get("tipe", LIAB_TIPE_LIST[0]) if _i < len(_liab_items) else LIAB_TIPE_LIST[0]
+            _li1,_li2,_li3 = st.columns([2,2,2])
+            _l_nama = _li1.text_input("Nama Liabilitas", value=_prev_nama, key=f"l_nama_{_i}", placeholder="Contoh: KPR BRI")
+            _l_tipe = _li2.selectbox("Tipe", LIAB_TIPE_LIST, index=LIAB_TIPE_LIST.index(_prev_tipe) if _prev_tipe in LIAB_TIPE_LIST else 0, key=f"l_tipe_{_i}")
+            _l_nom  = _li3.number_input("Nilai (Rp)", min_value=0, value=int(_prev_nom), step=100_000, key=f"l_nom_{_i}")
+            if _l_nama.strip() and _l_nom > 0:
+                _liab_rows.append({"nama":_l_nama.strip(), "tipe":_l_tipe, "nominal":_l_nom})
+                _liab_total_input += _l_nom
+
+        st.markdown(f"**Total Liabilitas: {rp(_liab_total_input)}**")
+        _nw_preview = _aset_total_input - _liab_total_input
+        _nwp_clr = "#4ade80" if _nw_preview >= 0 else "#f87171"
+        st.markdown(f"**Net Worth Preview: <span style='color:{_nwp_clr}'>{rp(_nw_preview)}</span>**", unsafe_allow_html=True)
+
+        if st.button("💾 Simpan Net Worth Bulan Ini", use_container_width=True, key="btn_save_nw"):
+            if simpan_networth(uid, _kb_nw, _aset_total_input, _liab_total_input, _aset_rows, _liab_rows):
+                st.session_state.muat_nw_sukses = False
+                muat_networth(uid, True)
+                st.session_state.simpan_sukses = True
+                st.session_state.pesan_toast   = "💎 Net Worth berhasil disimpan!"; st.rerun()
+
+    # ── Grafik Tren Net Worth ──
+    if len(_nw_history) >= 2:
+        st.markdown("---")
+        st.markdown("**📈 Tren Net Worth**")
+        _nw_df = pd.DataFrame([{
+            "Periode": h["bulan_key"].replace("_"," "),
+            "Aset":    h["total_aset"],
+            "Liabilitas": h["total_liabilitas"],
+            "Net Worth": h["total_aset"] - h["total_liabilitas"]
+        } for h in _nw_history])
+
+        _nw_melt = _nw_df.melt(id_vars="Periode", value_vars=["Aset","Liabilitas","Net Worth"],
+                                var_name="Tipe", value_name="Nilai")
+        st.altair_chart(
+            alt.Chart(_nw_melt).mark_line(point=True).encode(
+                x=alt.X("Periode:N", title="Periode"),
+                y=alt.Y("Nilai:Q", title="Nilai (Rp)"),
+                color=alt.Color("Tipe:N", scale=alt.Scale(
+                    domain=["Aset","Liabilitas","Net Worth"],
+                    range=["#4ade80","#f87171","#60a5fa"])),
+                tooltip=["Periode","Tipe","Nilai"]
+            ).properties(height=280), use_container_width=True)
+
+        st.dataframe(_nw_df, use_container_width=True, hide_index=True)
+    elif len(_nw_history) == 1:
+        st.info("Catat net worth bulan depan untuk melihat tren perkembangan.")
+
+
+# ============================================================
+# TAB 7 — IMPORT CSV MUTASI BANK
+# ============================================================
+with _t7:
+    st.markdown("#### 📥 Import CSV Mutasi Bank")
+    st.caption("Upload file CSV mutasi rekening bank, mapping kolom, lalu import massal ke DanaPintar.")
+
+    with st.expander("📋 Format CSV yang Didukung", expanded=False):
+        st.markdown("""
+        **Format yang disarankan:**
+        Kolom minimal: tanggal, deskripsi/keterangan, nominal/debit/kredit.
+
+        **Contoh CSV BCA:**
+        ```
+        Tanggal,Keterangan,Cabang,Nominal,Tipe
+        01/05/2026,TRANSFER KE BUDI,ATM,-50000,DB
+        02/05/2026,GAJI MASUK,,5000000,CR
+        ```
+
+        **Contoh CSV Mandiri:**
+        ```
+        Tanggal Transaksi,Deskripsi,Debit,Kredit,Saldo
+        01/05/2026,BELANJA ALFAMART,75000,,8925000
+        02/05/2026,GAJI,,5000000,13925000
+        ```
+
+        💡 **Tips:** File harus `.csv`. Baris kosong di awal file akan diabaikan otomatis.
+        """)
+
+    _csv_file = st.file_uploader("📂 Upload file CSV mutasi bank:", type=["csv"], key="csv_uploader")
+
+    if _csv_file is not None:
+        try:
+            # Auto-detect encoding dan separator
+            _raw_bytes = _csv_file.read()
+            try:
+                _csv_str = _raw_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                try:
+                    _csv_str = _raw_bytes.decode("latin-1")
+                except Exception:
+                    _csv_str = _raw_bytes.decode("utf-8", errors="ignore")
+
+            # Coba berbagai separator
+            _df_raw = None
+            for _sep in [",", ";", "\t", "|"]:
+                try:
+                    _df_try = pd.read_csv(io.StringIO(_csv_str), sep=_sep, skip_blank_lines=True)
+                    if len(_df_try.columns) >= 2:
+                        _df_raw = _df_try; break
+                except Exception: continue
+
+            if _df_raw is None or _df_raw.empty:
+                st.error("❌ Tidak bisa membaca file CSV. Pastikan format benar.")
+            else:
+                # Hapus baris yang semua null
+                _df_raw = _df_raw.dropna(how="all")
+                _df_raw.columns = [str(c).strip() for c in _df_raw.columns]
+
+                st.success(f"✅ File berhasil dibaca: **{len(_df_raw)} baris**, **{len(_df_raw.columns)} kolom**")
+
+                with st.expander("👀 Preview Data Mentah", expanded=True):
+                    st.dataframe(_df_raw.head(10), use_container_width=True)
+
+                st.markdown("---")
+                st.markdown("### 🔗 Mapping Kolom")
+                st.caption("Cocokkan kolom dari file CSV-mu ke field DanaPintar.")
+
+                _cols_csv = ["— Pilih Kolom —"] + list(_df_raw.columns)
+                _kat_all_import = get_kategori_pengeluaran()
+
+                _im1,_im2 = st.columns(2)
+                with _im1:
+                    _map_tgl  = st.selectbox("📅 Kolom Tanggal:", _cols_csv, key="map_tgl")
+                    _map_desk = st.selectbox("📝 Kolom Deskripsi:", _cols_csv, key="map_desk")
+                    _map_nom  = st.selectbox("💰 Kolom Nominal/Debit:", _cols_csv, key="map_nom")
+                with _im2:
+                    _map_tipe = st.selectbox("📌 Kolom Tipe (Opsional):", _cols_csv, key="map_tipe")
+                    _import_kat = st.selectbox("🏷️ Kategori Default:", _kat_all_import, key="imp_kat")
+                    _import_sft = st.radio("Sifat Default:", ["Wajib","Sukarela"], key="imp_sft")
+                    _import_wlt = st.selectbox("👛 Wallet:", ["— Tanpa Wallet —"] + [f"{w['tipe']} {w['nama']}" for w in st.session_state.wallets], key="imp_wlt")
+
+                _tgl_format = st.text_input("Format Tanggal:", value="%d/%m/%Y",
+                    help="Contoh: %d/%m/%Y, %Y-%m-%d, %d-%m-%Y")
+                _min_nominal = st.number_input("Minimal Nominal (filter baris kecil):", min_value=0, value=1000, step=1000)
+                _hanya_debit = st.checkbox("Hanya import baris debit/pengeluaran", value=True)
+
+                if st.button("🔍 Preview Import", use_container_width=True, key="btn_preview_import"):
+                    if _map_tgl == "— Pilih Kolom —" or _map_desk == "— Pilih Kolom —" or _map_nom == "— Pilih Kolom —":
+                        st.error("❌ Pilih kolom Tanggal, Deskripsi, dan Nominal terlebih dahulu.")
+                    else:
+                        try:
+                            _df_import = _df_raw.copy()
+                            _df_import["_tgl"]  = pd.to_datetime(_df_import[_map_tgl], format=_tgl_format, errors="coerce")
+                            _df_import["_desk"] = _df_import[_map_desk].astype(str).str.strip()
+                            _df_import["_nom"]  = pd.to_numeric(
+                                _df_import[_map_nom].astype(str).str.replace(r"[^0-9\.\-]","",regex=True),
+                                errors="coerce"
+                            ).abs()
+
+                            # Filter
+                            _df_import = _df_import.dropna(subset=["_tgl","_nom"])
+                            _df_import = _df_import[_df_import["_nom"] >= _min_nominal]
+                            _df_import = _df_import[_df_import["_desk"].str.len() > 0]
+
+                            if _df_import.empty:
+                                st.warning("⚠️ Tidak ada baris yang valid setelah filter.")
+                            else:
+                                st.session_state.csv_import_df = _df_import[["_tgl","_desk","_nom"]].copy()
+                                st.session_state.csv_import_mapping = {
+                                    "kat": _import_kat, "sft": _import_sft,
+                                    "wlt": _import_wlt
+                                }
+                                st.session_state.csv_import_preview = True
+
+                        except Exception as _ie:
+                            st.error(f"❌ Error saat parsing: {_ie}")
+
+                if st.session_state.csv_import_preview and st.session_state.csv_import_df is not None:
+                    _df_prev = st.session_state.csv_import_df
+                    st.markdown(f"### ✅ Preview Import — {len(_df_prev)} transaksi")
+
+                    _prev_show = _df_prev.copy()
+                    _prev_show.columns = ["Tanggal","Deskripsi","Nominal (Rp)"]
+                    _prev_show["Nominal (Rp)"] = _prev_show["Nominal (Rp)"].apply(lambda x: f"Rp {x:,.0f}")
+                    st.dataframe(_prev_show.head(20), use_container_width=True, hide_index=True)
+
+                    if len(_df_prev) > 20:
+                        st.caption(f"... dan {len(_df_prev)-20} baris lainnya.")
+
+                    _total_nominal_imp = _df_prev["_nom"].sum()
+                    st.markdown(f"**Total Nominal: {rp(_total_nominal_imp)}** | Kategori: `{_import_kat}` | Sifat: `{_import_sft}`")
+
+                    _imp_col1, _imp_col2 = st.columns(2)
+                    with _imp_col1:
+                        if st.button("⬆️ Import Sekarang!", use_container_width=True, key="btn_do_import", type="primary"):
+                            _imp_map  = st.session_state.csv_import_mapping
+                            _wid_imp  = None
+                            _wlt_imp  = _imp_map["wlt"]
+                            if _wlt_imp != "— Tanpa Wallet —":
+                                _wl_list = st.session_state.wallets
+                                _wl_opts = [f"{w['tipe']} {w['nama']}" for w in _wl_list]
+                                if _wlt_imp in _wl_opts:
+                                    _wid_imp = _wl_list[_wl_opts.index(_wlt_imp)]["id"]
+
+                            _ok_imp = 0; _fail_imp = 0
+                            _progress = st.progress(0)
+                            _total_rows = len(_df_prev)
+                            for _ri, _rrow in _df_prev.iterrows():
+                                try:
+                                    _wt_imp = TZ.localize(
+                                        datetime(_rrow["_tgl"].year, _rrow["_tgl"].month, _rrow["_tgl"].day, 12, 0)
+                                    ).astimezone(pytz.UTC).isoformat()
+                                    _pl_imp = {
+                                        "user_id":   uid,
+                                        "catatan":   str(_rrow["_desk"])[:200],
+                                        "nominal":   int(_rrow["_nom"]),
+                                        "kategori":  _imp_map["kat"],
+                                        "sifat":     _imp_map["sft"],
+                                        "waktu_transaksi": _wt_imp
+                                    }
+                                    if _wid_imp: _pl_imp["wallet_id"] = _wid_imp
+                                    supabase.table("transaksi").insert(_pl_imp).execute()
+                                    _ok_imp += 1
+                                except Exception: _fail_imp += 1
+                                _progress.progress((_ok_imp + _fail_imp) / _total_rows)
+
+                            st.cache_data.clear()
+                            st.session_state.csv_import_df      = None
+                            st.session_state.csv_import_preview = False
+                            st.session_state.tx_show_count      = 5
+                            if _ok_imp > 0:
+                                st.success(f"✅ **{_ok_imp} transaksi** berhasil diimport!")
+                            if _fail_imp > 0:
+                                st.warning(f"⚠️ {_fail_imp} baris gagal diimport.")
+                            st.rerun()
+                    with _imp_col2:
+                        if st.button("❌ Batal Import", use_container_width=True, key="btn_cancel_import"):
+                            st.session_state.csv_import_df      = None
+                            st.session_state.csv_import_preview = False; st.rerun()
+
+        except Exception as _csv_e:
+            st.error(f"❌ Error membaca file: {_csv_e}")
+    else:
+        st.markdown("""
+        <div style="background:#1e293b;border-radius:14px;padding:2rem;text-align:center;
+                    border:2px dashed #475569;margin:1rem 0;">
+            <div style="font-size:2.5rem;">📂</div>
+            <div style="font-size:1rem;color:#94a3b8;margin-top:0.5rem;">Upload file CSV mutasi bank di atas</div>
+            <div style="font-size:0.82rem;color:#64748b;margin-top:0.3rem;">
+                Format didukung: CSV dari BCA, Mandiri, BNI, BRI, CIMB, dll.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
+# ============================================================
+# TAB 8 — CUSTOM KATEGORI
+# ============================================================
+with _t8:
+    st.markdown("#### 🏷️ Custom Kategori")
+    st.caption("Tambah kategori pengeluaran atau pemasukan sesuai kebutuhanmu.")
+
+    _ck_t1, _ck_t2 = st.tabs(["📤 Pengeluaran","📥 Pemasukan"])
+
+    for _ck_tab, _ck_tipe, _ck_list_key, _ck_default in [
+        (_ck_t1, "pengeluaran", "custom_kat_pglr", KATEGORI_PENGELUARAN_DEFAULT),
+        (_ck_t2, "pemasukan",   "custom_kat_msuk", KATEGORI_PEMASUKAN_DEFAULT)
+    ]:
+        with _ck_tab:
+            st.markdown(f"**Kategori Default {_ck_tipe.title()}:**")
+            _def_chips = "".join([
+                f'<span style="display:inline-block;background:#1e293b;border:1px solid #475569;'
+                f'border-radius:20px;padding:3px 12px;font-size:0.82rem;margin:3px;">'
+                f'{k}</span>' for k in _ck_default
+            ])
+            st.markdown(_def_chips, unsafe_allow_html=True)
+
+            st.markdown("---")
+            st.markdown(f"**Kategori Custom Kamu:**")
+            _cust_list = st.session_state[_ck_list_key]
+            if _cust_list:
+                for _ck in _cust_list:
+                    _ckc1, _ckc2 = st.columns([5,1])
+                    with _ckc1:
+                        st.markdown(
+                            f'<span style="display:inline-block;background:#1e293b;border:1.5px solid #4ade80;'
+                            f'border-radius:20px;padding:3px 12px;font-size:0.88rem;margin:3px;">'
+                            f'{_ck.get("ikon","📌")} {_ck["nama"]}</span>',
+                            unsafe_allow_html=True)
+                    with _ckc2:
+                        if st.button("🗑️", key=f"del_ck_{_ck['id']}"):
+                            if hapus_custom_kat(uid, _ck["id"]):
+                                st.session_state.muat_custom_kat_sukses = False
+                                muat_custom_kat(uid, True); st.rerun()
+            else:
+                st.info(f"Belum ada kategori {_ck_tipe} custom.")
+
+            st.markdown("---")
+            with st.form(f"frm_ck_{_ck_tipe}"):
+                _ck1,_ck2 = st.columns([4,1])
+                _new_kat_nama = _ck1.text_input(f"Nama kategori baru ({_ck_tipe}):",
+                    placeholder=f"Contoh: {'Snack Mingguan' if _ck_tipe=='pengeluaran' else 'Dividen Saham'}")
+                _new_kat_ikon = _ck2.text_input("Ikon:", value="📌",
+                    help="Copy paste emoji apapun")
+                if st.form_submit_button(f"➕ Tambah Kategori {_ck_tipe.title()}", use_container_width=True):
+                    if not _new_kat_nama.strip():
+                        st.error("Nama kategori tidak boleh kosong.")
+                    elif _new_kat_nama.strip() in _ck_default:
+                        st.warning("Kategori ini sudah ada di daftar default.")
+                    elif any(k["nama"] == _new_kat_nama.strip() for k in _cust_list):
+                        st.warning("Kategori ini sudah ada.")
+                    else:
+                        if simpan_custom_kat(uid, _new_kat_nama.strip(), _ck_tipe, _new_kat_ikon.strip() or "📌"):
+                            st.session_state.muat_custom_kat_sukses = False
+                            muat_custom_kat(uid, True)
+                            st.success(f"✅ Kategori '{_new_kat_nama.strip()}' ditambahkan!"); st.rerun()
+
+
+# ============================================================
+# TAB 9 — VISUALISASI (termasuk Heatmap Kalender)
+# ============================================================
+with _t9:
     st.markdown("#### 📊 Grafik & Perbandingan")
-    _vt1,_vt2,_vt3 = st.tabs(["📈 Tren","🥧 Kategori","↔️ Komparatif"])
+    _vt1,_vt2,_vt3,_vt4 = st.tabs(["📈 Tren","🥧 Kategori","↔️ Komparatif","📅 Kalender Heatmap"])
 
     with _vt1:
         _vc1,_vc2 = st.columns(2)
@@ -2215,12 +2744,8 @@ with _t5:
 
         st.markdown("**Net Cash Flow Bulanan**")
         if not df.empty or not df_pm.empty:
-            _dfo = df.groupby(["tahun","bulan"])["nominal"].sum().reset_index()\
-                     .rename(columns={"nominal":"pengeluaran"}) if not df.empty \
-                   else pd.DataFrame(columns=["tahun","bulan","pengeluaran"])
-            _dfi = df_pm.groupby(["tahun","bulan"])["nominal"].sum().reset_index()\
-                        .rename(columns={"nominal":"pemasukan"}) if not df_pm.empty \
-                  else pd.DataFrame(columns=["tahun","bulan","pemasukan"])
+            _dfo = df.groupby(["tahun","bulan"])["nominal"].sum().reset_index().rename(columns={"nominal":"pengeluaran"}) if not df.empty else pd.DataFrame(columns=["tahun","bulan","pengeluaran"])
+            _dfi = df_pm.groupby(["tahun","bulan"])["nominal"].sum().reset_index().rename(columns={"nominal":"pemasukan"}) if not df_pm.empty else pd.DataFrame(columns=["tahun","bulan","pemasukan"])
             _dfcf = pd.merge(_dfo,_dfi,on=["tahun","bulan"],how="outer").fillna(0)
             _dfcf["net"]    = _dfcf["pemasukan"]-_dfcf["pengeluaran"]
             _dfcf["status"] = _dfcf["net"].apply(lambda x:"Surplus" if x>=0 else "Defisit")
@@ -2228,8 +2753,7 @@ with _t5:
                 alt.Chart(_dfcf).mark_bar().encode(
                     x=alt.X("bulan:N",sort=list(KAMUS_BULAN.values()),title="Bulan"),
                     y=alt.Y("net:Q",title="Net (Rp)"),
-                    color=alt.Color("status:N",scale=alt.Scale(
-                        domain=["Surplus","Defisit"],range=["#2E7D32","#E53935"])),
+                    color=alt.Color("status:N",scale=alt.Scale(domain=["Surplus","Defisit"],range=["#2E7D32","#E53935"])),
                     tooltip=["bulan","tahun","pemasukan","pengeluaran","net"]
                 ).properties(height=230), use_container_width=True)
 
@@ -2253,8 +2777,7 @@ with _t5:
                     alt.Chart(_ds).mark_arc(innerRadius=40).encode(
                         theta=alt.Theta(field="nominal",type="quantitative"),
                         color=alt.Color(field="sifat",type="nominal",
-                                        scale=alt.Scale(domain=["Wajib","Sukarela"],
-                                                        range=["#1565C0","#FF7043"])),
+                                        scale=alt.Scale(domain=["Wajib","Sukarela"],range=["#1565C0","#FF7043"])),
                         tooltip=["sifat","nominal"]
                     ).properties(height=270), use_container_width=True)
             else: st.write("Tidak ada data.")
@@ -2289,8 +2812,7 @@ with _t5:
                 _mm2[2].metric("Selisih",rp(abs(_tb2-_ta2)),
                     delta="Lebih Hemat" if _tb2<_ta2 else "Lebih Boros",
                     delta_color="normal" if _tb2<=_ta2 else "inverse")
-                _melt2 = _dcmp.melt(id_vars="Kategori",value_vars=[_la,_lb],
-                                     var_name="Periode",value_name="Nominal")
+                _melt2 = _dcmp.melt(id_vars="Kategori",value_vars=[_la,_lb],var_name="Periode",value_name="Nominal")
                 st.altair_chart(
                     alt.Chart(_melt2).mark_bar().encode(
                         x=alt.X("Kategori:N",title=""),
@@ -2301,11 +2823,58 @@ with _t5:
                 st.dataframe(_dcmp, use_container_width=True, hide_index=True)
         else: st.info("Belum ada data untuk dibandingkan.")
 
+    with _vt4:
+        st.markdown("**📅 Kalender Heatmap Pengeluaran**")
+        st.caption("Warna menunjukkan intensitas pengeluaran per hari. Hover untuk melihat nominal.")
+
+        if not df.empty:
+            _hm_thn_list = sorted(df["tahun"].unique().tolist())
+            _hm_c1, _hm_c2 = st.columns(2)
+            _hm_thn  = _hm_c1.selectbox("Tahun:", _hm_thn_list, index=len(_hm_thn_list)-1, key="hm_thn")
+            _hm_bulan_list = sorted(df[df["tahun"]==_hm_thn]["waktu_transaksi"].dt.month.unique().tolist())
+            _hm_bln  = _hm_c2.selectbox("Bulan:", [KAMUS_BULAN[m] for m in _hm_bulan_list],
+                                          index=len(_hm_bulan_list)-1, key="hm_bln")
+            _hm_bln_idx = [k for k,v in KAMUS_BULAN.items() if v==_hm_bln][0]
+            _df_hm   = df[(df["tahun"]==_hm_thn)&(df["waktu_transaksi"].dt.month==_hm_bln_idx)].copy()
+
+            # Statistik bulan ini
+            _hm_total  = _df_hm["nominal"].sum()
+            _hm_hari   = _df_hm["waktu_transaksi"].dt.date.nunique()
+            _hm_avg    = _hm_total / _hm_hari if _hm_hari > 0 else 0
+            _hm_max_day = None
+            if not _df_hm.empty:
+                _daily_grp  = _df_hm.groupby(_df_hm["waktu_transaksi"].dt.day)["nominal"].sum()
+                _hm_max_day = _daily_grp.idxmax()
+                _hm_max_val = _daily_grp.max()
+
+            _hm_mc1,_hm_mc2,_hm_mc3 = st.columns(3)
+            _hm_mc1.metric("Total Bulan", rp(_hm_total))
+            _hm_mc2.metric("Hari Aktif", f"{_hm_hari} hari")
+            _hm_mc3.metric("Rata-rata/Hari", rp(_hm_avg))
+
+            if _hm_max_day:
+                st.caption(f"🔴 Pengeluaran tertinggi: tanggal **{_hm_max_day}** ({rp(_hm_max_val)})")
+
+            st.markdown(f"#### {_hm_bln} {_hm_thn}")
+            _hm_html = render_heatmap(_df_hm, _hm_bln_idx, _hm_thn)
+            st.markdown(_hm_html, unsafe_allow_html=True)
+
+            # Top 5 hari terboros
+            if not _df_hm.empty:
+                st.markdown("**Top 5 Hari Terboros:**")
+                _top5 = _df_hm.groupby(_df_hm["waktu_transaksi"].dt.day)["nominal"].sum()\
+                               .nlargest(5).reset_index()
+                _top5.columns = ["Tanggal","Total (Rp)"]
+                _top5["Tanggal"] = _top5["Tanggal"].apply(lambda d: f"{d} {_hm_bln} {_hm_thn}")
+                st.dataframe(_top5, use_container_width=True, hide_index=True)
+        else:
+            st.info("Belum ada data transaksi untuk ditampilkan dalam kalender.")
+
 
 # ============================================================
-# TAB 6 — ANALISIS AI
+# TAB 10 — ANALISIS AI
 # ============================================================
-with _t6:
+with _t10:
     st.markdown("#### 🧠 Analisis AI Cerdas")
     if not _dfv.empty:
         st.markdown("##### 📈 Tren Historis")
@@ -2374,7 +2943,7 @@ with _t6:
             st.markdown(_bh, unsafe_allow_html=True)
             for _i,_n,_d in _bdgs: st.caption(f"{_i} **{_n}**: {_d}")
         else:
-            st.info("Belum ada badge. Terus catat transaksi untuk membuka pencapaian!")
+            st.info("Belum ada badge. Terus catat transaksi!")
 
         st.markdown("---")
         st.markdown("##### 📄 Ekspor PDF")
@@ -2393,9 +2962,9 @@ with _t6:
 
 
 # ============================================================
-# TAB 7 — CHAT AI
+# TAB 11 — CHAT AI
 # ============================================================
-with _t7:
+with _t11:
     st.markdown("#### 🤖 DanaBot — AI Keuangan Pribadi")
     st.caption("✨ Powered by Google Gemini 2.5 Flash (Free Tier)")
 
@@ -2404,8 +2973,7 @@ with _t7:
         st.warning("⚠️ Tambahkan `GEMINI_API_KEY` ke `.streamlit/secrets.toml` dan install `google-generativeai`.")
     else:
         for _msg in st.session_state.chat_history:
-            with st.chat_message(_msg["role"],
-                                  avatar="🤖" if _msg["role"]=="assistant" else "👤"):
+            with st.chat_message(_msg["role"], avatar="🤖" if _msg["role"]=="assistant" else "👤"):
                 st.markdown(_msg["content"])
 
         if _pr7 := st.chat_input("Tanya soal keuanganmu..."):
@@ -2417,22 +2985,27 @@ with _t7:
                 _kd7="\nPengeluaran per kategori:\n"+"".join(
                     f"  - {k}: {rp(v)}\n" for k,v in _dfv.groupby("kategori")["nominal"].sum().items())
 
+            _goals_sum = ""
+            if st.session_state.financial_goals:
+                _goals_sum = "\nFinancial Goals:\n"+"".join(
+                    f"  - {g['nama']}: {rp(g.get('terkumpul',0))}/{rp(g['target_nominal'])} ({g.get('terkumpul',0)/g['target_nominal']*100:.0f}%)\n"
+                    for g in st.session_state.financial_goals)
+
             _sys7=f"""Kamu adalah DanaBot, asisten keuangan pribadi dari DanaPintar AI.
-Bantu pengguna Indonesia menganalisis keuangan mereka dengan bahasa yang ramah dan saran actionable.
+Bantu pengguna Indonesia menganalisis keuangan dengan bahasa ramah dan saran actionable.
 Jangan mengarang data.
 
 DATA KEUANGAN:
 Periode: {_pil_bln} {_pil_thn}
 Anggaran: {rp(_bud)} | Pemasukan: {rp(_tot_msuk)} | Pengeluaran: {rp(_tot_pglr)}
-Target Tabungan: {rp(_tgt)} | Batas Belanja: {rp(_bts)} | Net Cash Flow: {rp(_net)}
-Health Score: {_hs}/100 ({_ls}){_kd7}"""
+Target Tabungan: {rp(_tgt)} | Net Cash Flow: {rp(_net)}
+Health Score: {_hs}/100 ({_ls}){_kd7}{_goals_sum}"""
 
             with st.chat_message("assistant",avatar="🤖"):
                 with st.spinner("DanaBot berpikir..."):
                     try:
                         genai.configure(api_key=GEMINI_API_KEY)
-                        _gh = [{"role":"user" if m["role"]=="user" else "model",
-                                 "parts":[m["content"]]}
+                        _gh = [{"role":"user" if m["role"]=="user" else "model","parts":[m["content"]]}
                                 for m in st.session_state.chat_history[:-1]]
                         _mdl = genai.GenerativeModel("gemini-2.5-flash",system_instruction=_sys7)
                         _rs  = _mdl.start_chat(history=_gh).send_message(_pr7)
@@ -2450,42 +3023,37 @@ Health Score: {_hs}/100 ({_ls}){_kd7}"""
 
 
 # ============================================================
-# TAB 8 — CHANGELOG
+# TAB 12 — CHANGELOG
 # ============================================================
-with _t8:
+with _t12:
     st.markdown("#### 📋 Riwayat Update — DanaPintar AI")
     st.caption("Semua perubahan yang dilakukan developer pada aplikasi ini.")
 
     for _cl in CHANGELOG:
         _is_latest = _cl == CHANGELOG[0]
-        _badge = ' <span style="background:#2E7D32;color:white;border-radius:20px;padding:2px 10px;font-size:0.75rem;font-weight:600;">LATEST</span>' if _is_latest else ""
-
+        _badge = (' <span style="background:#2E7D32;color:white;border-radius:20px;'
+                  'padding:2px 10px;font-size:0.75rem;font-weight:600;">LATEST</span>'
+                  if _is_latest else "")
         st.markdown(f"""
         <div style="border-left:4px solid {'#2E7D32' if _is_latest else '#94a3b8'};
                     padding:1rem 1.2rem;margin-bottom:1.2rem;border-radius:0 10px 10px 0;
-                    background:{'#f0fdf4' if _is_latest else '#f8fafc'};">
-            <div style="font-size:1.1rem;font-weight:700;color:{'#1B5E20' if _is_latest else '#334155'};">
+                    background:{'rgba(46,125,50,0.08)' if _is_latest else 'rgba(148,163,184,0.05)'};">
+            <div style="font-size:1.1rem;font-weight:700;color:{'#4ade80' if _is_latest else '#e2e8f0'};">
                 v{_cl['versi']} {_badge}
             </div>
-            <div style="font-size:0.82rem;color:#64748b;margin-bottom:0.6rem;">
-                🗓 {_cl['tanggal']}
-            </div>
+            <div style="font-size:0.82rem;color:#64748b;margin-bottom:0.6rem;">🗓 {_cl['tanggal']}</div>
         """, unsafe_allow_html=True)
-
         if _cl["fitur"]:
             st.markdown("**✨ Fitur Baru:**")
-            for _f in _cl["fitur"]:
-                st.markdown(f"- {_f}")
+            for _f in _cl["fitur"]: st.markdown(f"- {_f}")
         if _cl["perbaikan"]:
             st.markdown("**🔧 Perbaikan:**")
-            for _p in _cl["perbaikan"]:
-                st.markdown(f"- {_p}")
-
+            for _p in _cl["perbaikan"]: st.markdown(f"- {_p}")
         st.markdown("</div>", unsafe_allow_html=True)
-        if _cl != CHANGELOG[-1]: st.markdown("")
 
     st.markdown("---")
     st.caption("🛠️ DanaPintar AI dikembangkan oleh **Hendrawan Lotanto**")
+
 
 # ============================================================
 # FOOTER
@@ -2494,7 +3062,7 @@ st.markdown("---")
 st.markdown(
     "<p style='text-align:center;color:#2E7D32;font-size:14px;'>"
     "🛠️ Dibangun dengan ❤️ oleh <strong>Hendrawan Lotanto</strong> "
-    "— © 2026 DanaPintar AI Premium v3.0"
+    "— © 2026 DanaPintar AI Premium v4.0"
     "</p>",
     unsafe_allow_html=True
 )
