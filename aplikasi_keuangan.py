@@ -1793,8 +1793,8 @@ st.markdown("---")
 # ============================================================
 _TABS = ["📋 Pengeluaran","💵 Pemasukan","💸 Hutang/Piutang","👛 Wallet",
          "🎯 Goals","💎 Net Worth","📥 Import CSV","🏷️ Kategori",
-         "📊 Visualisasi","🧠 Analisis AI","🤖 Chat AI","📋 Changelog"]
-_t1,_t2,_t3,_t4,_t5,_t6,_t7,_t8,_t9,_t10,_t11,_t12 = st.tabs(_TABS)
+         "📊 Visualisasi","🧠 Analisis AI","🤖 Chat AI","📄 Laporan","📋 Changelog"]
+_t1,_t2,_t3,_t4,_t5,_t6,_t7,_t8,_t9,_t10,_t11,_t12,_t13 = st.tabs(_TABS)
 
 
 # ============================================================
@@ -3023,9 +3023,413 @@ Health Score: {_hs}/100 ({_ls}){_kd7}{_goals_sum}"""
 
 
 # ============================================================
-# TAB 12 — CHANGELOG
+# TAB 12 — LAPORAN VISUAL (PNG / JPEG / PDF)
 # ============================================================
 with _t12:
+    st.markdown("#### 📄 Laporan Keuangan Visual")
+    st.caption("Generate laporan keuangan dalam format gambar atau PDF — siap share ke WA atau disimpan.")
+
+    # ── Guard: require matplotlib ──
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as _mpatches
+        from matplotlib.patches import FancyBboxPatch as _FBP
+        import matplotlib.patheffects as _mpe
+        import matplotlib.colors as _mcolors
+        from matplotlib.colors import LinearSegmentedColormap as _LSC
+        import numpy as _np
+        from PIL import Image as _PILImage
+        import io as _io
+        _REPORT_OK = True
+    except ImportError:
+        _REPORT_OK = False
+
+    if not _REPORT_OK:
+        st.error("❌ Install `matplotlib` dan `Pillow` untuk fitur laporan:\n`pip install matplotlib pillow`")
+    else:
+        # ── Pilihan periode laporan ──
+        _rep_c1, _rep_c2, _rep_c3 = st.columns(3)
+        _rep_bln = _rep_c1.selectbox(
+            "Bulan Laporan:",
+            list(KAMUS_BULAN.values()),
+            index=wib().month - 1,
+            key="rep_bln"
+        )
+        _rep_thn_opts = sorted(df["tahun"].unique().tolist()) if not df.empty else [wib().year]
+        _rep_thn = _rep_c2.selectbox(
+            "Tahun:",
+            _rep_thn_opts,
+            index=len(_rep_thn_opts) - 1,
+            key="rep_thn"
+        )
+        _rep_fmt = _rep_c3.selectbox(
+            "Format Download:",
+            ["PNG (Gambar HD)", "JPEG (Foto, lebih kecil)", "PDF (Dokumen)"],
+            key="rep_fmt"
+        )
+
+        # ── Ambil data periode yang dipilih ──
+        _rep_ke   = f"{_rep_bln}_{_rep_thn}"
+        _rep_bud  = st.session_state.anggaran_terkunci.get(_rep_ke, 0)
+        _rep_tgt  = st.session_state.target_tabungan.get(_rep_ke, 0)
+
+        if not df.empty:
+            _rep_dfv = df[(df["bulan"] == _rep_bln) & (df["tahun"] == _rep_thn)].copy()
+        else:
+            _rep_dfv = pd.DataFrame()
+
+        if not df_pm.empty:
+            _rep_dfpv = df_pm[(df_pm["bulan"] == _rep_bln) & (df_pm["tahun"] == _rep_thn)].copy()
+        else:
+            _rep_dfpv = pd.DataFrame()
+
+        _rep_tot_pglr = _rep_dfv["nominal"].sum()    if not _rep_dfv.empty  else 0.0
+        _rep_tot_msuk = _rep_dfpv["nominal"].sum()   if not _rep_dfpv.empty else 0.0
+
+        # Health score untuk periode ini
+        _rep_sukarela = _rep_dfv[_rep_dfv["sifat"] == "Sukarela"]["nominal"].sum() if not _rep_dfv.empty else 0.0
+        _rep_hs, _    = health_score(_rep_tot_pglr, _rep_bud, _rep_tgt, _rep_sukarela,
+                                      _rep_dfv, df if not df.empty else pd.DataFrame())
+        _rep_ls, _, _ = label_hs(_rep_hs)
+        _rep_hs_str   = _rep_ls.replace("💚","").replace("💛","").replace("🟠","").replace("🔴","").strip()
+
+        # Kategori data
+        if not _rep_dfv.empty:
+            _rep_kat_data = _rep_dfv.groupby("kategori")["nominal"].sum().to_dict()
+        else:
+            _rep_kat_data = {}
+
+        # ── Preview info ──
+        _ri1, _ri2, _ri3, _ri4 = st.columns(4)
+        _ri1.metric("Pemasukan",    rp(_rep_tot_msuk))
+        _ri2.metric("Pengeluaran",  rp(_rep_tot_pglr))
+        _ri3.metric("Health Score", f"{_rep_hs}/100")
+        _ri4.metric("Kategori",     f"{len(_rep_kat_data)} pos")
+
+        if not _rep_kat_data:
+            st.info(f"ℹ️ Belum ada data pengeluaran untuk **{_rep_bln} {_rep_thn}**. Coba pilih periode lain.")
+
+        # ── RENDER FUNCTION (inline, using closure) ──
+        def _build_report_figure():
+            # ── Palette ──
+            _BG     = '#0f172a'
+            _BG2    = '#1e293b'
+            _BG3    = '#334155'
+            _ACC    = '#4ade80'
+            _ACC2   = '#16a34a'
+            _RED    = '#f87171'
+            _BLUE   = '#60a5fa'
+            _YEL    = '#fbbf24'
+            _PUR    = '#a78bfa'
+            _ORG    = '#fb923c'
+            _TXT    = '#e2e8f0'
+            _TXT2   = '#94a3b8'
+            _KAT_C  = {
+                'Makanan': _ACC, 'Transportasi': _BLUE,
+                'Hiburan/Gaya Hidup': _PUR, 'Kebutuhan Rumah/Kesehatan': _ORG,
+                'Tagihan Wajib': _RED, 'Lain-lain': '#64748b',
+            }
+
+            def _rp(n):  return f"Rp {n:,.0f}"
+            def _ty(y):  return 1.0 - y
+
+            def _rrect(ax, x, y, w, h, r=0.015, fc=_BG2, ec='none', lw=0, alpha=1.0, z=2):
+                box = _FBP((x, y), w, h,
+                    boxstyle=f"round,pad=0,rounding_size={r}",
+                    facecolor=_mcolors.to_rgba(fc, alpha),
+                    edgecolor=ec if ec != 'none' else 'none',
+                    linewidth=lw,
+                    transform=ax.transAxes, clip_on=False, zorder=z)
+                ax.add_patch(box)
+
+            def _pbar(ax, x, y, w, h, pct, fc, bc=_BG3, r=0.008, z=3):
+                _rrect(ax, x, y, w, h, r=r, fc=bc, z=z)
+                fw = max(0.002, min(pct / 100, 1.0)) * w
+                _rrect(ax, x, y, fw, h, r=r, fc=fc, z=z + 1)
+
+            cats   = list(_rep_kat_data.keys())
+            vals   = [float(_rep_kat_data[c]) for c in cats]
+            total  = sum(vals) or 1.0
+            c_list = [_KAT_C.get(c, '#64748b') for c in cats]
+
+            net_c  = _ACC if (_rep_tot_msuk - _rep_tot_pglr) >= 0 else _RED
+            batas  = max(0.0, _rep_bud - _rep_tgt)
+            sisa   = _rep_bud - _rep_tot_pglr
+            pct_b  = min(100.0, _rep_tot_pglr / batas * 100) if batas > 0 else 0.0
+            pb_clr = _ACC if pct_b < 70 else (_YEL if pct_b < 90 else _RED)
+            tab_a  = max(0.0, _rep_tot_msuk - _rep_tot_pglr)
+            tab_p  = min(999.0, tab_a / _rep_tgt * 100) if _rep_tgt > 0 else 0.0
+            tab_c  = _ACC if tab_p >= 100 else (_YEL if tab_p >= 50 else _RED)
+            hs_clr = _ACC if _rep_hs >= 80 else (_YEL if _rep_hs >= 60 else (_ORG if _rep_hs >= 40 else _RED))
+
+            fig = plt.figure(figsize=(10, 17.78), facecolor=_BG)
+            fig.patch.set_facecolor(_BG)
+            ax  = fig.add_axes([0, 0, 1, 1])
+            ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+            ax.set_facecolor(_BG); ax.axis('off')
+
+            # ── HEADER ──
+            cmap_h = _LSC.from_list('h', ['#1a3a2a', '#0d2a4a', '#0f172a'])
+            grad   = _np.linspace(0, 1, 100).reshape(1, -1)
+            ax.imshow(grad, aspect='auto', cmap=cmap_h, alpha=0.95,
+                      extent=[0, 1, _ty(0.11), 1], transform=ax.transAxes, zorder=0)
+            ax.text(0.055, _ty(0.038), 'DanaPintar AI',
+                    color=_ACC, fontsize=16, fontweight='bold',
+                    transform=ax.transAxes, zorder=5,
+                    path_effects=[_mpe.withStroke(linewidth=3, foreground='#0a1628')])
+            ax.text(0.055, _ty(0.070), 'Laporan Keuangan Bulanan',
+                    color=_TXT2, fontsize=8.5, transform=ax.transAxes, zorder=5)
+            ax.text(0.055, _ty(0.096), 'Dicetak otomatis oleh DanaPintar AI Premium',
+                    color='#475569', fontsize=7, transform=ax.transAxes, zorder=5)
+            _rrect(ax, 0.67, _ty(0.096), 0.295, 0.066, r=0.012, fc='#15803d', z=4)
+            ax.text(0.815, _ty(0.061), f"{_rep_bln} {_rep_thn}",
+                    color='white', fontsize=11, fontweight='bold',
+                    ha='center', transform=ax.transAxes, zorder=5)
+            ax.axhline(_ty(0.11), color=_ACC2, linewidth=2, alpha=0.5, zorder=3)
+
+            # ── USER + HEALTH SCORE ──
+            _pr_u  = st.session_state.profil
+            _nmu   = _pr_u.get("nama","").strip() or email_user.split("@")[0].title()
+            ax.text(0.055, _ty(0.118), _nmu,
+                    color=_TXT, fontsize=12, fontweight='bold', transform=ax.transAxes, zorder=3)
+            ax.text(0.055, _ty(0.144), email_user,
+                    color=_TXT2, fontsize=8, transform=ax.transAxes, zorder=3)
+            _rrect(ax, 0.62, _ty(0.166), 0.34, 0.048, r=0.014, fc=_BG2, ec=hs_clr, lw=1.5, z=3)
+            ax.text(0.640, _ty(0.141), 'Health Score',
+                    color=_TXT2, fontsize=7, transform=ax.transAxes, zorder=4)
+            ax.text(0.850, _ty(0.138), f"{_rep_hs}/100",
+                    color=hs_clr, fontsize=13, fontweight='bold',
+                    ha='center', transform=ax.transAxes, zorder=4)
+            ax.text(0.815, _ty(0.158), _rep_hs_str,
+                    color=hs_clr, fontsize=7.5, fontweight='bold',
+                    ha='center', transform=ax.transAxes, zorder=4)
+            ax.axhline(_ty(0.180), color=_BG3, linewidth=1, alpha=0.7)
+
+            # ── SUMMARY CARDS ──
+            _cards = [
+                ('Pemasukan',    _rp(_rep_tot_msuk),                    _ACC,  '#0d2a1a'),
+                ('Pengeluaran',  _rp(_rep_tot_pglr),                    _RED,  '#2a0d0d'),
+                ('Anggaran',     _rp(_rep_bud),                         _BLUE, '#0d1a2a'),
+                ('Net Cashflow', _rp(_rep_tot_msuk - _rep_tot_pglr),    net_c, '#0d2a1a' if (_rep_tot_msuk - _rep_tot_pglr) >= 0 else '#2a0d0d'),
+            ]
+            for i, (lbl, val, clr, bg) in enumerate(_cards):
+                col = i % 2; row = i // 2
+                cx  = 0.05 + col * (0.435 + 0.068)
+                cy  = 0.200 + row * (0.090 + 0.018)
+                _rrect(ax, cx, _ty(cy + 0.090), 0.435, 0.090, r=0.016, fc=bg, ec=clr, lw=1.2, z=3)
+                _rrect(ax, cx + 0.008, _ty(cy + 0.015), 0.419, 0.003, r=0.002, fc=clr, z=4)
+                ax.text(cx + 0.025, _ty(cy + 0.090*0.38), lbl,
+                        color=_TXT2, fontsize=7.5, transform=ax.transAxes, zorder=4)
+                ax.text(cx + 0.025, _ty(cy + 0.090*0.75), val,
+                        color=clr, fontsize=11.5, fontweight='bold', transform=ax.transAxes, zorder=4)
+
+            # ── BUDGET PROGRESS BAR ──
+            ax.text(0.055, _ty(0.430), 'Realisasi Anggaran Belanja',
+                    color=_TXT2, fontsize=8, transform=ax.transAxes)
+            ax.text(0.945, _ty(0.430), f"{pct_b:.0f}%",
+                    color=pb_clr, fontsize=9, fontweight='bold',
+                    ha='right', transform=ax.transAxes)
+            _pbar(ax, 0.055, _ty(0.456), 0.89, 0.017, pct_b, fc=pb_clr)
+            ax.text(0.055, _ty(0.474),
+                    f"Batas {_rp(batas)}  ·  Sisa {_rp(sisa)}  ·  Target tabungan {_rp(_rep_tgt)}",
+                    color='#64748b', fontsize=7, transform=ax.transAxes)
+            ax.axhline(_ty(0.492), color=_BG3, linewidth=1, alpha=0.7)
+
+            # ── BREAKDOWN TITLE ──
+            ax.text(0.055, _ty(0.504), 'Breakdown Pengeluaran',
+                    color=_TXT, fontsize=11, fontweight='bold', transform=ax.transAxes)
+            ax.text(0.055, _ty(0.530), f"Total {_rp(total)} untuk {len(cats)} kategori",
+                    color=_TXT2, fontsize=8, transform=ax.transAxes)
+
+            if cats:
+                # ── PIE CHART ──
+                pie_ax = fig.add_axes([0.03, 1 - 0.810, 0.38, 0.26])
+                pie_ax.set_facecolor(_BG)
+                pie_ax.set_aspect('equal')
+                wedges, _ = pie_ax.pie(
+                    vals, colors=c_list,
+                    wedgeprops=dict(width=0.42, edgecolor=_BG, linewidth=2.5),
+                    startangle=90, counterclock=False)
+                pie_ax.pie(vals,
+                    colors=[c+'44' for c in c_list],
+                    wedgeprops=dict(width=0.04, edgecolor='none'),
+                    startangle=90, counterclock=False, radius=1.08)
+                pie_ax.text(0,  0.07, _rp(total), color=_TXT, fontsize=9, fontweight='bold', ha='center')
+                pie_ax.text(0, -0.14, 'Total',    color=_TXT2, fontsize=7.5, ha='center')
+
+                # ── BAR CHART ──
+                bar_ax = fig.add_axes([0.44, 1 - 0.820, 0.54, 0.27])
+                bar_ax.set_facecolor(_BG)
+                sidx   = _np.argsort(vals)
+                sv     = [vals[i] for i in sidx]
+                sc     = [c_list[i] for i in sidx]
+                sn     = [cats[i] for i in sidx]
+                sp     = [v / total * 100 for v in sv]
+                mx_v   = max(sv) or 1
+                for j, (v, clr_j, n_j, p_j) in enumerate(zip(sv, sc, sn, sp)):
+                    bar_ax.barh(j, mx_v * 1.3, color=_BG3, height=0.55, alpha=0.5, edgecolor='none', zorder=1)
+                    bar_ax.barh(j, v, color=clr_j, height=0.55, alpha=0.88, edgecolor='none', zorder=2)
+                    bar_ax.text(v + mx_v * 0.04, j,
+                                f"Rp {v/1e3:.0f}k  {p_j:.0f}%",
+                                va='center', color=clr_j, fontsize=7, fontweight='bold', zorder=3)
+                bar_ax.set_yticks(_np.arange(len(sn)))
+                bar_ax.set_yticklabels([n.split('/')[0][:13] for n in sn], fontsize=7, color=_TXT2)
+                bar_ax.tick_params(left=False, bottom=False)
+                bar_ax.set_xlim(0, mx_v * 1.7)
+                bar_ax.set_ylim(-0.5, len(cats) - 0.5)
+                bar_ax.xaxis.set_visible(False)
+                for sp_ in bar_ax.spines.values(): sp_.set_visible(False)
+                bar_ax.set_facecolor(_BG)
+
+                # ── DETAIL LIST ──
+                y_list = 0.820
+                ax.axhline(_ty(y_list - 0.008), color=_BG3, linewidth=1, alpha=0.6)
+                ax.text(0.055, _ty(y_list + 0.012), 'Detail per Kategori',
+                        color=_TXT2, fontsize=8, fontweight='bold', transform=ax.transAxes)
+                sidx_d = _np.argsort(vals)[::-1]
+                for j, i in enumerate(sidx_d):
+                    cat_j = cats[i]; val_j = vals[i]; clr_j = c_list[i]
+                    pct_j = val_j / total * 100
+                    ry    = y_list + 0.038 + j * 0.046
+                    _rrect(ax, 0.055, _ty(ry + 0.036), 0.89, 0.038, r=0.008, fc=_BG2, z=2)
+                    dot   = plt.Circle((0.08, _ty(ry + 0.018)), 0.010,
+                                       color=clr_j, transform=ax.transAxes, zorder=4, alpha=0.9)
+                    ax.add_patch(dot)
+                    ax.text(0.105, _ty(ry + 0.015), cat_j,
+                            color=_TXT, fontsize=8, transform=ax.transAxes, zorder=4)
+                    _rrect(ax, 0.53, _ty(ry + 0.030), 0.09, 0.026, r=0.006, fc=clr_j+'33', z=3)
+                    ax.text(0.575, _ty(ry + 0.017), f"{pct_j:.1f}%",
+                            color=clr_j, fontsize=7.5, fontweight='bold',
+                            ha='center', transform=ax.transAxes, zorder=4)
+                    ax.text(0.93, _ty(ry + 0.015), _rp(val_j),
+                            color=_TXT, fontsize=8.5, fontweight='bold',
+                            ha='right', transform=ax.transAxes, zorder=4)
+                    _pbar(ax, 0.105, _ty(ry + 0.034), 0.40, 0.007, pct_j, fc=clr_j, bc=_BG3, r=0.004)
+
+                # ── TABUNGAN CARD ──
+                y_tab = y_list + 0.038 + len(cats) * 0.046 + 0.020
+                ax.axhline(_ty(y_tab - 0.008), color=_BG3, linewidth=1, alpha=0.6)
+                _rrect(ax, 0.055, _ty(y_tab + 0.068), 0.89, 0.068,
+                       r=0.014, fc='#0d2a1a', ec=_ACC2, lw=1.2, z=3)
+                _rrect(ax, 0.055, _ty(y_tab + 0.068), 0.012, 0.068, r=0.008, fc=_ACC2, z=4)
+                ax.text(0.09, _ty(y_tab + 0.022), 'Tabungan Bulan Ini',
+                        color=_ACC, fontsize=9, fontweight='bold', transform=ax.transAxes, zorder=4)
+                ax.text(0.09, _ty(y_tab + 0.048),
+                        f"{_rp(tab_a)}  dari target  {_rp(_rep_tgt)}",
+                        color=_TXT2, fontsize=8, transform=ax.transAxes, zorder=4)
+                ax.text(0.90, _ty(y_tab + 0.030), f"{tab_p:.0f}%",
+                        color=tab_c, fontsize=18, fontweight='bold',
+                        ha='right', transform=ax.transAxes, zorder=4)
+                _pbar(ax, 0.09, _ty(y_tab + 0.060), 0.72, 0.010, tab_p, fc=tab_c, bc=_BG3, r=0.004)
+
+                # ── FOOTER ──
+                y_foot = y_tab + 0.090
+            else:
+                # No data — show empty state message
+                ax.text(0.5, _ty(0.65), 'Belum ada data pengeluaran',
+                        color=_TXT2, fontsize=12, ha='center', transform=ax.transAxes)
+                ax.text(0.5, _ty(0.68), f'untuk periode {_rep_bln} {_rep_thn}',
+                        color='#475569', fontsize=9, ha='center', transform=ax.transAxes)
+                y_foot = 0.72
+
+            ax.axhline(_ty(y_foot), color=_BG3, linewidth=1, alpha=0.6)
+            ax.text(0.5, _ty(y_foot + 0.020),
+                    'DanaPintar AI Premium  |  Laporan Keuangan Otomatis',
+                    color=_TXT2, fontsize=7.5, ha='center', transform=ax.transAxes)
+            ax.text(0.5, _ty(y_foot + 0.038),
+                    'Dibuat secara otomatis  ·  Bukan pengganti saran keuangan profesional',
+                    color='#475569', fontsize=6.5, ha='center', transform=ax.transAxes)
+            ax.text(0.5, 0.5, 'DanaPintar AI',
+                    color='white', fontsize=60, fontweight='bold',
+                    ha='center', va='center', alpha=0.020,
+                    rotation=30, transform=ax.transAxes, zorder=0)
+
+            plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+            return fig
+
+        # ── GENERATE BUTTON ──
+        if st.button("🎨 Generate Laporan", use_container_width=True, key="btn_gen_report", type="primary"):
+            with st.spinner("Membuat laporan visual... ⏳"):
+                try:
+                    _fig_rep = _build_report_figure()
+                    _BG_COL  = '#0f172a'
+
+                    # Buffer untuk tiap format
+                    _buf_png = _io.BytesIO()
+                    _fig_rep.savefig(_buf_png, format='png', dpi=120, bbox_inches='tight',
+                                     facecolor=_BG_COL, pad_inches=0.0)
+                    _buf_png.seek(0)
+
+                    _buf_jpg = _io.BytesIO()
+                    _pil_img = _PILImage.open(_buf_png).convert('RGB')
+                    _pil_img.save(_buf_jpg, 'JPEG', quality=95)
+                    _buf_jpg.seek(0)
+                    _buf_png.seek(0)  # reset for preview
+
+                    _buf_pdf = _io.BytesIO()
+                    _fig_rep.savefig(_buf_pdf, format='pdf', bbox_inches='tight',
+                                     facecolor=_BG_COL, pad_inches=0.0)
+                    _buf_pdf.seek(0)
+
+                    plt.close(_fig_rep)
+
+                    st.session_state["_report_png"] = _buf_png.read()
+                    st.session_state["_report_jpg"] = _buf_jpg.read()
+                    st.session_state["_report_pdf"] = _buf_pdf.read()
+                    st.session_state["_report_label"] = f"{_rep_bln}_{_rep_thn}"
+                    st.success("✅ Laporan berhasil dibuat!")
+
+                except Exception as _re:
+                    st.error(f"❌ Gagal generate laporan: {_re}")
+
+        # ── PREVIEW + DOWNLOAD ──
+        if st.session_state.get("_report_png"):
+            _lbl = st.session_state.get("_report_label", "laporan")
+            st.markdown("---")
+            st.markdown("**👀 Preview Laporan:**")
+            st.image(st.session_state["_report_png"], use_container_width=True,
+                     caption=f"Laporan Keuangan {_lbl.replace('_',' ')}")
+
+            st.markdown("**⬇️ Download:**")
+            _dl1, _dl2, _dl3 = st.columns(3)
+            with _dl1:
+                st.download_button(
+                    "🖼️ Download PNG",
+                    data=st.session_state["_report_png"],
+                    file_name=f"DanaPintar_{_lbl}.png",
+                    mime="image/png",
+                    use_container_width=True, key="dl_png"
+                )
+            with _dl2:
+                st.download_button(
+                    "📷 Download JPEG",
+                    data=st.session_state["_report_jpg"],
+                    file_name=f"DanaPintar_{_lbl}.jpg",
+                    mime="image/jpeg",
+                    use_container_width=True, key="dl_jpg"
+                )
+            with _dl3:
+                st.download_button(
+                    "📄 Download PDF",
+                    data=st.session_state["_report_pdf"],
+                    file_name=f"DanaPintar_{_lbl}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True, key="dl_pdf"
+                )
+
+            st.caption("💡 PNG/JPEG cocok untuk share WA, Instagram Stories, atau arsip foto. PDF untuk disimpan/dicetak.")
+
+            if st.button("🔄 Reset Laporan", key="btn_reset_report"):
+                for _k in ["_report_png","_report_jpg","_report_pdf","_report_label"]:
+                    st.session_state.pop(_k, None)
+                st.rerun()
+
+
+# ============================================================
+# ============================================================
+with _t13:
     st.markdown("#### 📋 Riwayat Update — DanaPintar AI")
     st.caption("Semua perubahan yang dilakukan developer pada aplikasi ini.")
 
