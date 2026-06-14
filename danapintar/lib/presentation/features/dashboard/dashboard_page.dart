@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../domain/notifikasi.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../providers/providers.dart';
 import '../../widgets/health_card.dart';
@@ -37,6 +38,8 @@ class DashboardPage extends ConsumerWidget {
         children: [
           _PeriodeSelector(month: sel.month, year: sel.year),
           const SizedBox(height: 12),
+          ...data.notifikasi.map((n) => _NotifCard(n)),
+          if (data.notifikasi.isNotEmpty) const SizedBox(height: 4),
           _BalanceCard(data: data),
           const SizedBox(height: 16),
           _MetricsRow(data: data),
@@ -315,6 +318,43 @@ class _SectionTitle extends StatelessWidget {
       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
     ),
   );
+}
+
+class _NotifCard extends StatelessWidget {
+  const _NotifCard(this.notif);
+  final Notif notif;
+
+  Color get _color => switch (notif.level) {
+    NotifLevel.sukses => AppColors.accent,
+    NotifLevel.info => AppColors.income,
+    NotifLevel.peringatan => const Color(0xFFF59E0B),
+    NotifLevel.bahaya => AppColors.expense,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _color.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Text(notif.ikon, style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              notif.pesan,
+              style: const TextStyle(fontSize: 12.5, color: AppColors.text),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _EmptyHint extends StatelessWidget {

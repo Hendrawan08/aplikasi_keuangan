@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/formatters.dart';
@@ -115,3 +116,17 @@ final selectedPeriodeProvider = StateProvider<Periode>((ref) {
   final now = DateTime.now();
   return (month: now.month, year: now.year);
 });
+
+// ── Onboarding ────────────────────────────────────────────────
+const _kOnboardingKey = 'onboarding_done';
+
+final onboardingDoneProvider = FutureProvider<bool>((ref) async {
+  final p = await SharedPreferences.getInstance();
+  return p.getBool(_kOnboardingKey) ?? false;
+});
+
+Future<void> selesaikanOnboarding(WidgetRef ref) async {
+  final p = await SharedPreferences.getInstance();
+  await p.setBool(_kOnboardingKey, true);
+  ref.invalidate(onboardingDoneProvider);
+}

@@ -7,21 +7,27 @@ ke Flutter, dengan arsitektur **layered + tested** dan penyimpanan **100% lokal 
 
 ## Status
 
-**Fase 0 — Pondasi** ✅ · **Fase 1 — MVP Core** ✅
+**Fase 0 — Pondasi** ✅ · **Fase 1 — MVP Core** ✅ · **Fase 2 — Fitur Lengkap** ✅
 
 Sudah berfungsi:
 - Catat / edit / hapus pengeluaran & pemasukan (presisi jam-menit)
 - Anggaran terkunci & target tabungan per bulan, batas belanja
 - Multi-wallet (dompet)
 - Dashboard hidup: kartu saldo, Financial Health Score, metrik, badge,
-  transaksi terakhir, pemilih bulan
-- Grafik: donut Wajib vs Sukarela + breakdown per kategori (`fl_chart`)
+  notifikasi in-app, transaksi terakhir, pemilih bulan
+- 🎯 Financial Goals, 💸 Hutang/Piutang, 💎 Net Worth tracker
+- 🏷️ Custom kategori (terintegrasi ke form), 📂 budget per kategori,
+  🔄 transaksi berulang
+- 📊 Visualisasi: heatmap kalender, komparatif bulan, tren bulanan,
+  donut Wajib vs Sukarela, breakdown kategori (`fl_chart`)
+- 📥 Import CSV mutasi bank · 📄 Laporan PDF · 📋 Changelog
+- 🎉 Onboarding wizard pengguna baru
 - **Backup & Restore ke file** (ekspor via share, impor via file picker)
-- Domain layer murni + unit test (health score, badge, jam rawan, aturan anggaran)
+- Domain layer murni + unit test (health score, badge, jam rawan, aturan
+  anggaran, notifikasi)
 
-Belum (Fase 2+): Goals, Net Worth, Hutang/Piutang, custom kategori, budget per
-kategori, recurring, import CSV, heatmap, laporan PDF, onboarding. Fase 3: AI
-(Scan Struk & DanaBot) via Edge Function. Lihat `../docs/RENCANA_MIGRASI_FLUTTER.md`.
+Belum (Fase 3): AI — Scan Struk & DanaBot via Supabase Edge Function.
+Lihat `../docs/RENCANA_MIGRASI_FLUTTER.md`.
 
 ## Struktur
 

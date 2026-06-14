@@ -6,8 +6,10 @@ import '../../data/mappers.dart';
 import '../../domain/badges.dart';
 import '../../domain/budget_rules.dart';
 import '../../domain/health_score.dart';
+import '../../domain/impulse_detector.dart';
 import '../../domain/models.dart';
 import '../../domain/monthly_analytics.dart';
+import '../../domain/notifikasi.dart';
 import 'providers.dart';
 
 /// Ringkasan keuangan periode terpilih, hasil komputasi domain.
@@ -24,6 +26,7 @@ class DashboardData {
   final HealthResult health;
   final HealthLabel label;
   final List<Badge> badges;
+  final List<Notif> notifikasi;
   final Map<String, int> pengeluaranPerKategori;
   final List<TransaksiData> transaksiBulan;
   final List<PemasukanData> pemasukanBulan;
@@ -41,6 +44,7 @@ class DashboardData {
     required this.health,
     required this.label,
     required this.badges,
+    required this.notifikasi,
     required this.pengeluaranPerKategori,
     required this.transaksiBulan,
     required this.pemasukanBulan,
@@ -115,6 +119,14 @@ final dashboardProvider = Provider<DashboardData>((ref) {
       transaksi: allViews,
       budgetByMonth: budgets,
       targetByMonth: targets,
+    ),
+    notifikasi: generateNotifikasi(
+      anggaranTerkunci: anggaran > 0,
+      targetAda: target > 0,
+      totalPengeluaran: totalPglr,
+      batasBelanja: batas,
+      belanjaJamRawan: totalBelanjaJamRawan(txViews),
+      sukarelaBerlebihan: sukarelaBerlebihan(sukarela, anggaran),
     ),
     pengeluaranPerKategori: perKategori,
     transaksiBulan: txBulan,
