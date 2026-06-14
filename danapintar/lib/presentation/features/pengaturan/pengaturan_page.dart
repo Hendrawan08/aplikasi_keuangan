@@ -1,6 +1,12 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
@@ -77,9 +83,93 @@ class PengaturanPage extends ConsumerWidget {
             ],
           ),
         ),
+        const SizedBox(height: 12),
+        _Card(
+          title: '💾 Data & Backup',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Data tersimpan 100% di HP ini. Buat backup berkala agar tidak '
+                'hilang saat ganti/reset HP.',
+                style: TextStyle(color: AppColors.text2, fontSize: 12),
+              ),
+              const SizedBox(height: 10),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.upload_file, size: 16),
+                label: const Text('Backup (Ekspor ke file)'),
+                onPressed: () => _backup(context, ref),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.download, size: 16),
+                label: const Text('Restore (Impor dari file)'),
+                onPressed: () => _restore(context, ref),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
+
+  Future<void> _backup(BuildContext context, WidgetRef ref) async {
+    try {
+      final json = await ref.read(backupServiceProvider).exportJson();
+      final dir = await getTemporaryDirectory();
+      final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+      final file = File('${dir.path}/danapintar_backup_$stamp.json');
+      await file.writeAsString(json);
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: 'Backup DanaPintar — simpan file ini di tempat aman.',
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) _snack(context, '❌ Gagal backup: $e');
+    }
+  }
+
+  Future<void> _restore(BuildContext context, WidgetRef ref) async {
+    final res = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    final path = res?.files.single.path;
+    if (path == null) return;
+    if (!context.mounted) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Restore data?'),
+        content: const Text(
+            'Seluruh data saat ini akan DIGANTI dengan isi file backup. '
+            'Tindakan ini tidak bisa dibatalkan.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Restore')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      final content = await File(path).readAsString();
+      await ref.read(backupServiceProvider).importJson(content);
+      if (context.mounted) _snack(context, '✅ Data berhasil dipulihkan.');
+    } catch (e) {
+      if (context.mounted) _snack(context, '❌ Gagal restore: $e');
+    }
+  }
+
+  void _snack(BuildContext context, String msg) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(msg)));
 
   Widget _kv(String k, String v) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),

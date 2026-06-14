@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../../data/backup/backup_service.dart';
 import '../../data/local/database.dart';
 import '../../data/repositories/budget_repository.dart';
 import '../../data/repositories/pemasukan_repository.dart';
@@ -17,6 +18,8 @@ final walletRepoProvider =
     Provider((ref) => WalletRepository(ref.watch(databaseProvider)));
 final budgetRepoProvider =
     Provider((ref) => BudgetRepository(ref.watch(databaseProvider)));
+final backupServiceProvider =
+    Provider((ref) => BackupService(ref.watch(databaseProvider)));
 
 // ── Stream data (reaktif dari DB) ─────────────────────────────
 final transaksiListProvider = StreamProvider<List<TransaksiData>>(
