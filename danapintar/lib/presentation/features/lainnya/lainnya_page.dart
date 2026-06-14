@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../goals/goals_page.dart';
 import '../hutang/hutang_page.dart';
+import '../kategori/kategori_page.dart';
+import '../networth/networth_page.dart';
 
 /// Hub menu fitur tambahan.
 class LainnyaPage extends StatelessWidget {
@@ -21,6 +23,18 @@ class LainnyaPage extends StatelessWidget {
         'Hutang & Piutang',
         'Lacak pinjaman & tagihan',
         () => const HutangPage(),
+      ),
+      _MenuItem(
+        '💎',
+        'Net Worth',
+        'Aset vs liabilitas & tren',
+        () => const NetWorthPage(),
+      ),
+      _MenuItem(
+        '🏷️',
+        'Custom Kategori',
+        'Tambah kategori sendiri',
+        () => const KategoriPage(),
       ),
     ];
     return ListView(

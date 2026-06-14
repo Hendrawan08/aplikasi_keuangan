@@ -111,6 +111,10 @@ class _TransaksiFormPageState extends ConsumerState<TransaksiFormPage> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
+    final kategoriList = ref.watch(kategoriPengeluaranProvider);
+    final kategoriItems = kategoriList.contains(_kategori)
+        ? kategoriList
+        : [_kategori, ...kategoriList];
     return Scaffold(
       appBar: AppBar(
         title: Text(isEdit ? 'Edit Pengeluaran' : 'Catat Pengeluaran'),
@@ -144,7 +148,7 @@ class _TransaksiFormPageState extends ConsumerState<TransaksiFormPage> {
             DropdownButtonFormField<String>(
               initialValue: _kategori,
               decoration: const InputDecoration(labelText: 'Kategori'),
-              items: dropdownItems(kategoriPengeluaranDefault),
+              items: dropdownItems(kategoriItems),
               onChanged: (v) => setState(() => _kategori = v!),
             ),
             const SizedBox(height: 12),

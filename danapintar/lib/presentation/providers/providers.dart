@@ -1,11 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
+import '../../core/constants/app_constants.dart';
 import '../../data/backup/backup_service.dart';
 import '../../data/local/database.dart';
 import '../../data/repositories/budget_repository.dart';
+import '../../data/repositories/custom_kategori_repository.dart';
 import '../../data/repositories/goal_repository.dart';
 import '../../data/repositories/hutang_repository.dart';
+import '../../data/repositories/networth_repository.dart';
 import '../../data/repositories/pemasukan_repository.dart';
 import '../../data/repositories/transaksi_repository.dart';
 import '../../data/repositories/wallet_repository.dart';
@@ -29,6 +32,12 @@ final goalRepoProvider = Provider(
 );
 final hutangRepoProvider = Provider(
   (ref) => HutangRepository(ref.watch(databaseProvider)),
+);
+final networthRepoProvider = Provider(
+  (ref) => NetworthRepository(ref.watch(databaseProvider)),
+);
+final customKategoriRepoProvider = Provider(
+  (ref) => CustomKategoriRepository(ref.watch(databaseProvider)),
 );
 final backupServiceProvider = Provider(
   (ref) => BackupService(ref.watch(databaseProvider)),
@@ -56,6 +65,30 @@ final goalListProvider = StreamProvider<List<FinancialGoal>>(
 final hutangListProvider = StreamProvider<List<HutangPiutangData>>(
   (ref) => ref.watch(hutangRepoProvider).watchAll(),
 );
+final networthListProvider = StreamProvider<List<NetworthHistoryData>>(
+  (ref) => ref.watch(networthRepoProvider).watchAll(),
+);
+final customKategoriListProvider = StreamProvider<List<CustomKategoriData>>(
+  (ref) => ref.watch(customKategoriRepoProvider).watchAll(),
+);
+
+// Kategori gabungan: default + custom (dipakai dropdown form).
+final kategoriPengeluaranProvider = Provider<List<String>>((ref) {
+  final custom = ref.watch(customKategoriListProvider).value ?? const [];
+  final extra = custom
+      .where((k) => k.tipe == 'pengeluaran')
+      .map((k) => k.nama)
+      .where((n) => !kategoriPengeluaranDefault.contains(n));
+  return [...kategoriPengeluaranDefault, ...extra];
+});
+final kategoriPemasukanProvider = Provider<List<String>>((ref) {
+  final custom = ref.watch(customKategoriListProvider).value ?? const [];
+  final extra = custom
+      .where((k) => k.tipe == 'pemasukan')
+      .map((k) => k.nama)
+      .where((n) => !kategoriPemasukanDefault.contains(n));
+  return [...kategoriPemasukanDefault, ...extra];
+});
 
 // ── Periode terpilih (bulan & tahun) ──────────────────────────
 typedef Periode = ({int month, int year});

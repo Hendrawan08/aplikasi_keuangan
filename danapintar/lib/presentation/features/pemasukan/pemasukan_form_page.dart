@@ -61,6 +61,10 @@ class _PemasukanFormPageState extends ConsumerState<PemasukanFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    final kategoriList = ref.watch(kategoriPemasukanProvider);
+    final kategoriItems = kategoriList.contains(_kategori)
+        ? kategoriList
+        : [_kategori, ...kategoriList];
     return Scaffold(
       appBar: AppBar(title: const Text('Catat Pemasukan')),
       body: Form(
@@ -92,7 +96,7 @@ class _PemasukanFormPageState extends ConsumerState<PemasukanFormPage> {
             DropdownButtonFormField<String>(
               initialValue: _kategori,
               decoration: const InputDecoration(labelText: 'Kategori'),
-              items: dropdownItems(kategoriPemasukanDefault),
+              items: dropdownItems(kategoriItems),
               onChanged: (v) => setState(() => _kategori = v!),
             ),
             const SizedBox(height: 12),
