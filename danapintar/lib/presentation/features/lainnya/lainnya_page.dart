@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../budget_kategori/budget_kategori_page.dart';
+import '../changelog/changelog_page.dart';
 import '../goals/goals_page.dart';
 import '../hutang/hutang_page.dart';
 import '../kategori/kategori_page.dart';
 import '../networth/networth_page.dart';
 import '../recurring/recurring_page.dart';
+import '../visualisasi/visualisasi_page.dart';
 
 /// Hub menu fitur tambahan.
 class LainnyaPage extends StatelessWidget {
@@ -49,6 +51,18 @@ class LainnyaPage extends StatelessWidget {
         'Transaksi Berulang',
         'Template transaksi rutin',
         () => const RecurringPage(),
+      ),
+      _MenuItem(
+        '📊',
+        'Visualisasi',
+        'Heatmap, komparatif & tren',
+        () => const VisualisasiPage(),
+      ),
+      _MenuItem(
+        '📋',
+        'Changelog',
+        'Riwayat perubahan aplikasi',
+        () => const ChangelogPage(),
       ),
     ];
     return ListView(
