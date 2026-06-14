@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/form_utils.dart';
 import '../../providers/providers.dart';
 
 /// Form catat pemasukan.
@@ -29,16 +30,32 @@ class _PemasukanFormPageState extends ConsumerState<PemasukanFormPage> {
 
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
-    final nominal = int.parse(_nominal.text.replaceAll(RegExp(r'[^0-9]'), ''));
+    final nominal = parseNominal(_nominal.text);
     final now = DateTime.now();
-    final waktu = DateTime(_tanggal.year, _tanggal.month, _tanggal.day,
-        now.hour, now.minute);
-    await ref.read(pemasukanRepoProvider).tambah(
-          sumber: _sumber.text.trim(),
-          nominal: nominal,
-          kategori: _kategori,
-          waktu: waktu,
-        );
+    final waktu = DateTime(
+      _tanggal.year,
+      _tanggal.month,
+      _tanggal.day,
+      now.hour,
+      now.minute,
+    );
+    try {
+      await ref
+          .read(pemasukanRepoProvider)
+          .tambah(
+            sumber: _sumber.text.trim(),
+            nominal: nominal,
+            kategori: _kategori,
+            waktu: waktu,
+          );
+    } catch (err) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('❌ Gagal menyimpan: $err')));
+      }
+      return;
+    }
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -54,7 +71,9 @@ class _PemasukanFormPageState extends ConsumerState<PemasukanFormPage> {
             TextFormField(
               controller: _sumber,
               decoration: const InputDecoration(
-                  labelText: 'Sumber', hintText: 'Mis. Gaji Juni'),
+                labelText: 'Sumber',
+                hintText: 'Mis. Gaji Juni',
+              ),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
             ),
@@ -64,27 +83,24 @@ class _PemasukanFormPageState extends ConsumerState<PemasukanFormPage> {
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: const InputDecoration(
-                  labelText: 'Nominal (Rp)', prefixText: 'Rp '),
-              validator: (v) {
-                final n = int.tryParse(v?.replaceAll(RegExp('[^0-9]'), '') ?? '');
-                if (n == null || n <= 0) return 'Nominal tidak valid';
-                return null;
-              },
+                labelText: 'Nominal (Rp)',
+                prefixText: 'Rp ',
+              ),
+              validator: validatorNominal,
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: _kategori,
               decoration: const InputDecoration(labelText: 'Kategori'),
-              items: kategoriPemasukanDefault
-                  .map((k) => DropdownMenuItem(value: k, child: Text(k)))
-                  .toList(),
+              items: dropdownItems(kategoriPemasukanDefault),
               onChanged: (v) => setState(() => _kategori = v!),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               icon: const Icon(Icons.calendar_today, size: 16),
               label: Text(
-                  '${_tanggal.day} ${kamusBulan[_tanggal.month]} ${_tanggal.year}'),
+                '${_tanggal.day} ${kamusBulan[_tanggal.month]} ${_tanggal.year}',
+              ),
               onPressed: () async {
                 final d = await showDatePicker(
                   context: context,

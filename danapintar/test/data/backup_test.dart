@@ -7,18 +7,28 @@ import 'package:danapintar/data/local/database.dart';
 void main() {
   test('export → import memulihkan seluruh data', () async {
     final db1 = AppDatabase.forTesting(NativeDatabase.memory());
-    await db1.into(db1.transaksi).insert(TransaksiCompanion.insert(
-          id: 't1',
-          catatan: 'Kopi',
-          nominal: 25000,
-          kategori: 'Makanan',
-          sifat: 'Sukarela',
-          waktuTransaksi: DateTime(2026, 6, 14, 9, 30),
-        ));
-    await db1.into(db1.wallets).insert(
-        WalletsCompanion.insert(id: 'w1', nama: 'Dompet', tipe: '💵 Cash'));
-    await db1.into(db1.budgets).insert(
-        BudgetsCompanion.insert(bulanKey: 'Juni_2026', nominal: 1000000));
+    await db1
+        .into(db1.transaksi)
+        .insert(
+          TransaksiCompanion.insert(
+            id: 't1',
+            catatan: 'Kopi',
+            nominal: 25000,
+            kategori: 'Makanan',
+            sifat: 'Sukarela',
+            waktuTransaksi: DateTime(2026, 6, 14, 9, 30),
+          ),
+        );
+    await db1
+        .into(db1.wallets)
+        .insert(
+          WalletsCompanion.insert(id: 'w1', nama: 'Dompet', tipe: '💵 Cash'),
+        );
+    await db1
+        .into(db1.budgets)
+        .insert(
+          BudgetsCompanion.insert(bulanKey: 'Juni_2026', nominal: 1000000),
+        );
 
     final json = await BackupService(db1).exportJson();
     await db1.close();
@@ -45,14 +55,18 @@ void main() {
 
   test('import idempoten (tidak menggandakan data)', () async {
     final db1 = AppDatabase.forTesting(NativeDatabase.memory());
-    await db1.into(db1.transaksi).insert(TransaksiCompanion.insert(
-          id: 't1',
-          catatan: 'A',
-          nominal: 1000,
-          kategori: 'Makanan',
-          sifat: 'Wajib',
-          waktuTransaksi: DateTime(2026, 6, 1),
-        ));
+    await db1
+        .into(db1.transaksi)
+        .insert(
+          TransaksiCompanion.insert(
+            id: 't1',
+            catatan: 'A',
+            nominal: 1000,
+            kategori: 'Makanan',
+            sifat: 'Wajib',
+            waktuTransaksi: DateTime(2026, 6, 1),
+          ),
+        );
     final json = await BackupService(db1).exportJson();
 
     // Impor dua kali ke DB yang sama → tetap 1 baris (insertOrReplace).

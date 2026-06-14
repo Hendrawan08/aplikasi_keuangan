@@ -13,13 +13,6 @@ final NumberFormat _rupiah = NumberFormat.currency(
 
 String rp(num n) => _rupiah.format(n);
 
-/// Waktu sekarang dalam zona WIB (Asia/Jakarta, UTC+7).
-/// Komponen tanggal/jam dapat dibaca langsung dari nilai yang dikembalikan.
-DateTime wibNow() => DateTime.now().toUtc().add(wibOffset);
-
-/// Ubah [utc] (atau waktu apa pun) menjadi komponen dinding waktu WIB.
-DateTime toWib(DateTime t) => t.toUtc().add(wibOffset);
-
 /// Kunci bulan: "{NamaBulan}_{tahun}", mis. "Mei_2026".
 /// Port dari pola `f"{_bln}_{_thn}"` di kode Python.
 String bulanKey(int month, int year) => '${kamusBulan[month]}_$year';

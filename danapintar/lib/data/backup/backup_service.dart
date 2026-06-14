@@ -20,10 +20,12 @@ class BackupService {
       'version': schemaVersion,
       'exportedAt': DateTime.now().toIso8601String(),
       'tables': {
-        'profiles':
-            (await _db.select(_db.profiles).get()).map((e) => e.toJson()).toList(),
-        'budgets':
-            (await _db.select(_db.budgets).get()).map((e) => e.toJson()).toList(),
+        'profiles': (await _db.select(_db.profiles).get())
+            .map((e) => e.toJson())
+            .toList(),
+        'budgets': (await _db.select(_db.budgets).get())
+            .map((e) => e.toJson())
+            .toList(),
         'savings_goals': (await _db.select(_db.savingsGoals).get())
             .map((e) => e.toJson())
             .toList(),
@@ -33,8 +35,9 @@ class BackupService {
         'custom_kategori': (await _db.select(_db.customKategori).get())
             .map((e) => e.toJson())
             .toList(),
-        'wallets':
-            (await _db.select(_db.wallets).get()).map((e) => e.toJson()).toList(),
+        'wallets': (await _db.select(_db.wallets).get())
+            .map((e) => e.toJson())
+            .toList(),
         'financial_goals': (await _db.select(_db.financialGoals).get())
             .map((e) => e.toJson())
             .toList(),
@@ -63,7 +66,16 @@ class BackupService {
   Future<void> importJson(String jsonStr) async {
     final root = jsonDecode(jsonStr);
     if (root is! Map || root['app'] != 'danapintar') {
-      throw const FormatException('File ini bukan backup DanaPintar yang valid.');
+      throw const FormatException(
+        'File ini bukan backup DanaPintar yang valid.',
+      );
+    }
+    final ver = root['version'];
+    if (ver is int && ver > schemaVersion) {
+      throw FormatException(
+        'Versi backup ($ver) lebih baru dari versi aplikasi ini '
+        '($schemaVersion). Perbarui aplikasi untuk memulihkan file ini.',
+      );
     }
     final tables = (root['tables'] as Map?)?.cast<String, dynamic>() ?? {};
 
@@ -89,56 +101,88 @@ class BackupService {
 
       // Isi ulang dari backup.
       for (final m in rows('profiles')) {
-        await _db.into(_db.profiles).insert(Profile.fromJson(m),
-            mode: InsertMode.insertOrReplace);
+        await _db
+            .into(_db.profiles)
+            .insert(Profile.fromJson(m), mode: InsertMode.insertOrReplace);
       }
       for (final m in rows('budgets')) {
-        await _db.into(_db.budgets).insert(Budget.fromJson(m),
-            mode: InsertMode.insertOrReplace);
+        await _db
+            .into(_db.budgets)
+            .insert(Budget.fromJson(m), mode: InsertMode.insertOrReplace);
       }
       for (final m in rows('savings_goals')) {
-        await _db.into(_db.savingsGoals).insert(SavingsGoal.fromJson(m),
-            mode: InsertMode.insertOrReplace);
+        await _db
+            .into(_db.savingsGoals)
+            .insert(SavingsGoal.fromJson(m), mode: InsertMode.insertOrReplace);
       }
       for (final m in rows('budget_kategori')) {
-        await _db.into(_db.budgetKategori).insert(
-            BudgetKategoriData.fromJson(m),
-            mode: InsertMode.insertOrReplace);
+        await _db
+            .into(_db.budgetKategori)
+            .insert(
+              BudgetKategoriData.fromJson(m),
+              mode: InsertMode.insertOrReplace,
+            );
       }
       for (final m in rows('custom_kategori')) {
-        await _db.into(_db.customKategori).insert(
-            CustomKategoriData.fromJson(m),
-            mode: InsertMode.insertOrReplace);
+        await _db
+            .into(_db.customKategori)
+            .insert(
+              CustomKategoriData.fromJson(m),
+              mode: InsertMode.insertOrReplace,
+            );
       }
       for (final m in rows('wallets')) {
-        await _db.into(_db.wallets).insert(Wallet.fromJson(m),
-            mode: InsertMode.insertOrReplace);
+        await _db
+            .into(_db.wallets)
+            .insert(Wallet.fromJson(m), mode: InsertMode.insertOrReplace);
       }
       for (final m in rows('financial_goals')) {
-        await _db.into(_db.financialGoals).insert(FinancialGoal.fromJson(m),
-            mode: InsertMode.insertOrReplace);
+        await _db
+            .into(_db.financialGoals)
+            .insert(
+              FinancialGoal.fromJson(m),
+              mode: InsertMode.insertOrReplace,
+            );
       }
       for (final m in rows('networth_history')) {
-        await _db.into(_db.networthHistory).insert(
-            NetworthHistoryData.fromJson(m),
-            mode: InsertMode.insertOrReplace);
+        await _db
+            .into(_db.networthHistory)
+            .insert(
+              NetworthHistoryData.fromJson(m),
+              mode: InsertMode.insertOrReplace,
+            );
       }
       for (final m in rows('transaksi')) {
-        await _db.into(_db.transaksi).insert(TransaksiData.fromJson(m),
-            mode: InsertMode.insertOrReplace);
+        await _db
+            .into(_db.transaksi)
+            .insert(
+              TransaksiData.fromJson(m),
+              mode: InsertMode.insertOrReplace,
+            );
       }
       for (final m in rows('pemasukan')) {
-        await _db.into(_db.pemasukan).insert(PemasukanData.fromJson(m),
-            mode: InsertMode.insertOrReplace);
+        await _db
+            .into(_db.pemasukan)
+            .insert(
+              PemasukanData.fromJson(m),
+              mode: InsertMode.insertOrReplace,
+            );
       }
       for (final m in rows('hutang_piutang')) {
-        await _db.into(_db.hutangPiutang).insert(HutangPiutangData.fromJson(m),
-            mode: InsertMode.insertOrReplace);
+        await _db
+            .into(_db.hutangPiutang)
+            .insert(
+              HutangPiutangData.fromJson(m),
+              mode: InsertMode.insertOrReplace,
+            );
       }
       for (final m in rows('recurring_templates')) {
-        await _db.into(_db.recurringTemplates).insert(
-            RecurringTemplate.fromJson(m),
-            mode: InsertMode.insertOrReplace);
+        await _db
+            .into(_db.recurringTemplates)
+            .insert(
+              RecurringTemplate.fromJson(m),
+              mode: InsertMode.insertOrReplace,
+            );
       }
     });
   }

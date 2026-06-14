@@ -26,7 +26,9 @@ List<Badge> cekBadges({
     }
   }
   if (mx >= 7) {
-    badges.add(Badge('🗓️', 'Pencatat Setia', 'Streak $mx hari berturut-turut'));
+    badges.add(
+      Badge('🗓️', 'Pencatat Setia', 'Streak $mx hari berturut-turut'),
+    );
   }
 
   // 🏆 Penabung Konsisten — ≥ 2 bulan total ≤ (anggaran − target).
@@ -45,8 +47,7 @@ List<Badge> cekBadges({
   }
 
   // 🌈 Pengelola Lengkap — ≥ 5 kategori berbeda di bulan terakhir berdata.
-  final sorted = [...transaksi]
-    ..sort((a, b) => a.waktuWib.compareTo(b.waktuWib));
+  final sorted = [...transaksi]..sort((a, b) => a.waktu.compareTo(b.waktu));
   final lastKey = sorted.last.bulanKey;
   final nk = transaksi
       .where((t) => t.bulanKey == lastKey)

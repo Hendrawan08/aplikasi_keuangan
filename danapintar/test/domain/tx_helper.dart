@@ -13,7 +13,7 @@ TxView tx(
   final d = DateTime.parse(tanggal);
   final dt = DateTime(d.year, d.month, d.day, jam);
   return TxView(
-    waktuWib: dt,
+    waktu: dt,
     nominal: nominal,
     kategori: kategori,
     sifat: sifat,

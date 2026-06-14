@@ -13,8 +13,10 @@ void main() {
 
   group('sisaAnggaran', () {
     test('surplus', () => expect(sisaAnggaran(1000000, 700000), 300000));
-    test('defisit boleh negatif',
-        () => expect(sisaAnggaran(500000, 700000), -200000));
+    test(
+      'defisit boleh negatif',
+      () => expect(sisaAnggaran(500000, 700000), -200000),
+    );
   });
 
   group('porsiSukarelaPersen', () {
@@ -24,9 +26,13 @@ void main() {
 
   group('sukarelaBerlebihan (ambang > 50%)', () {
     test('60% → true', () => expect(sukarelaBerlebihan(600000, 1000000), true));
-    test('tepat 50% → false (bukan >50)',
-        () => expect(sukarelaBerlebihan(500000, 1000000), false));
-    test('50.0001% → true',
-        () => expect(sukarelaBerlebihan(500001, 1000000), true));
+    test(
+      'tepat 50% → false (bukan >50)',
+      () => expect(sukarelaBerlebihan(500000, 1000000), false),
+    );
+    test(
+      '50.0001% → true',
+      () => expect(sukarelaBerlebihan(500001, 1000000), true),
+    );
   });
 }

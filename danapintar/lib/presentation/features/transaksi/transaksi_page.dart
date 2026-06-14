@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/providers.dart';
+import '../../widgets/confirm_dialog.dart';
 import '../../widgets/tx_tile.dart';
 import 'transaksi_form_page.dart';
 
@@ -20,8 +21,10 @@ class TransaksiPage extends ConsumerWidget {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(32),
-              child: Text('Belum ada pengeluaran.\nKetuk + untuk mencatat.',
-                  textAlign: TextAlign.center),
+              child: Text(
+                'Belum ada pengeluaran.\nKetuk + untuk mencatat.',
+                textAlign: TextAlign.center,
+              ),
             ),
           );
         }
@@ -36,45 +39,33 @@ class TransaksiPage extends ConsumerWidget {
               nominal: t.nominal,
               waktu: t.waktuTransaksi,
               isExpense: true,
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => TransaksiFormPage(
-                  existing: TransaksiExisting(
-                    id: t.id,
-                    catatan: t.catatan,
-                    nominal: t.nominal,
-                    kategori: t.kategori,
-                    sifat: t.sifat,
-                    waktu: t.waktuTransaksi,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => TransaksiFormPage(
+                    existing: TransaksiExisting(
+                      id: t.id,
+                      catatan: t.catatan,
+                      nominal: t.nominal,
+                      kategori: t.kategori,
+                      sifat: t.sifat,
+                      waktu: t.waktuTransaksi,
+                      walletId: t.walletId,
+                    ),
                   ),
                 ),
-              )),
-              onLongPress: () => _konfirmasiHapus(context, ref, t.id, t.catatan),
+              ),
+              onLongPress: () async {
+                final ok = await konfirmasiHapus(
+                  context,
+                  judul: 'Hapus transaksi?',
+                  pesan: '"${t.catatan}" akan dihapus permanen.',
+                );
+                if (ok) await ref.read(transaksiRepoProvider).hapus(t.id);
+              },
             );
           },
         );
       },
     );
-  }
-
-  Future<void> _konfirmasiHapus(
-      BuildContext context, WidgetRef ref, String id, String nama) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Hapus transaksi?'),
-        content: Text('"$nama" akan dihapus permanen.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Batal')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Hapus')),
-        ],
-      ),
-    );
-    if (ok == true) {
-      await ref.read(transaksiRepoProvider).hapus(id);
-    }
   }
 }

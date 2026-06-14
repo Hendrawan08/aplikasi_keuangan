@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/form_utils.dart';
 import '../../providers/providers.dart';
 
 /// Form catat / edit transaksi pengeluaran.
@@ -24,6 +25,7 @@ class TransaksiExisting {
   final String kategori;
   final String sifat;
   final DateTime waktu;
+  final String? walletId;
   const TransaksiExisting({
     required this.id,
     required this.catatan,
@@ -31,6 +33,7 @@ class TransaksiExisting {
     required this.kategori,
     required this.sifat,
     required this.waktu,
+    this.walletId,
   });
 }
 
@@ -64,28 +67,43 @@ class _TransaksiFormPageState extends ConsumerState<TransaksiFormPage> {
 
   Future<void> _simpan() async {
     if (!_formKey.currentState!.validate()) return;
-    final nominal = int.parse(_nominal.text.replaceAll(RegExp(r'[^0-9]'), ''));
-    final waktu = DateTime(_tanggal.year, _tanggal.month, _tanggal.day,
-        _waktu.hour, _waktu.minute);
+    final nominal = parseNominal(_nominal.text);
+    final waktu = DateTime(
+      _tanggal.year,
+      _tanggal.month,
+      _tanggal.day,
+      _waktu.hour,
+      _waktu.minute,
+    );
     final repo = ref.read(transaksiRepoProvider);
     final e = widget.existing;
-    if (e == null) {
-      await repo.tambah(
-        catatan: _catatan.text.trim(),
-        nominal: nominal,
-        kategori: _kategori,
-        sifat: _sifat,
-        waktu: waktu,
-      );
-    } else {
-      await repo.ubah(
-        id: e.id,
-        catatan: _catatan.text.trim(),
-        nominal: nominal,
-        kategori: _kategori,
-        sifat: _sifat,
-        waktu: waktu,
-      );
+    try {
+      if (e == null) {
+        await repo.tambah(
+          catatan: _catatan.text.trim(),
+          nominal: nominal,
+          kategori: _kategori,
+          sifat: _sifat,
+          waktu: waktu,
+        );
+      } else {
+        await repo.ubah(
+          id: e.id,
+          catatan: _catatan.text.trim(),
+          nominal: nominal,
+          kategori: _kategori,
+          sifat: _sifat,
+          waktu: waktu,
+          walletId: e.walletId, // pertahankan kaitan dompet saat edit
+        );
+      }
+    } catch (err) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('❌ Gagal menyimpan: $err')));
+      }
+      return;
     }
     if (mounted) Navigator.of(context).pop();
   }
@@ -94,7 +112,9 @@ class _TransaksiFormPageState extends ConsumerState<TransaksiFormPage> {
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
     return Scaffold(
-      appBar: AppBar(title: Text(isEdit ? 'Edit Pengeluaran' : 'Catat Pengeluaran')),
+      appBar: AppBar(
+        title: Text(isEdit ? 'Edit Pengeluaran' : 'Catat Pengeluaran'),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -103,7 +123,9 @@ class _TransaksiFormPageState extends ConsumerState<TransaksiFormPage> {
             TextFormField(
               controller: _catatan,
               decoration: const InputDecoration(
-                  labelText: 'Catatan', hintText: 'Mis. Makan siang'),
+                labelText: 'Catatan',
+                hintText: 'Mis. Makan siang',
+              ),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
             ),
@@ -113,20 +135,16 @@ class _TransaksiFormPageState extends ConsumerState<TransaksiFormPage> {
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: const InputDecoration(
-                  labelText: 'Nominal (Rp)', prefixText: 'Rp '),
-              validator: (v) {
-                final n = int.tryParse(v?.replaceAll(RegExp('[^0-9]'), '') ?? '');
-                if (n == null || n <= 0) return 'Nominal tidak valid';
-                return null;
-              },
+                labelText: 'Nominal (Rp)',
+                prefixText: 'Rp ',
+              ),
+              validator: validatorNominal,
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: _kategori,
               decoration: const InputDecoration(labelText: 'Kategori'),
-              items: kategoriPengeluaranDefault
-                  .map((k) => DropdownMenuItem(value: k, child: Text(k)))
-                  .toList(),
+              items: dropdownItems(kategoriPengeluaranDefault),
               onChanged: (v) => setState(() => _kategori = v!),
             ),
             const SizedBox(height: 12),
@@ -144,7 +162,8 @@ class _TransaksiFormPageState extends ConsumerState<TransaksiFormPage> {
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.calendar_today, size: 16),
                     label: Text(
-                        '${_tanggal.day} ${kamusBulan[_tanggal.month]} ${_tanggal.year}'),
+                      '${_tanggal.day} ${kamusBulan[_tanggal.month]} ${_tanggal.year}',
+                    ),
                     onPressed: () async {
                       final d = await showDatePicker(
                         context: context,
@@ -163,7 +182,9 @@ class _TransaksiFormPageState extends ConsumerState<TransaksiFormPage> {
                     label: Text(_waktu.format(context)),
                     onPressed: () async {
                       final t = await showTimePicker(
-                          context: context, initialTime: _waktu);
+                        context: context,
+                        initialTime: _waktu,
+                      );
                       if (t != null) setState(() => _waktu = t);
                     },
                   ),

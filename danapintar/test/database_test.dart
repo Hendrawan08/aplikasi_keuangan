@@ -10,7 +10,9 @@ void main() {
   tearDown(() => db.close());
 
   test('skema terbentuk & transaksi bisa ditulis lalu dibaca', () async {
-    await db.into(db.transaksi).insert(
+    await db
+        .into(db.transaksi)
+        .insert(
           TransaksiCompanion.insert(
             id: 'tx-1',
             catatan: 'Kopi',
@@ -28,7 +30,9 @@ void main() {
   });
 
   test('default value kolom diterapkan', () async {
-    await db.into(db.wallets).insert(
+    await db
+        .into(db.wallets)
+        .insert(
           WalletsCompanion.insert(id: 'w-1', nama: 'Dompet', tipe: '💵 Cash'),
         );
     final w = await (db.select(db.wallets)).getSingle();

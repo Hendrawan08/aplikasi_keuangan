@@ -45,8 +45,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final showFab = _index != 3; // sembunyikan di Pengaturan
     return Scaffold(
       appBar: AppBar(
-        title: Text(_titles[_index],
-            style: const TextStyle(fontWeight: FontWeight.w800)),
+        title: Text(
+          _titles[_index],
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
       ),
       body: IndexedStack(index: _index, children: _pages),
       floatingActionButton: showFab
@@ -61,21 +63,25 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
           NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined),
-              selectedIcon: Icon(Icons.dashboard),
-              label: 'Beranda'),
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Beranda',
+          ),
           NavigationDestination(
-              icon: Icon(Icons.payments_outlined),
-              selectedIcon: Icon(Icons.payments),
-              label: 'Keluar'),
+            icon: Icon(Icons.payments_outlined),
+            selectedIcon: Icon(Icons.payments),
+            label: 'Keluar',
+          ),
           NavigationDestination(
-              icon: Icon(Icons.savings_outlined),
-              selectedIcon: Icon(Icons.savings),
-              label: 'Masuk'),
+            icon: Icon(Icons.savings_outlined),
+            selectedIcon: Icon(Icons.savings),
+            label: 'Masuk',
+          ),
           NavigationDestination(
-              icon: Icon(Icons.settings_outlined),
-              selectedIcon: Icon(Icons.settings),
-              label: 'Atur'),
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: 'Atur',
+          ),
         ],
       ),
     );

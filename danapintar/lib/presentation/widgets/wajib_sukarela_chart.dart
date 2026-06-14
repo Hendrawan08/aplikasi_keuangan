@@ -31,8 +31,10 @@ class WajibSukarelaChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('⚖️ Wajib vs Sukarela',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          const Text(
+            '⚖️ Wajib vs Sukarela',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -50,9 +52,10 @@ class WajibSukarelaChart extends StatelessWidget {
                         title: '${(wajib / total * 100).round()}%',
                         radius: 26,
                         titleStyle: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold),
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       PieChartSectionData(
                         value: sukarela.toDouble(),
@@ -60,9 +63,10 @@ class WajibSukarelaChart extends StatelessWidget {
                         title: '${(sukarela / total * 100).round()}%',
                         radius: 26,
                         titleStyle: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold),
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
@@ -74,14 +78,16 @@ class WajibSukarelaChart extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _Legend(
-                        color: AppColors.accent2,
-                        label: 'Wajib',
-                        value: wajib),
+                      color: AppColors.accent2,
+                      label: 'Wajib',
+                      value: wajib,
+                    ),
                     const SizedBox(height: 8),
                     _Legend(
-                        color: const Color(0xFFF59E0B),
-                        label: 'Sukarela',
-                        value: sukarela),
+                      color: const Color(0xFFF59E0B),
+                      label: 'Sukarela',
+                      value: sukarela,
+                    ),
                   ],
                 ),
               ),
@@ -94,8 +100,11 @@ class WajibSukarelaChart extends StatelessWidget {
 }
 
 class _Legend extends StatelessWidget {
-  const _Legend(
-      {required this.color, required this.label, required this.value});
+  const _Legend({
+    required this.color,
+    required this.label,
+    required this.value,
+  });
   final Color color;
   final String label;
   final int value;
@@ -111,9 +120,10 @@ class _Legend extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label, style: const TextStyle(fontSize: 12)),
-              Text(rp(value),
-                  style: const TextStyle(
-                      color: AppColors.text2, fontSize: 12)),
+              Text(
+                rp(value),
+                style: const TextStyle(color: AppColors.text2, fontSize: 12),
+              ),
             ],
           ),
         ),

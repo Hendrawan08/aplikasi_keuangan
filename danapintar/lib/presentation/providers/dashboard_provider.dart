@@ -59,14 +59,18 @@ final dashboardProvider = Provider<DashboardData>((ref) {
   final key = bulanKey(sel.month, sel.year);
 
   final txBulan = allTx
-      .where((t) =>
-          t.waktuTransaksi.month == sel.month &&
-          t.waktuTransaksi.year == sel.year)
+      .where(
+        (t) =>
+            t.waktuTransaksi.month == sel.month &&
+            t.waktuTransaksi.year == sel.year,
+      )
       .toList();
   final pmBulan = allPm
-      .where((p) =>
-          p.waktuPemasukan.month == sel.month &&
-          p.waktuPemasukan.year == sel.year)
+      .where(
+        (p) =>
+            p.waktuPemasukan.month == sel.month &&
+            p.waktuPemasukan.year == sel.year,
+      )
       .toList();
 
   final totalPglr = txBulan.fold<int>(0, (s, t) => s + t.nominal);
@@ -116,4 +120,24 @@ final dashboardProvider = Provider<DashboardData>((ref) {
     transaksiBulan: txBulan,
     pemasukanBulan: pmBulan,
   );
+});
+
+/// Bungkus status loading/error dari sumber data agar dashboard bisa
+/// membedakan "sedang memuat" / "gagal" dari "memang kosong".
+final dashboardAsyncProvider = Provider<AsyncValue<DashboardData>>((ref) {
+  final sources = <AsyncValue<dynamic>>[
+    ref.watch(transaksiListProvider),
+    ref.watch(pemasukanListProvider),
+    ref.watch(budgetMapProvider),
+    ref.watch(targetMapProvider),
+  ];
+  for (final s in sources) {
+    if (s.hasError) {
+      return AsyncValue.error(s.error!, s.stackTrace ?? StackTrace.current);
+    }
+  }
+  if (sources.any((s) => s.isLoading && !s.hasValue)) {
+    return const AsyncValue.loading();
+  }
+  return AsyncValue.data(ref.watch(dashboardProvider));
 });

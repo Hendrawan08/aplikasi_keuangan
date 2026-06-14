@@ -10,11 +10,11 @@ enum HealthLabel {
   kritis;
 
   String get display => switch (this) {
-        HealthLabel.excellent => '💚 Excellent',
-        HealthLabel.sehat => '💛 Sehat',
-        HealthLabel.perluPerhatian => '🟠 Perlu Perhatian',
-        HealthLabel.kritis => '🔴 Kritis',
-      };
+    HealthLabel.excellent => '💚 Excellent',
+    HealthLabel.sehat => '💛 Sehat',
+    HealthLabel.perluPerhatian => '🟠 Perlu Perhatian',
+    HealthLabel.kritis => '🔴 Kritis',
+  };
 }
 
 class HealthResult {
@@ -35,11 +35,11 @@ class HealthResult {
   /// Rincian untuk ditampilkan (label → skor), nilai maksimum di
   /// [breakdownMaks].
   Map<String, int> get breakdown => {
-        'Rasio Tabungan': rasioTabungan,
-        'Konsistensi Catat': konsistensi,
-        'Porsi Sukarela': porsiSukarela,
-        'Tren Pengeluaran': tren,
-      };
+    'Rasio Tabungan': rasioTabungan,
+    'Konsistensi Catat': konsistensi,
+    'Porsi Sukarela': porsiSukarela,
+    'Tren Pengeluaran': tren,
+  };
 
   static const Map<String, int> breakdownMaks = {
     'Rasio Tabungan': 40,
@@ -78,16 +78,13 @@ HealthResult hitungHealthScore({
   }
 
   // b) Konsistensi Catat (maks 20)
-  final int s2 =
-      adaData ? (min(1.0, hariUnikCatat / 15) * 20).toInt() : 0;
+  final int s2 = adaData ? (min(1.0, hariUnikCatat / 15) * 20).toInt() : 0;
 
   // c) Porsi Sukarela (maks 20)
   final int s3;
   if (budget > 0 && adaData) {
     final r = sukarela / budget;
-    s3 = r <= 0.3
-        ? 20
-        : (r <= 0.5 ? 12 : max(0, ((1 - r) * 20).toInt()));
+    s3 = r <= 0.3 ? 20 : (r <= 0.5 ? 12 : max(0, ((1 - r) * 20).toInt()));
   } else {
     s3 = 10;
   }
@@ -98,8 +95,10 @@ HealthResult hitungHealthScore({
     final rata = rataRataBulanLain;
     s4 = totalPengeluaran < rata
         ? 20
-        : max(0,
-            ((1 - (totalPengeluaran - rata) / max(rata, 1.0)) * 20).toInt());
+        : max(
+            0,
+            ((1 - (totalPengeluaran - rata) / max(rata, 1.0)) * 20).toInt(),
+          );
   }
 
   return HealthResult(

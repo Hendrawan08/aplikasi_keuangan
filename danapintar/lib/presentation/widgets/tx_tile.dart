@@ -35,18 +35,29 @@ class TxTile extends StatelessWidget {
         onLongPress: onLongPress,
         leading: CircleAvatar(
           backgroundColor: color.withValues(alpha: 0.15),
-          child: Text(isExpense ? '⬇' : '⬆',
-              style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+          child: Text(
+            isExpense ? '⬇' : '⬆',
+            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          ),
         ),
-        title: Text(judul,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-        subtitle: Text('$subtitle · $tgl',
-            style: const TextStyle(color: AppColors.text2, fontSize: 12)),
-        trailing: Text('${isExpense ? '-' : '+'}${rp(nominal)}',
-            style: TextStyle(
-                color: color, fontWeight: FontWeight.w700, fontSize: 13)),
+        title: Text(
+          judul,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        ),
+        subtitle: Text(
+          '$subtitle · $tgl',
+          style: const TextStyle(color: AppColors.text2, fontSize: 12),
+        ),
+        trailing: Text(
+          '${isExpense ? '-' : '+'}${rp(nominal)}',
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
+        ),
       ),
     );
   }

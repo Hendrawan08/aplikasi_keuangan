@@ -11,9 +11,9 @@ class TransaksiRepository {
 
   /// Stream seluruh transaksi, terbaru di atas.
   Stream<List<TransaksiData>> watchAll() {
-    return (_db.select(_db.transaksi)
-          ..orderBy([(t) => OrderingTerm.desc(t.waktuTransaksi)]))
-        .watch();
+    return (_db.select(
+      _db.transaksi,
+    )..orderBy([(t) => OrderingTerm.desc(t.waktuTransaksi)])).watch();
   }
 
   Future<void> tambah({
@@ -24,7 +24,9 @@ class TransaksiRepository {
     required DateTime waktu,
     String? walletId,
   }) {
-    return _db.into(_db.transaksi).insert(
+    return _db
+        .into(_db.transaksi)
+        .insert(
           TransaksiCompanion.insert(
             id: _uuid.v4(),
             catatan: catatan,

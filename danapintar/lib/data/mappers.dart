@@ -5,12 +5,12 @@ import 'local/database.dart';
 /// Pemetaan baris drift → model domain.
 extension TransaksiMapper on TransaksiData {
   TxView toTxView() => TxView(
-        waktuWib: waktuTransaksi,
-        nominal: nominal,
-        kategori: kategori,
-        sifat: sifat,
-        bulanKey: bulanKey(waktuTransaksi.month, waktuTransaksi.year),
-      );
+    waktu: waktuTransaksi,
+    nominal: nominal,
+    kategori: kategori,
+    sifat: sifat,
+    bulanKey: bulanKey(waktuTransaksi.month, waktuTransaksi.year),
+  );
 }
 
 extension TransaksiListMapper on List<TransaksiData> {

@@ -4,7 +4,8 @@ import 'package:danapintar/domain/badges.dart';
 import 'tx_helper.dart';
 
 void main() {
-  Set<String> nama(List badges) => badges.map((b) => b.nama).toSet().cast<String>();
+  Set<String> nama(List badges) =>
+      badges.map((b) => b.nama).toSet().cast<String>();
 
   test('transaksi kosong → tidak ada badge', () {
     expect(
@@ -45,13 +46,12 @@ void main() {
   });
 
   test('streak < 7 → tanpa Pencatat Setia', () {
-    final transaksi = [
-      tx('2026-06-01'),
-      tx('2026-06-02'),
-      tx('2026-06-03'),
-    ];
-    final badges =
-        cekBadges(transaksi: transaksi, budgetByMonth: {}, targetByMonth: {});
+    final transaksi = [tx('2026-06-01'), tx('2026-06-02'), tx('2026-06-03')];
+    final badges = cekBadges(
+      transaksi: transaksi,
+      budgetByMonth: {},
+      targetByMonth: {},
+    );
     expect(nama(badges).contains('Pencatat Setia'), false);
   });
 
@@ -61,8 +61,11 @@ void main() {
       tx('2026-06-02', kategori: 'Transportasi'),
       tx('2026-06-03', kategori: 'Makanan'), // hanya 2 kategori unik
     ];
-    final badges =
-        cekBadges(transaksi: transaksi, budgetByMonth: {}, targetByMonth: {});
+    final badges = cekBadges(
+      transaksi: transaksi,
+      budgetByMonth: {},
+      targetByMonth: {},
+    );
     expect(nama(badges).contains('Pengelola Lengkap'), false);
   });
 

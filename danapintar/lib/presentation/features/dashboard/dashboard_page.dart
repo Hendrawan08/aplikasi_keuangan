@@ -17,56 +17,75 @@ class DashboardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final data = ref.watch(dashboardProvider);
+    final async = ref.watch(dashboardAsyncProvider);
     final sel = ref.watch(selectedPeriodeProvider);
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _PeriodeSelector(month: sel.month, year: sel.year),
-        const SizedBox(height: 12),
-        _BalanceCard(data: data),
-        const SizedBox(height: 16),
-        _MetricsRow(data: data),
-        const SizedBox(height: 16),
-        HealthCard(health: data.health, label: data.label),
-        const SizedBox(height: 16),
-        if (data.adaData) ...[
-          WajibSukarelaChart(
-            wajib: data.totalPengeluaran - data.sukarela,
-            sukarela: data.sukarela,
+    return async.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Gagal memuat data: $e',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.expense),
           ),
+        ),
+      ),
+      data: (data) => ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _PeriodeSelector(month: sel.month, year: sel.year),
+          const SizedBox(height: 12),
+          _BalanceCard(data: data),
           const SizedBox(height: 16),
-          KategoriBreakdown(perKategori: data.pengeluaranPerKategori),
+          _MetricsRow(data: data),
           const SizedBox(height: 16),
-        ],
-        if (data.badges.isNotEmpty) ...[
-          const _SectionTitle('🏅 Badges'),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: data.badges
-                .map((b) => Chip(
+          HealthCard(health: data.health, label: data.label),
+          const SizedBox(height: 16),
+          if (data.adaData) ...[
+            WajibSukarelaChart(
+              wajib: data.totalPengeluaran - data.sukarela,
+              sukarela: data.sukarela,
+            ),
+            const SizedBox(height: 16),
+            KategoriBreakdown(perKategori: data.pengeluaranPerKategori),
+            const SizedBox(height: 16),
+          ],
+          if (data.badges.isNotEmpty) ...[
+            const _SectionTitle('🏅 Badges'),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: data.badges
+                  .map(
+                    (b) => Chip(
                       label: Text('${b.ikon} ${b.nama}'),
                       backgroundColor: AppColors.bg2,
                       side: const BorderSide(color: AppColors.accent),
-                    ))
-                .toList(),
-          ),
-          const SizedBox(height: 16),
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 16),
+          ],
+          const _SectionTitle('🧾 Transaksi Terakhir'),
+          if (data.transaksiBulan.isEmpty)
+            const _EmptyHint('Belum ada transaksi bulan ini.')
+          else
+            ...data.transaksiBulan
+                .take(5)
+                .map(
+                  (t) => TxTile(
+                    judul: t.catatan,
+                    subtitle: '${t.kategori} · ${t.sifat}',
+                    nominal: t.nominal,
+                    waktu: t.waktuTransaksi,
+                    isExpense: true,
+                  ),
+                ),
         ],
-        const _SectionTitle('🧾 Transaksi Terakhir'),
-        if (data.transaksiBulan.isEmpty)
-          const _EmptyHint('Belum ada transaksi bulan ini.')
-        else
-          ...data.transaksiBulan.take(5).map((t) => TxTile(
-                judul: t.catatan,
-                subtitle: '${t.kategori} · ${t.sifat}',
-                nominal: t.nominal,
-                waktu: t.waktuTransaksi,
-                isExpense: true,
-              )),
-      ],
+      ),
     );
   }
 }
@@ -117,48 +136,65 @@ class _BalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final netColor =
-        data.net >= 0 ? AppColors.incomeSoft : AppColors.expenseSoft;
+    final netColor = data.net >= 0
+        ? AppColors.incomeSoft
+        : AppColors.expenseSoft;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       decoration: BoxDecoration(
         gradient: AppColors.balanceGradient,
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [
-          BoxShadow(color: Colors.black38, blurRadius: 24, offset: Offset(0, 8)),
+          BoxShadow(
+            color: Colors.black38,
+            blurRadius: 24,
+            offset: Offset(0, 8),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('💹 RINGKASAN KEUANGAN',
-              style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 11,
-                  letterSpacing: 1,
-                  fontWeight: FontWeight.w600)),
+          const Text(
+            '💹 RINGKASAN KEUANGAN',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 11,
+              letterSpacing: 1,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 8),
-          Text(rp(data.net),
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800)),
-          Text(data.net >= 0 ? 'Surplus' : 'Defisit',
-              style: TextStyle(color: netColor, fontSize: 12)),
+          Text(
+            rp(data.net),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 30,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Text(
+            data.net >= 0 ? 'Surplus' : 'Defisit',
+            style: TextStyle(color: netColor, fontSize: 12),
+          ),
           const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
-                  child: _SubBalance(
-                      label: '⬆ Pemasukan',
-                      value: data.totalPemasukan,
-                      color: AppColors.incomeSoft)),
+                child: _SubBalance(
+                  label: '⬆ Pemasukan',
+                  value: data.totalPemasukan,
+                  color: AppColors.incomeSoft,
+                ),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                  child: _SubBalance(
-                      label: '⬇ Pengeluaran',
-                      value: data.totalPengeluaran,
-                      color: AppColors.expenseSoft)),
+                child: _SubBalance(
+                  label: '⬇ Pengeluaran',
+                  value: data.totalPengeluaran,
+                  color: AppColors.expenseSoft,
+                ),
+              ),
             ],
           ),
         ],
@@ -168,8 +204,11 @@ class _BalanceCard extends StatelessWidget {
 }
 
 class _SubBalance extends StatelessWidget {
-  const _SubBalance(
-      {required this.label, required this.value, required this.color});
+  const _SubBalance({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
   final String label;
   final int value;
   final Color color;
@@ -185,12 +224,19 @@ class _SubBalance extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
           const SizedBox(height: 2),
-          Text(rp(value),
-              style: TextStyle(
-                  color: color, fontSize: 15, fontWeight: FontWeight.w700)),
+          Text(
+            rp(value),
+            style: TextStyle(
+              color: color,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -239,14 +285,19 @@ class _Metric extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: const TextStyle(color: AppColors.text2, fontSize: 11)),
+          Text(
+            label,
+            style: const TextStyle(color: AppColors.text2, fontSize: 11),
+          ),
           const SizedBox(height: 4),
-          Text(value,
-              style: TextStyle(
-                  color: valueColor ?? AppColors.text,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700)),
+          Text(
+            value,
+            style: TextStyle(
+              color: valueColor ?? AppColors.text,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -258,10 +309,12 @@ class _SectionTitle extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(text,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-      );
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+    ),
+  );
 }
 
 class _EmptyHint extends StatelessWidget {
@@ -269,15 +322,17 @@ class _EmptyHint extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppColors.bg2,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Text(text,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.text2)),
-      );
+    width: double.infinity,
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: AppColors.bg2,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Text(
+      text,
+      textAlign: TextAlign.center,
+      style: const TextStyle(color: AppColors.text2),
+    ),
+  );
 }

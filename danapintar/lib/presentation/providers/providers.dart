@@ -11,27 +11,37 @@ import 'database_provider.dart';
 
 // ── Repositories ──────────────────────────────────────────────
 final transaksiRepoProvider = Provider(
-    (ref) => TransaksiRepository(ref.watch(databaseProvider)));
+  (ref) => TransaksiRepository(ref.watch(databaseProvider)),
+);
 final pemasukanRepoProvider = Provider(
-    (ref) => PemasukanRepository(ref.watch(databaseProvider)));
-final walletRepoProvider =
-    Provider((ref) => WalletRepository(ref.watch(databaseProvider)));
-final budgetRepoProvider =
-    Provider((ref) => BudgetRepository(ref.watch(databaseProvider)));
-final backupServiceProvider =
-    Provider((ref) => BackupService(ref.watch(databaseProvider)));
+  (ref) => PemasukanRepository(ref.watch(databaseProvider)),
+);
+final walletRepoProvider = Provider(
+  (ref) => WalletRepository(ref.watch(databaseProvider)),
+);
+final budgetRepoProvider = Provider(
+  (ref) => BudgetRepository(ref.watch(databaseProvider)),
+);
+final backupServiceProvider = Provider(
+  (ref) => BackupService(ref.watch(databaseProvider)),
+);
 
 // ── Stream data (reaktif dari DB) ─────────────────────────────
 final transaksiListProvider = StreamProvider<List<TransaksiData>>(
-    (ref) => ref.watch(transaksiRepoProvider).watchAll());
+  (ref) => ref.watch(transaksiRepoProvider).watchAll(),
+);
 final pemasukanListProvider = StreamProvider<List<PemasukanData>>(
-    (ref) => ref.watch(pemasukanRepoProvider).watchAll());
+  (ref) => ref.watch(pemasukanRepoProvider).watchAll(),
+);
 final walletListProvider = StreamProvider<List<Wallet>>(
-    (ref) => ref.watch(walletRepoProvider).watchAll());
+  (ref) => ref.watch(walletRepoProvider).watchAll(),
+);
 final budgetMapProvider = StreamProvider<Map<String, int>>(
-    (ref) => ref.watch(budgetRepoProvider).watchBudgets());
+  (ref) => ref.watch(budgetRepoProvider).watchBudgets(),
+);
 final targetMapProvider = StreamProvider<Map<String, int>>(
-    (ref) => ref.watch(budgetRepoProvider).watchTargets());
+  (ref) => ref.watch(budgetRepoProvider).watchTargets(),
+);
 
 // ── Periode terpilih (bulan & tahun) ──────────────────────────
 typedef Periode = ({int month, int year});

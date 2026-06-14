@@ -17,7 +17,9 @@ class WalletRepository {
     int saldoAwal = 0,
     String warna = '#2E7D32',
   }) {
-    return _db.into(_db.wallets).insert(
+    return _db
+        .into(_db.wallets)
+        .insert(
           WalletsCompanion.insert(
             id: _uuid.v4(),
             nama: nama,

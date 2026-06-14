@@ -10,9 +10,9 @@ class PemasukanRepository {
   static const _uuid = Uuid();
 
   Stream<List<PemasukanData>> watchAll() {
-    return (_db.select(_db.pemasukan)
-          ..orderBy([(t) => OrderingTerm.desc(t.waktuPemasukan)]))
-        .watch();
+    return (_db.select(
+      _db.pemasukan,
+    )..orderBy([(t) => OrderingTerm.desc(t.waktuPemasukan)])).watch();
   }
 
   Future<void> tambah({
@@ -22,7 +22,9 @@ class PemasukanRepository {
     required DateTime waktu,
     String? walletId,
   }) {
-    return _db.into(_db.pemasukan).insert(
+    return _db
+        .into(_db.pemasukan)
+        .insert(
           PemasukanCompanion.insert(
             id: _uuid.v4(),
             sumber: sumber,

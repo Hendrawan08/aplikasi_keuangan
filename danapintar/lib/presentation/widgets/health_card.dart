@@ -11,11 +11,11 @@ class HealthCard extends StatelessWidget {
   final HealthLabel label;
 
   Color get _scoreColor => switch (label) {
-        HealthLabel.excellent => AppColors.accent,
-        HealthLabel.sehat => const Color(0xFFEAB308),
-        HealthLabel.perluPerhatian => const Color(0xFFF97316),
-        HealthLabel.kritis => AppColors.expense,
-      };
+    HealthLabel.excellent => AppColors.accent,
+    HealthLabel.sehat => const Color(0xFFEAB308),
+    HealthLabel.perluPerhatian => const Color(0xFFF97316),
+    HealthLabel.kritis => AppColors.expense,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -29,39 +29,50 @@ class HealthCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('🏅 Financial Health Score',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          const Text(
+            '🏅 Financial Health Score',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Column(
                 children: [
-                  Text('${health.total}',
-                      style: TextStyle(
-                          color: _scoreColor,
-                          fontSize: 40,
-                          fontWeight: FontWeight.w800,
-                          height: 1)),
-                  const Text('/100',
-                      style:
-                          TextStyle(color: AppColors.text2, fontSize: 12)),
+                  Text(
+                    '${health.total}',
+                    style: TextStyle(
+                      color: _scoreColor,
+                      fontSize: 40,
+                      fontWeight: FontWeight.w800,
+                      height: 1,
+                    ),
+                  ),
+                  const Text(
+                    '/100',
+                    style: TextStyle(color: AppColors.text2, fontSize: 12),
+                  ),
                 ],
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   children: [
-                    Text(label.display,
-                        style: TextStyle(
-                            color: _scoreColor,
-                            fontWeight: FontWeight.w700)),
+                    Text(
+                      label.display,
+                      style: TextStyle(
+                        color: _scoreColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     const SizedBox(height: 8),
-                    ...health.breakdown.entries.map((e) => _Bar(
-                          label: e.key,
-                          value: e.value,
-                          max: HealthResult.breakdownMaks[e.key]!,
-                        )),
+                    ...health.breakdown.entries.map(
+                      (e) => _Bar(
+                        label: e.key,
+                        value: e.value,
+                        max: HealthResult.breakdownMaks[e.key]!,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -93,14 +104,18 @@ class _Bar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label,
-                  style: const TextStyle(
-                      color: AppColors.text2, fontSize: 11)),
-              Text('$value/$max',
-                  style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600)),
+              Text(
+                label,
+                style: const TextStyle(color: AppColors.text2, fontSize: 11),
+              ),
+              Text(
+                '$value/$max',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 2),

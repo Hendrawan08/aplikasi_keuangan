@@ -49,8 +49,21 @@ const List<String> tipeWallet = [
 ];
 
 const List<String> goalIkonList = [
-  '🎯', '🏠', '🚗', '✈️', '📱', '💍', '🎓', '💊',
-  '🐾', '🛒', '🎸', '💻', '📷', '⛵', '🏋️',
+  '🎯',
+  '🏠',
+  '🚗',
+  '✈️',
+  '📱',
+  '💍',
+  '🎓',
+  '💊',
+  '🐾',
+  '🛒',
+  '🎸',
+  '💻',
+  '📷',
+  '⛵',
+  '🏋️',
 ];
 
 const List<String> asetTipeList = [
@@ -73,6 +86,3 @@ const List<String> liabTipeList = [
 
 const int anggaranMin = 10000;
 const int anggaranDefault = 1000000;
-
-/// Offset WIB (Asia/Jakarta = UTC+7).
-const Duration wibOffset = Duration(hours: 7);
