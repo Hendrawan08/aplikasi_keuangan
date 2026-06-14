@@ -4,7 +4,9 @@ import '../budget_kategori/budget_kategori_page.dart';
 import '../changelog/changelog_page.dart';
 import '../goals/goals_page.dart';
 import '../hutang/hutang_page.dart';
+import '../import_csv/import_csv_page.dart';
 import '../kategori/kategori_page.dart';
+import '../laporan/laporan_page.dart';
 import '../networth/networth_page.dart';
 import '../recurring/recurring_page.dart';
 import '../visualisasi/visualisasi_page.dart';
@@ -57,6 +59,18 @@ class LainnyaPage extends StatelessWidget {
         'Visualisasi',
         'Heatmap, komparatif & tren',
         () => const VisualisasiPage(),
+      ),
+      _MenuItem(
+        '📥',
+        'Import CSV',
+        'Impor mutasi bank dari file',
+        () => const ImportCsvPage(),
+      ),
+      _MenuItem(
+        '📄',
+        'Laporan PDF',
+        'Generate & bagikan laporan',
+        () => const LaporanPage(),
       ),
       _MenuItem(
         '📋',
