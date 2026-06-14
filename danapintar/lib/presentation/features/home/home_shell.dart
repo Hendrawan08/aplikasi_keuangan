@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../dashboard/dashboard_page.dart';
+import '../lainnya/lainnya_page.dart';
 import '../pemasukan/pemasukan_form_page.dart';
 import '../pemasukan/pemasukan_page.dart';
 import '../pengaturan/pengaturan_page.dart';
@@ -23,6 +24,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     '📊 DanaPintar AI',
     '📋 Pengeluaran',
     '💵 Pemasukan',
+    '📦 Lainnya',
     '⚙️ Pengaturan',
   ];
 
@@ -30,6 +32,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     DashboardPage(),
     TransaksiPage(),
     PemasukanPage(),
+    LainnyaPage(),
     PengaturanPage(),
   ];
 
@@ -42,7 +45,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    final showFab = _index != 3; // sembunyikan di Pengaturan
+    final showFab = _index < 3; // tampil di Beranda/Pengeluaran/Pemasukan saja
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -76,6 +79,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             icon: Icon(Icons.savings_outlined),
             selectedIcon: Icon(Icons.savings),
             label: 'Masuk',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.widgets_outlined),
+            selectedIcon: Icon(Icons.widgets),
+            label: 'Lainnya',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),
