@@ -1,43 +1,113 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
+import '../../providers/dashboard_provider.dart';
+import '../../providers/providers.dart';
+import '../../widgets/health_card.dart';
+import '../../widgets/tx_tile.dart';
 
-/// Dashboard utama — kerangka Fase 0 (keadaan kosong).
-/// Kartu saldo, daftar transaksi, dsb. akan diisi pada Fase 1.
+/// Dashboard utama — menampilkan ringkasan keuangan periode terpilih.
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          '📊 DanaPintar AI',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text(
-            '✦ Sistem Keuangan Cerdas · 100% Lokal',
-            style: TextStyle(color: AppColors.text2, fontSize: 13),
+    final data = ref.watch(dashboardProvider);
+    final sel = ref.watch(selectedPeriodeProvider);
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _PeriodeSelector(month: sel.month, year: sel.year),
+        const SizedBox(height: 12),
+        _BalanceCard(data: data),
+        const SizedBox(height: 16),
+        _MetricsRow(data: data),
+        const SizedBox(height: 16),
+        HealthCard(health: data.health, label: data.label),
+        const SizedBox(height: 16),
+        if (data.badges.isNotEmpty) ...[
+          const _SectionTitle('🏅 Badges'),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: data.badges
+                .map((b) => Chip(
+                      label: Text('${b.ikon} ${b.nama}'),
+                      backgroundColor: AppColors.bg2,
+                      side: const BorderSide(color: AppColors.accent),
+                    ))
+                .toList(),
           ),
           const SizedBox(height: 16),
-          _BalanceCard(),
-          const SizedBox(height: 24),
-          const _EmptyState(),
         ],
-      ),
+        const _SectionTitle('🧾 Transaksi Terakhir'),
+        if (data.transaksiBulan.isEmpty)
+          const _EmptyHint('Belum ada transaksi bulan ini.')
+        else
+          ...data.transaksiBulan.take(5).map((t) => TxTile(
+                judul: t.catatan,
+                subtitle: '${t.kategori} · ${t.sifat}',
+                nominal: t.nominal,
+                waktu: t.waktuTransaksi,
+                isExpense: true,
+              )),
+      ],
+    );
+  }
+}
+
+class _PeriodeSelector extends ConsumerWidget {
+  const _PeriodeSelector({required this.month, required this.year});
+  final int month;
+  final int year;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    void shift(int delta) {
+      var m = month + delta;
+      var y = year;
+      if (m < 1) {
+        m = 12;
+        y--;
+      } else if (m > 12) {
+        m = 1;
+        y++;
+      }
+      ref.read(selectedPeriodeProvider.notifier).state = (month: m, year: y);
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        IconButton(
+          onPressed: () => shift(-1),
+          icon: const Icon(Icons.chevron_left),
+        ),
+        Text(
+          '${kamusBulan[month]} $year',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        IconButton(
+          onPressed: () => shift(1),
+          icon: const Icon(Icons.chevron_right),
+        ),
+      ],
     );
   }
 }
 
 class _BalanceCard extends StatelessWidget {
+  const _BalanceCard({required this.data});
+  final DashboardData data;
+
   @override
   Widget build(BuildContext context) {
+    final netColor =
+        data.net >= 0 ? AppColors.incomeSoft : AppColors.expenseSoft;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       decoration: BoxDecoration(
@@ -50,28 +120,35 @@ class _BalanceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '💹 RINGKASAN KEUANGAN',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 11,
-              letterSpacing: 1,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          const Text('💹 RINGKASAN KEUANGAN',
+              style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11,
+                  letterSpacing: 1,
+                  fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          Text(
-            rp(0),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Net Cash Flow',
-            style: TextStyle(color: Colors.white60, fontSize: 12),
+          Text(rp(data.net),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800)),
+          Text(data.net >= 0 ? 'Surplus' : 'Defisit',
+              style: TextStyle(color: netColor, fontSize: 12)),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                  child: _SubBalance(
+                      label: '⬆ Pemasukan',
+                      value: data.totalPemasukan,
+                      color: AppColors.incomeSoft)),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: _SubBalance(
+                      label: '⬇ Pengeluaran',
+                      value: data.totalPengeluaran,
+                      color: AppColors.expenseSoft)),
+            ],
           ),
         ],
       ),
@@ -79,38 +156,117 @@ class _BalanceCard extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+class _SubBalance extends StatelessWidget {
+  const _SubBalance(
+      {required this.label, required this.value, required this.color});
+  final String label;
+  final int value;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.bg2,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border, style: BorderStyle.solid),
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: const Column(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('🌱', style: TextStyle(fontSize: 40)),
-          SizedBox(height: 12),
-          Text(
-            'Belum ada data keuangan',
-            style: TextStyle(
-              color: AppColors.text,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          SizedBox(height: 6),
-          Text(
-            'Pencatatan transaksi & dashboard penuh akan hadir di Fase 1.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.text2, fontSize: 13),
-          ),
+          Text(label,
+              style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          const SizedBox(height: 2),
+          Text(rp(value),
+              style: TextStyle(
+                  color: color, fontSize: 15, fontWeight: FontWeight.w700)),
         ],
       ),
     );
   }
+}
+
+class _MetricsRow extends StatelessWidget {
+  const _MetricsRow({required this.data});
+  final DashboardData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _Metric('Anggaran', rp(data.anggaran))),
+        const SizedBox(width: 8),
+        Expanded(child: _Metric('Batas Belanja', rp(data.batas))),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _Metric(
+            'Sisa',
+            rp(data.sisa),
+            valueColor: data.sisa >= 0 ? AppColors.accent : AppColors.expense,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Metric extends StatelessWidget {
+  const _Metric(this.label, this.value, {this.valueColor});
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.bg2,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: const TextStyle(color: AppColors.text2, fontSize: 11)),
+          const SizedBox(height: 4),
+          Text(value,
+              style: TextStyle(
+                  color: valueColor ?? AppColors.text,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(text,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+      );
+}
+
+class _EmptyHint extends StatelessWidget {
+  const _EmptyHint(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.bg2,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Text(text,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.text2)),
+      );
 }

@@ -1,14 +1,33 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:danapintar/main.dart';
+import 'package:danapintar/domain/health_score.dart';
+import 'package:danapintar/presentation/widgets/health_card.dart';
 
 void main() {
-  testWidgets('App boots and shows dashboard', (WidgetTester tester) async {
-    await tester.pumpWidget(const DanaPintarApp());
+  testWidgets('HealthCard menampilkan skor & label', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: HealthCard(
+            health: HealthResult(
+              total: 72,
+              rasioTabungan: 30,
+              konsistensi: 18,
+              porsiSukarela: 14,
+              tren: 10,
+            ),
+            label: HealthLabel.sehat,
+          ),
+        ),
+      ),
+    );
 
-    // Judul aplikasi tampil.
-    expect(find.text('📊 DanaPintar AI'), findsOneWidget);
-    // Keadaan kosong Fase 0 tampil.
-    expect(find.text('Belum ada data keuangan'), findsOneWidget);
+    expect(find.text('🏅 Financial Health Score'), findsOneWidget);
+    expect(find.text('72'), findsOneWidget);
+    expect(find.text('💛 Sehat'), findsOneWidget);
+    // Empat komponen rincian tampil.
+    expect(find.text('Rasio Tabungan'), findsOneWidget);
+    expect(find.text('Tren Pengeluaran'), findsOneWidget);
   });
 }

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/theme/app_theme.dart';
-import 'presentation/features/dashboard/dashboard_page.dart';
+import 'presentation/features/home/home_shell.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('id_ID', null);
   runApp(const ProviderScope(child: DanaPintarApp()));
 }
 
@@ -17,7 +20,7 @@ class DanaPintarApp extends StatelessWidget {
       title: 'DanaPintar AI',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark(),
-      home: const DashboardPage(),
+      home: const HomeShell(),
     );
   }
 }
