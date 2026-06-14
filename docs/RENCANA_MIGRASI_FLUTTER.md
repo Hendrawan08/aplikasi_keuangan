@@ -1,21 +1,21 @@
-# Rencana Migrasi: DanaPintar AI → Flutter (Dart)
+# Rencana Migrasi: DanaPintar AI → Flutter (Dart) — Edisi LOKAL-FIRST
 
-> Status: **DRAFT untuk review** · Belum ada implementasi kode.
-> Tujuan dokumen ini: mencapai konsensus 100% sebelum baris kode pertama ditulis.
+> Status: **DRAFT untuk review** · Belum ada implementasi kode aplikasi.
+> Revisi: arsitektur diubah dari cloud (Supabase) → **100% lokal di HP**.
 
 ---
 
 ## 1. Ringkasan & Tujuan
 
-DanaPintar AI saat ini adalah aplikasi web Streamlit (Python) berupa **satu file** `aplikasi_keuangan.py` (~3.974 baris). Aplikasi akan **ditulis ulang total** sebagai aplikasi mobile native menggunakan **Flutter (Dart)**, dengan tujuan akhir **distribusi resmi di App Store & Google Play**.
+DanaPintar AI saat ini = aplikasi web Streamlit (Python), **satu file** ~3.974 baris. Akan **ditulis ulang total** sebagai aplikasi mobile **Flutter (Dart)**.
 
-Ini adalah **rewrite**, bukan port. Reuse kode Python ≈ 0%. Yang berpindah adalah *konsep, logika bisnis, prompt AI, dan backend* — bukan kode UI.
+**Keputusan arah (final):**
+- 📱 **Android dulu**, didistribusikan sebagai **APK via Firebase App Distribution** (link "klik → install"). **Bukan** Play Store (hindari biaya). iOS ditunda (butuh Apple Developer $99/th — tidak bisa via link).
+- 🔒 **100% LOKAL — semua data keuangan disimpan di HP, tanpa cloud.** Privasi maksimal, biaya server Rp 0.
+- 💾 **Backup/Restore manual ke file** sebagai jaring pengaman anti-kehilangan data.
+- 🤖 Fitur AI (Scan & DanaBot) **ditunda**; saat tiba waktunya, jalan lewat **proxy tipis** (Supabase Edge Function — satu-satunya unsur cloud, hanya untuk AI, bukan simpan data).
 
-### Aset yang bertahan utuh
-- **Backend Supabase** (Postgres + Auth + Storage + RLS) → dipakai langsung via `supabase_flutter`.
-- **Skema database & data pengguna** → tidak perlu disentuh (hanya didokumentasikan ulang sebagai migrasi).
-- **Logika domain / "opini produk"** → diterjemahkan ke Dart + **dites**.
-- **Prompt Gemini** (scan struk + DanaBot) → aset teks, dipindahkan ke Edge Functions.
+**Yang berpindah dari versi lama:** logika domain ("opini produk"), prompt Gemini, dan ide UX. **Kode UI & backend cloud TIDAK berpindah.**
 
 ---
 
@@ -23,13 +23,16 @@ Ini adalah **rewrite**, bukan port. Reuse kode Python ≈ 0%. Yang berpindah ada
 
 | Aspek | Keputusan |
 |---|---|
-| Platform | Flutter, target App Store + Google Play (native) |
-| Strategi AI | Proxy via Supabase Edge Functions (key TIDAK ditanam di app) |
-| Arsitektur | Layered + tested; domain layer murni tanpa dependensi UI/DB |
+| Platform | Flutter; **Android dulu** via APK link |
+| Distribusi | **Firebase App Distribution** (gratis, link install) |
+| Penyimpanan data | **100% lokal di HP** (DB SQLite via `drift`) — tanpa cloud |
+| Backup | **Export/Import ke file** (tombol manual; di sinilah izin folder dipakai) |
+| Auth | **Kunci lokal opsional** (PIN/biometrik) — tanpa akun/email |
+| Fitur AI | Ditunda; nanti via **proxy tipis** Edge Function |
+| Supabase project `danapintar` | **Di-pause** (gratis); diaktifkan saat fase AI |
+| Arsitektur | Layered + tested; domain layer murni |
 | State management | Riverpod |
-| Fasing AI | Bertahap — rilis core dulu, AI menyusul di update |
-| Offline | Tidak untuk v1 (online-first); dapat ditambah kemudian |
-| Model data | `freezed` + `json_serializable` (anti dict mentah) |
+| Model data | `freezed` + `json_serializable` |
 
 ---
 
@@ -41,12 +44,13 @@ danapintar/
 │   ├── core/
 │   │   ├── theme/            # ThemeData (pengganti ~320 baris CSS)
 │   │   ├── constants/        # KAMUS_BULAN, kategori default, dll.
-│   │   └── utils/            # rp(), wib(), parsing waktu WIB
+│   │   └── utils/            # rp(), wib(), format tanggal WIB
 │   ├── data/
-│   │   ├── models/           # freezed: Transaksi, Pemasukan, Wallet, Goal,
-│   │   │                     #          NetWorth, Hutang, BudgetKategori, ...
-│   │   └── repositories/     # SATU-SATUNYA tempat akses Supabase
-│   ├── domain/               # ⭐ JIWA APP — ZERO dependensi UI/Supabase
+│   │   ├── local/            # ⭐ drift: definisi tabel + DAO (SQLite lokal)
+│   │   ├── models/           # freezed: Transaksi, Pemasukan, Wallet, Goal, ...
+│   │   ├── repositories/     # Repository (baca/tulis ke DB lokal)
+│   │   └── backup/           # ⭐ Export/Import file backup (.json) + izin folder
+│   ├── domain/               # ⭐ JIWA APP — ZERO dependensi UI/DB
 │   │   ├── health_score.dart
 │   │   ├── budget_rules.dart
 │   │   ├── impulse_detector.dart
@@ -55,31 +59,28 @@ danapintar/
 │   └── presentation/
 │       ├── providers/        # Riverpod providers
 │       └── features/
-│           ├── auth/  dashboard/  transaksi/  pemasukan/
+│           ├── lock/  dashboard/  transaksi/  pemasukan/
 │           ├── wallet/  goals/  networth/  hutang/
-│           ├── kategori/  import_csv/  visualisasi/
+│           ├── kategori/  import_csv/  visualisasi/  backup/
 │           ├── scan/  chat/  laporan/        # (fase AI / lanjutan)
-├── supabase/
-│   ├── migrations/           # skema DB ter-version (bukan komentar lagi)
-│   └── functions/
-│       ├── gemini-scan/      # Edge Function: scan struk
-│       └── gemini-chat/      # Edge Function: DanaBot
-└── test/
-    └── domain/               # unit test untuk SEMUA rumus finansial
+└── (Supabase hanya dipakai NANTI untuk Edge Function AI — di luar repo app)
 ```
 
 ### Aturan emas
-1. **`domain/` tidak boleh mengimpor** apa pun dari `data/`, `presentation/`, Supabase, atau Flutter. Murni Dart → bisa dites tanpa emulator.
-2. **Hanya `data/repositories/`** yang menyentuh Supabase. UI tidak pernah memanggil DB langsung (berbeda total dari versi sekarang).
-3. **Tidak ada secret di app.** Semua panggilan Gemini lewat Edge Function.
+1. **`domain/` murni Dart** — tidak impor apa pun dari `data/`, `presentation/`, atau Flutter. Bisa dites tanpa emulator.
+2. **Hanya `data/repositories/`** yang menyentuh DB lokal. UI tidak pernah query DB langsung.
+3. **Tidak ada secret di app.** Saat fase AI tiba, panggilan Gemini lewat Edge Function (key di server).
+4. **Data tidak pernah keluar HP** kecuali saat user sendiri mengekspor file backup.
 
 ### Stack final
 | Kebutuhan | Package |
 |---|---|
-| Backend | `supabase_flutter` |
+| DB lokal | **`drift`** (SQLite bertipe) |
 | State | `flutter_riverpod` |
 | Model | `freezed`, `json_serializable` |
-| Chart | `fl_chart` (tren/bar/donat) + grid kustom (heatmap kalender) |
+| Kunci app | `local_auth` (PIN/biometrik) — opsional |
+| Backup/share file | `file_picker`, `share_plus`, `path_provider` |
+| Chart | `fl_chart` + grid kustom (heatmap kalender) |
 | PDF/laporan | `pdf` + `printing` |
 | Kamera/file (scan) | `image_picker` / `file_picker` |
 | Format angka/tanggal | `intl` |
@@ -88,13 +89,14 @@ danapintar/
 
 ## 4. Pemetaan Fitur: Lama → Baru
 
-| Fitur (Streamlit) | Status | Catatan migrasi |
+| Fitur (Streamlit) | Status | Catatan |
 |---|---|---|
-| Auth (login/register) | ✅ Pertahankan | `supabase_flutter` auth |
-| Pengeluaran + presisi jam-menit | ✅ Pertahankan | Inti |
+| Auth akun (email/password) | 🔁 Ganti | → kunci lokal PIN/biometrik (opsional), tanpa akun |
+| ☁️ Sinkronisasi cloud | ❌ Hapus | Diganti **backup/restore file** |
+| Pengeluaran (presisi jam-menit) | ✅ Pertahankan | Inti |
 | Pemasukan | ✅ Pertahankan | Inti |
-| Anggaran terkunci per bulan | ✅ Pertahankan | Pembeda produk |
-| Target tabungan + batas belanja | ✅ Pertahankan | → domain `budget_rules` |
+| Anggaran terkunci per bulan | ✅ Pertahankan | Pembeda |
+| Target tabungan + batas belanja | ✅ Pertahankan | → domain |
 | Budget per kategori | ✅ Pertahankan | |
 | Multi-wallet | ✅ Pertahankan | |
 | Net Worth tracker | ✅ Pertahankan | |
@@ -102,74 +104,71 @@ danapintar/
 | Financial Goals | ✅ Pertahankan | |
 | Custom kategori | ✅ Pertahankan | |
 | Recurring templates | ✅ Pertahankan | |
-| Import CSV mutasi | ✅ Pertahankan | `file_picker` + parsing Dart |
+| Import CSV mutasi | ✅ Pertahankan | parsing Dart |
 | Health Score | ✅ Pertahankan | → domain + **test** |
 | Gamifikasi/badge | ✅ Pertahankan | → domain + **test** |
-| Auditor tren MoM | ✅ Pertahankan | → domain |
+| Auditor tren MoM | ✅ Pertahankan | → domain (butuh histori → makin penting backup) |
 | Deteksi jam rawan | ✅ Pertahankan | → domain |
 | Visualisasi (tren/kategori/komparatif) | ✅ Pertahankan | Altair → `fl_chart` |
-| Heatmap kalender | ✅ Pertahankan | grid kustom Flutter |
+| Heatmap kalender | ✅ Pertahankan | grid kustom |
 | Onboarding wizard | ✅ Pertahankan | |
-| Notifikasi in-app | ✅ Pertahankan | (push native = peningkatan opsional) |
-| Laporan PDF & visual | ✅ Pertahankan | FPDF/matplotlib → `pdf`/`printing` |
-| Scan Struk (Gemini Vision) | 🔁 Fase AI | Lewat Edge Function `gemini-scan` |
-| DanaBot chat (Gemini) | 🔁 Fase AI | Lewat Edge Function `gemini-chat` |
+| Notifikasi in-app | ✅ Pertahankan | |
+| Laporan PDF & visual | ✅ Pertahankan | → `pdf`/`printing` |
+| **Backup & Restore ke file** | 🆕 Tambah | Tombol Export/Import; **izin folder di sini** |
+| Scan Struk (Gemini Vision) | 🔁 Fase AI | Via Edge Function proxy |
+| DanaBot chat (Gemini) | 🔁 Fase AI | Via Edge Function proxy |
 | Dark mode | ✅ Pertahankan | → `ThemeData` |
 | Changelog | ✅ Pertahankan | aset statis |
-| ~320 baris CSS | ❌ Buang | Ganti `ThemeData` |
-| Seluruh UI Streamlit | ❌ Buang | Ganti widget Flutter |
+| ~320 baris CSS + UI Streamlit | ❌ Buang | → widget Flutter |
 
 ---
 
-## 5. Skema Database (didokumentasikan ulang)
+## 5. Skema Data LOKAL (drift / SQLite)
 
-Tabel yang terdeteksi dari kode (semua **wajib RLS aktif**, kunci `user_id`):
+Entitas sama seperti versi lama, tapi sekarang **tabel SQLite di HP** (bukan Postgres cloud). Tanpa `user_id` & tanpa RLS (single-user per device).
 
-| Tabel | Kolom utama |
+| Tabel lokal | Kolom utama |
 |---|---|
-| `profiles` | id (uid), nama, lokasi, foto_url, updated_at |
-| `budgets` | user_id, bulan_key, nominal |
-| `savings_goals` | user_id, bulan_key, target_nominal |
-| `budget_kategori` | user_id, bulan_key, kategori, nominal |
-| `custom_kategori` | id, user_id, nama, tipe, ikon |
-| `wallets` | id, user_id, nama, tipe, saldo_awal, warna |
-| `financial_goals` | id, user_id, nama, target_nominal, terkumpul, deadline, kategori, ikon |
-| `networth_history` | id, user_id, bulan_key, total_aset, total_liabilitas, catatan_aset (jsonb), catatan_liabilitas (jsonb) |
-| `transaksi` | id, user_id, catatan, nominal, kategori, sifat, wallet_id, waktu_transaksi |
-| `pemasukan` | id, user_id, sumber, nominal, kategori, wallet_id, waktu_pemasukan |
-| `hutang_piutang` | id, user_id, tipe, nama, nominal, status, tanggal |
-| `recurring_templates` | id, user_id, ... (frekuensi: Bulanan/Mingguan/2 Mingguan) |
+| `profile` | nama, lokasi, foto_path (opsional) |
+| `budgets` | bulan_key, nominal |
+| `savings_goals` | bulan_key, target_nominal |
+| `budget_kategori` | bulan_key, kategori, nominal |
+| `custom_kategori` | id, nama, tipe, ikon |
+| `wallets` | id, nama, tipe, saldo_awal, warna |
+| `financial_goals` | id, nama, target_nominal, terkumpul, deadline, kategori, ikon |
+| `networth_history` | id, bulan_key, total_aset, total_liabilitas, catatan_aset, catatan_liabilitas |
+| `transaksi` | id, catatan, nominal, kategori, sifat, wallet_id, waktu_transaksi |
+| `pemasukan` | id, sumber, nominal, kategori, wallet_id, waktu_pemasukan |
+| `hutang_piutang` | id, tipe, nama, nominal, status, tanggal |
+| `recurring_templates` | id, ... (frekuensi: Bulanan/Mingguan/2 Mingguan) |
 
-Storage bucket: `profile-photos`.
+> **`bulan_key`:** `"{NamaBulan}_{tahun}"`, mis. `"Mei_2026"`. **Timezone:** Asia/Jakarta (WIB).
 
-> **Format `bulan_key`:** `"{NamaBulan}_{tahun}"`, mis. `"Mei_2026"`.
-
-### ⚠️ Tindakan keamanan WAJIB (Fase 0)
-- **Verifikasi setiap tabel benar-benar punya RLS aktif + policy SELECT/INSERT/UPDATE/DELETE berbasis `user_id = auth.uid()`.** Ini krusial karena anon key memang ditanam di app mobile (normal). RLS = satu-satunya pelindung antar-user.
-- Pindahkan skema dari komentar di kode ke `supabase/migrations/` (ter-version).
+### Format file Backup (Export/Import)
+- Satu file `.json` berisi seluruh tabel di atas + nomor versi skema (untuk kompatibilitas saat upgrade).
+- Export: user pilih lokasi simpan (folder HP / Drive / share) → **muncul izin folder**.
+- Import: user pilih file → app validasi versi → restore (mengganti/menggabung data).
 
 ---
 
-## 6. Domain Layer — Rumus Bisnis yang Harus Diport (SETIA)
+## 6. Domain Layer — Rumus Bisnis (port SETIA, wajib di-test)
 
-> Diekstrak langsung dari `aplikasi_keuangan.py`. Inilah "jiwa" produk. Semua wajib punya unit test di `test/domain/`.
+> Diekstrak langsung dari `aplikasi_keuangan.py`. **Tidak berubah** meski sumber data jadi lokal.
 
 ### 6.1 Batas Belanja
 ```
 batasBelanja = max(0, anggaran - targetTabungan)
 ```
 
-### 6.2 Health Score (total di-cap 100)
+### 6.2 Health Score (di-cap 100)
 **a) Rasio Tabungan (maks 40)**
 ```
 jika anggaran>0 dan target>0:
     batas = max(0, anggaran - target)
-    s1 = 40                            jika totalPengeluaran <= batas
-       = max(0, 40 - ((totalPengeluaran - batas) / anggaran) * 80)   jika tidak
-jika anggaran>0 (target=0):
-    s1 = max(0, (1 - totalPengeluaran/anggaran) * 40)
-jika tidak:
-    s1 = 20
+    s1 = 40                                                jika totalPengeluaran <= batas
+       = max(0, 40 - ((totalPengeluaran - batas)/anggaran) * 80)  jika tidak
+jika anggaran>0 (target=0): s1 = max(0, (1 - totalPengeluaran/anggaran) * 40)
+jika tidak: s1 = 20
 ```
 **b) Konsistensi Catat (maks 20)**
 ```
@@ -179,7 +178,7 @@ s2 = min(1.0, jumlahHariUnikTransaksi / 15) * 20   (0 jika tidak ada data)
 ```
 jika anggaran>0 dan ada data:
     r = totalSukarela / anggaran
-    s3 = 20  jika r<=0.3 ; 12 jika r<=0.5 ; selain itu max(0,(1-r)*20)
+    s3 = 20 jika r<=0.3 ; 12 jika r<=0.5 ; selain itu max(0,(1-r)*20)
 jika tidak: s3 = 10
 ```
 **d) Tren Pengeluaran (maks 20)**
@@ -187,103 +186,77 @@ jika tidak: s3 = 10
 default 10
 jika ada histori bulan lain:
     rata = rata-rata total pengeluaran bulan-bulan sebelumnya
-    s4 = 20  jika totalBulanIni < rata
-       = max(0, (1 - (totalBulanIni - rata)/max(rata,1)) * 20)  jika tidak
+    s4 = 20 jika totalBulanIni < rata
+       = max(0, (1 - (totalBulanIni - rata)/max(rata,1)) * 20) jika tidak
 ```
 **Total:** `min(100, s1+s2+s3+s4)`
-
 **Label:** `>=80` Excellent · `>=60` Sehat · `>=40` Perlu Perhatian · `<40` Kritis
 
 ### 6.3 Deteksi Jam Rawan (impulsif)
 ```
-transaksi rawan = jam >= 20 ATAU jam <= 5   (malam/dini hari)
+transaksi rawan = jam >= 20 ATAU jam <= 5
 ```
 
 ### 6.4 Alert Porsi Sukarela
 ```
-persenSukarela = (totalSukarela / anggaran) * 100
-alert "berlebihan" jika persenSukarela > 50
+persenSukarela = (totalSukarela / anggaran) * 100   →  alert jika > 50
 ```
 
-### 6.5 Badges (gamifikasi)
+### 6.5 Badges
 | Badge | Syarat |
 |---|---|
 | 🗓️ Pencatat Setia | streak pencatatan ≥ 7 hari berturut-turut |
-| 🏆 Penabung Konsisten | ≥ 2 bulan dengan total pengeluaran ≤ (anggaran − target) |
+| 🏆 Penabung Konsisten | ≥ 2 bulan dengan total ≤ (anggaran − target) |
 | 🌈 Pengelola Lengkap | ≥ 5 kategori berbeda di bulan terakhir |
 | 💎 Big Saver | target ≥ 20% anggaran **dan** total ≤ (anggaran − target) di suatu bulan |
 
 ### 6.6 Konstanta
 - **Kategori pengeluaran default:** Makanan, Transportasi, Hiburan/Gaya Hidup, Kebutuhan Rumah/Kesehatan, Tagihan Wajib, Lain-lain
 - **Kategori pemasukan default:** Gaji, Freelance, Bisnis, Investasi, Hadiah/Bonus, Passive Income, Lain-lain
-- **Sifat:** Wajib / Sukarela
-- **Anggaran minimum:** 10.000 · **default:** 1.000.000
-- **Timezone:** Asia/Jakarta (WIB)
+- **Sifat:** Wajib / Sukarela · **Anggaran min:** 10.000 · **default:** 1.000.000
 
 ---
 
-## 7. Kontrak Edge Functions (Fase AI)
+## 7. Fitur AI (Fase lanjutan — proxy tipis)
 
-Key Gemini disimpan sebagai **secret di Supabase**, bukan di app.
-
-### 7.1 `gemini-scan` (scan struk)
-- **Request:** `{ image_base64, mime_type }` (auth: JWT user)
-- **Proses:** kirim ke Gemini Vision dengan prompt scan struk (port dari kode).
-- **Response (JSON):**
-  ```json
-  {
-    "berhasil": true, "confidence": "tinggi",
-    "nama_toko": "Indomaret", "tanggal": "2026-05-31",
-    "total": 87500, "items": [{"nama":"...","harga":4000,"qty":2}],
-    "kategori_saran": "Makanan", "nama_transaksi": "...",
-    "catatan_ai": "...", "gagal_alasan": ""
-  }
-  ```
-- App menampilkan **preview & edit** sebelum simpan (jangan auto-save).
-
-### 7.2 `gemini-chat` (DanaBot)
-- **Request:** `{ messages[], konteks_keuangan }` (auth: JWT user)
-- **System prompt** (port dari kode) + ringkasan keuangan periode aktif.
-- **Response:** `{ reply }`
-
-> Model awal: `gemini-2.5-flash` (sesuai versi sekarang) — dapat ditinjau ulang saat fase AI.
+Saat fase AI tiba:
+- Aktifkan kembali (restore) project Supabase `danapintar` (`mgaonsjwcaahwlcfqxeg`).
+- Deploy **Edge Functions** `gemini-scan` & `gemini-chat`. **Hanya** sebagai perantara ke Gemini — **tidak menyimpan data keuangan**. Gemini API key = secret di server.
+- App mengirim foto struk / pesan chat ke endpoint, menerima hasil. Data keuangan tetap di HP.
+- Model awal: `gemini-2.5-flash`.
 
 ---
 
 ## 8. Roadmap Berfase
 
-### Fase 0 — Pondasi & Keamanan
-- ✅ Verifikasi & kuatkan RLS produksi (PRIORITAS keamanan).
+### Fase 0 — Pondasi
 - Inisialisasi project Flutter + struktur folder layered.
-- Migrasi skema DB → `supabase/migrations/`.
-- Auth Supabase (login/register/logout) jalan di Flutter.
-- Setup `ThemeData` dasar (dark mode).
-- **DoD:** user bisa login dan melihat dashboard kosong.
+- Setup `drift` (skema DB lokal §5) + DAO.
+- `ThemeData` dasar (dark mode) — pengganti CSS.
+- (Opsional) kunci lokal PIN/biometrik.
+- **DoD:** app jalan, DB lokal terbentuk, bisa lihat dashboard kosong.
 
-### Fase 1 — MVP Core (target: submit ke store)
-- Model `freezed` untuk entitas inti.
-- Repository: transaksi, pemasukan, budget, wallet.
+### Fase 1 — MVP Core (target: bisa di-share via APK link)
+- Model `freezed` + repository (transaksi, pemasukan, budget, wallet).
 - Domain: `health_score`, `budget_rules`, `impulse_detector`, `badges` (+ **unit test**).
-- UI: dashboard (balance card, health score, metrik), input/list pengeluaran & pemasukan (pagination + search/filter), anggaran terkunci, target tabungan, wallet.
-- Chart dasar (`fl_chart`): tren & kategori.
-- **DoD:** alur catat→lihat→analisis dasar lengkap; semua test domain hijau; siap build rilis.
+- UI: dashboard, input/list pengeluaran & pemasukan (pagination + search/filter), anggaran terkunci, target tabungan, wallet.
+- Chart dasar (`fl_chart`).
+- **Backup/Restore ke file** (penting sejak awal — jaring pengaman data).
+- **DoD:** alur catat→lihat→analisis lengkap; test domain hijau; build APK rilis.
 
 ### Fase 2 — Fitur Lanjutan
-- Goals, Net Worth, Hutang/Piutang, custom kategori, budget per kategori.
-- Import CSV mutasi, recurring templates.
-- Heatmap kalender, dashboard komparatif.
-- Laporan PDF/visual.
-- Onboarding wizard, notifikasi in-app, changelog.
+- Goals, Net Worth, Hutang/Piutang, custom kategori, budget per kategori, recurring.
+- Import CSV mutasi, heatmap kalender, dashboard komparatif.
+- Laporan PDF/visual, onboarding, notifikasi in-app, changelog.
 
-### Fase 3 — AI
-- Edge Functions `gemini-scan` + `gemini-chat` (secret Gemini di server).
-- UI Scan Struk (kamera/file → preview/edit → simpan).
-- UI DanaBot chat.
+### Fase 3 — AI (opsional, butuh internet)
+- Restore project Supabase, deploy Edge Functions `gemini-scan` + `gemini-chat`.
+- UI Scan Struk (kamera/file → preview/edit → simpan) & DanaBot chat.
 
-### Fase 4 — Rilis Store
-- Privacy policy + deklarasi data (termasuk data yang dikirim ke Gemini).
-- Ikon, splash, screenshot store, akun demo untuk reviewer.
-- Akun Apple Developer ($99/th) & Google Play ($25 sekali).
+### Fase 4 — Distribusi
+- Build APK release (signed).
+- Setup **Firebase App Distribution** → bagikan link install ke tester/user.
+- (Nanti, jika mau ke Play Store/iOS → siapkan akun berbayar + privacy policy.)
 
 ---
 
@@ -291,35 +264,34 @@ Key Gemini disimpan sebagai **secret di Supabase**, bukan di app.
 
 | Risiko | Dampak | Mitigasi |
 |---|---|---|
-| RLS ternyata tidak aktif/bocor | Data semua user terekspos (anon key publik) | **Fase 0 wajib** verifikasi sebelum hal lain |
-| Scope creep (14 tab sekaligus) | Tidak pernah selesai | Fasing ketat; MVP core dulu |
-| Review Apple menolak app finansial | Tertunda rilis | Privacy policy + akun demo sejak awal |
-| Biaya Gemini membengkak | Tagihan | Edge Function + rate limit per user |
-| Terjemahan rumus tidak setia | Hasil beda dari versi lama | Unit test berbasis rumus di §6 |
-| Mengulang "dosa monolit" | Sulit dirawat lagi | Aturan emas arsitektur §3 ditegakkan |
+| **Kehilangan data** (HP reset/rusak/uninstall) | Data keuangan lenyap | **Backup/Restore ke file** (Fase 1), edukasi user backup rutin |
+| Data lama di Supabase produksi lama | Tidak ikut pindah ke app lokal | Putuskan: mulai bersih, atau buat importer satu kali (lihat open items) |
+| Scope creep (14 tab) | Tak kunjung selesai | Fasing ketat; MVP core dulu |
+| Format backup berubah saat upgrade | Restore gagal | Sertakan nomor versi skema di file backup |
+| Terjemahan rumus tak setia | Hasil beda dari versi lama | Unit test berbasis rumus §6 |
+| "Install dari sumber tak dikenal" (Android) | User bingung saat install APK | Sediakan panduan singkat saat bagikan link |
 
 ---
 
-## 10. Yang Masih Perlu Diputuskan (Open Items)
+## 10. Open Items (perlu diputuskan)
 
-1. **Nama package/bundle ID** (mis. `com.hendrawan.danapintar`).
-2. **Branding visual** mobile (pertahankan palet dark hijau sekarang, atau refresh?).
-3. **Penyedia push notification** (jika notifikasi diangkat ke native nanti).
-4. **Strategi versioning data** jika skema perlu berubah saat migrasi.
-5. **Minimum OS** target (mis. iOS 13+, Android 8+).
+1. **Data lama:** apakah ada data di Supabase produksi lama (`lmyvddqwmmpsrpigzygi`) yang perlu di-import sekali ke app lokal, atau mulai dari nol?
+2. **Bundle/Application ID** (mis. `com.hendrawan.danapintar`).
+3. **Kunci lokal**: pakai PIN/biometrik, atau tanpa kunci sama sekali?
+4. **Minimum Android** (mis. Android 8/API 26+).
+5. **Branding**: pertahankan palet dark-hijau sekarang atau refresh?
 
 ---
 
 ## 11. Definition of Done (keseluruhan)
 
-- [ ] Semua fitur §4 berstatus "Pertahankan" hadir di Flutter.
-- [ ] Domain layer 100% bebas dependensi UI/DB, ter-cover unit test.
+- [ ] Semua fitur §4 berstatus "Pertahankan/Tambah" hadir di Flutter.
+- [ ] Data tersimpan 100% lokal (drift), tidak ada data keuangan ke cloud.
+- [ ] **Backup/Restore ke file berfungsi & teruji.**
+- [ ] Domain layer bebas dependensi UI/DB, ter-cover unit test.
 - [ ] Tidak ada secret/API key di dalam app.
-- [ ] RLS terverifikasi untuk semua tabel.
-- [ ] Skema DB ter-version di `supabase/migrations/`.
-- [ ] Build rilis lolos di iOS & Android.
-- [ ] Privacy policy & kelengkapan store siap.
+- [ ] Build APK release sukses & terdistribusi via Firebase App Distribution.
 
 ---
 
-> **Catatan:** Dokumen ini adalah artefak konsensus. Implementasi kode **tidak dimulai** sampai Anda menyetujui rencana ini (atau kita iterasi lagi).
+> **Catatan:** Implementasi kode **belum dimulai**. Menunggu persetujuan rencana ini.
