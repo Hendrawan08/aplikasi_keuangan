@@ -7,7 +7,9 @@ import '../../../core/utils/formatters.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../providers/providers.dart';
 import '../../widgets/health_card.dart';
+import '../../widgets/kategori_breakdown.dart';
 import '../../widgets/tx_tile.dart';
+import '../../widgets/wajib_sukarela_chart.dart';
 
 /// Dashboard utama — menampilkan ringkasan keuangan periode terpilih.
 class DashboardPage extends ConsumerWidget {
@@ -29,6 +31,15 @@ class DashboardPage extends ConsumerWidget {
         const SizedBox(height: 16),
         HealthCard(health: data.health, label: data.label),
         const SizedBox(height: 16),
+        if (data.adaData) ...[
+          WajibSukarelaChart(
+            wajib: data.totalPengeluaran - data.sukarela,
+            sukarela: data.sukarela,
+          ),
+          const SizedBox(height: 16),
+          KategoriBreakdown(perKategori: data.pengeluaranPerKategori),
+          const SizedBox(height: 16),
+        ],
         if (data.badges.isNotEmpty) ...[
           const _SectionTitle('🏅 Badges'),
           Wrap(

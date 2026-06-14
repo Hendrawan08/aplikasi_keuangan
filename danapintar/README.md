@@ -7,15 +7,21 @@ ke Flutter, dengan arsitektur **layered + tested** dan penyimpanan **100% lokal 
 
 ## Status
 
-**Fase 0 — Pondasi** ✅ (selesai)
-- Struktur folder layered (`core / data / domain / presentation`)
-- Database lokal SQLite (`drift`) + seluruh tabel skema
-- Tema gelap (`ThemeData`) — port palet warna dari versi lama
-- State management: Riverpod
-- Kerangka dashboard (keadaan kosong)
+**Fase 0 — Pondasi** ✅ · **Fase 1 — MVP Core** ✅
 
-Fase berikutnya (1+): model `freezed`, repository, domain layer (health score, badge, dsb.),
-pencatatan transaksi, chart, dan fitur Backup/Restore. Lihat dokumen rencana.
+Sudah berfungsi:
+- Catat / edit / hapus pengeluaran & pemasukan (presisi jam-menit)
+- Anggaran terkunci & target tabungan per bulan, batas belanja
+- Multi-wallet (dompet)
+- Dashboard hidup: kartu saldo, Financial Health Score, metrik, badge,
+  transaksi terakhir, pemilih bulan
+- Grafik: donut Wajib vs Sukarela + breakdown per kategori (`fl_chart`)
+- **Backup & Restore ke file** (ekspor via share, impor via file picker)
+- Domain layer murni + unit test (health score, badge, jam rawan, aturan anggaran)
+
+Belum (Fase 2+): Goals, Net Worth, Hutang/Piutang, custom kategori, budget per
+kategori, recurring, import CSV, heatmap, laporan PDF, onboarding. Fase 3: AI
+(Scan Struk & DanaBot) via Edge Function. Lihat `../docs/RENCANA_MIGRASI_FLUTTER.md`.
 
 ## Struktur
 
