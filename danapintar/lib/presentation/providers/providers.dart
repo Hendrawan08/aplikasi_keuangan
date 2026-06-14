@@ -2,14 +2,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/utils/formatters.dart';
 import '../../data/backup/backup_service.dart';
 import '../../data/local/database.dart';
+import '../../data/repositories/budget_kategori_repository.dart';
 import '../../data/repositories/budget_repository.dart';
 import '../../data/repositories/custom_kategori_repository.dart';
 import '../../data/repositories/goal_repository.dart';
 import '../../data/repositories/hutang_repository.dart';
 import '../../data/repositories/networth_repository.dart';
 import '../../data/repositories/pemasukan_repository.dart';
+import '../../data/repositories/recurring_repository.dart';
 import '../../data/repositories/transaksi_repository.dart';
 import '../../data/repositories/wallet_repository.dart';
 import 'database_provider.dart';
@@ -38,6 +41,12 @@ final networthRepoProvider = Provider(
 );
 final customKategoriRepoProvider = Provider(
   (ref) => CustomKategoriRepository(ref.watch(databaseProvider)),
+);
+final recurringRepoProvider = Provider(
+  (ref) => RecurringRepository(ref.watch(databaseProvider)),
+);
+final budgetKategoriRepoProvider = Provider(
+  (ref) => BudgetKategoriRepository(ref.watch(databaseProvider)),
 );
 final backupServiceProvider = Provider(
   (ref) => BackupService(ref.watch(databaseProvider)),
@@ -71,6 +80,15 @@ final networthListProvider = StreamProvider<List<NetworthHistoryData>>(
 final customKategoriListProvider = StreamProvider<List<CustomKategoriData>>(
   (ref) => ref.watch(customKategoriRepoProvider).watchAll(),
 );
+final recurringListProvider = StreamProvider<List<RecurringTemplate>>(
+  (ref) => ref.watch(recurringRepoProvider).watchAll(),
+);
+final budgetKategoriProvider = StreamProvider<Map<String, int>>((ref) {
+  final sel = ref.watch(selectedPeriodeProvider);
+  return ref
+      .watch(budgetKategoriRepoProvider)
+      .watchByBulan(bulanKey(sel.month, sel.year));
+});
 
 // Kategori gabungan: default + custom (dipakai dropdown form).
 final kategoriPengeluaranProvider = Provider<List<String>>((ref) {
