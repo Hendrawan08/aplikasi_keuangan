@@ -7,7 +7,7 @@ ke Flutter, dengan arsitektur **layered + tested** dan penyimpanan **100% lokal 
 
 ## Status
 
-**Fase 0 — Pondasi** ✅ · **Fase 1 — MVP Core** ✅ · **Fase 2 — Fitur Lengkap** ✅
+**Fase 0** ✅ · **Fase 1 (MVP)** ✅ · **Fase 2 (Fitur Lengkap)** ✅ · **Fase 3 (AI)** 🟡 kode siap, perlu deploy
 
 Sudah berfungsi:
 - Catat / edit / hapus pengeluaran & pemasukan (presisi jam-menit)
@@ -26,7 +26,20 @@ Sudah berfungsi:
 - Domain layer murni + unit test (health score, badge, jam rawan, aturan
   anggaran, notifikasi)
 
-Belum (Fase 3): AI — Scan Struk & DanaBot via Supabase Edge Function.
+**Fase 3 — AI** (📸 Scan Struk & 🤖 DanaBot): kode lengkap (Edge Functions di
+`supabase/functions/` + UI Flutter). Untuk mengaktifkan: deploy Edge Functions,
+set secret `GEMINI_API_KEY`, isi anon key di `lib/core/config/ai_config.dart`.
+
+## Mengaktifkan AI (Fase 3)
+
+1. Restore/aktifkan project Supabase `danapintar`.
+2. Set secret: `supabase secrets set GEMINI_API_KEY=<key>` (atau via Dashboard →
+   Edge Functions → Secrets).
+3. Deploy:
+   `supabase functions deploy gemini-scan --no-verify-jwt`
+   `supabase functions deploy gemini-chat --no-verify-jwt`
+4. Isi `anonKey` di `lib/core/config/ai_config.dart` (Dashboard → Settings → API).
+
 Lihat `../docs/RENCANA_MIGRASI_FLUTTER.md`.
 
 ## Struktur
