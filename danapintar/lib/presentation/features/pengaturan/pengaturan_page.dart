@@ -133,12 +133,9 @@ class PengaturanPage extends ConsumerWidget {
       final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
       final file = File('${dir.path}/danapintar_backup_$stamp.json');
       await file.writeAsString(json);
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path)],
-          text: 'Backup DanaPintar — simpan file ini di tempat aman.',
-        ),
-      );
+      await Share.shareXFiles([
+        XFile(file.path),
+      ], text: 'Backup DanaPintar — simpan file ini di tempat aman.');
     } catch (e) {
       if (context.mounted) _snack(context, '❌ Gagal backup: $e');
     }
