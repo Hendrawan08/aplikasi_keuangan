@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -106,12 +107,18 @@ class NotifSettingsNotifier extends AsyncNotifier<NotifSettings> {
   }
 
   /// Dipanggil sekali saat aplikasi mulai: minta izin + pasang jadwal.
+  /// Dibungkus try/catch agar kegagalan notifikasi tak pernah mengganggu UI.
   Future<void> bootstrap() async {
-    final s = await future;
-    if (s.enabled) {
-      await NotificationService.instance.requestPermission();
+    try {
+      final s = await future;
+      await NotificationService.instance.init();
+      if (s.enabled) {
+        await NotificationService.instance.requestPermission();
+      }
+      await _applySchedules(s);
+    } catch (e) {
+      debugPrint('bootstrap notifikasi gagal: $e');
     }
-    await _applySchedules(s);
   }
 
   Future<void> setEnabled(bool v) async {

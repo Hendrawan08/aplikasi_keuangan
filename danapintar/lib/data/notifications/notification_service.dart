@@ -34,29 +34,35 @@ class NotificationService {
   /// Inisialisasi plugin + zona waktu. Aman dipanggil berkali-kali.
   Future<void> init() async {
     if (_ready) return;
-
-    // Zona waktu untuk penjadwalan tepat (zonedSchedule butuh tz.local benar).
-    tzdata.initializeTimeZones();
     try {
-      final name = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(name));
-    } catch (e) {
-      // Fallback aman untuk pengguna Indonesia bila deteksi gagal.
+      // Zona waktu untuk penjadwalan tepat (zonedSchedule butuh tz.local benar).
+      tzdata.initializeTimeZones();
       try {
-        tz.setLocalLocation(tz.getLocation('Asia/Jakarta'));
-      } catch (_) {/* biarkan UTC default */}
-      debugPrint('NotificationService: gagal deteksi zona waktu ($e)');
+        final name = await FlutterTimezone.getLocalTimezone().timeout(
+          const Duration(seconds: 4),
+        );
+        tz.setLocalLocation(tz.getLocation(name));
+      } catch (e) {
+        // Fallback aman untuk pengguna Indonesia bila deteksi gagal.
+        try {
+          tz.setLocalLocation(tz.getLocation('Asia/Jakarta'));
+        } catch (_) {/* biarkan UTC default */}
+        debugPrint('NotificationService: gagal deteksi zona waktu ($e)');
+      }
+
+      const androidInit = AndroidInitializationSettings(
+        '@drawable/ic_stat_danapintar',
+      );
+      await _plugin.initialize(
+        const InitializationSettings(android: androidInit),
+      );
+
+      await _createChannels();
+      _ready = true;
+    } catch (e) {
+      // Jangan pernah biarkan kegagalan notifikasi memblok aplikasi.
+      debugPrint('NotificationService.init gagal: $e');
     }
-
-    const androidInit = AndroidInitializationSettings(
-      '@drawable/ic_stat_danapintar',
-    );
-    await _plugin.initialize(
-      const InitializationSettings(android: androidInit),
-    );
-
-    await _createChannels();
-    _ready = true;
   }
 
   Future<void> _createChannels() async {
