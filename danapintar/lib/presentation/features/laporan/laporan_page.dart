@@ -19,6 +19,10 @@ class LaporanPage extends ConsumerWidget {
     final sel = ref.watch(selectedPeriodeProvider);
     final data = ref.watch(dashboardProvider);
     final periode = '${kamusBulan[sel.month]} ${sel.year}';
+    // Pastikan data sudah termuat agar PDF tidak berisi angka nol palsu.
+    final ready =
+        ref.watch(transaksiListProvider).hasValue &&
+        ref.watch(pemasukanListProvider).hasValue;
 
     return Scaffold(
       appBar: AppBar(title: const Text('📄 Laporan PDF')),
@@ -53,8 +57,8 @@ class LaporanPage extends ConsumerWidget {
           const SizedBox(height: 16),
           FilledButton.icon(
             icon: const Icon(Icons.picture_as_pdf),
-            label: const Text('Buat & Bagikan PDF'),
-            onPressed: () => _buatPdf(periode, data),
+            label: Text(ready ? 'Buat & Bagikan PDF' : 'Memuat data…'),
+            onPressed: ready ? () => _buatPdf(context, periode, data) : null,
           ),
         ],
       ),
@@ -72,17 +76,22 @@ class LaporanPage extends ConsumerWidget {
     ),
   );
 
-  Future<void> _buatPdf(String periode, DashboardData data) async {
-    final doc = pw.Document();
-    final kategori = data.pengeluaranPerKategori.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+  Future<void> _buatPdf(
+    BuildContext context,
+    String periode,
+    DashboardData data,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final doc = pw.Document();
+      final kategori = data.pengeluaranPerKategori.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
 
-    doc.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (ctx) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
+      // MultiPage agar tabel kategori panjang otomatis berpindah halaman.
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          build: (ctx) => [
             pw.Text(
               'DanaPintar AI — Laporan Keuangan',
               style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
@@ -125,21 +134,25 @@ class LaporanPage extends ConsumerWidget {
                     ),
                 ],
               ),
-            pw.Spacer(),
+            pw.SizedBox(height: 16),
             pw.Text(
               'Dibuat oleh DanaPintar AI',
               style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey),
             ),
           ],
         ),
-      ),
-    );
+      );
 
-    final bytes = await doc.save();
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'DanaPintar_${periode.replaceAll(' ', '_')}.pdf',
-    );
+      final bytes = await doc.save();
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'DanaPintar_${periode.replaceAll(' ', '_')}.pdf',
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('❌ Gagal membuat PDF: $e')),
+      );
+    }
   }
 
   pw.Widget _pdfRow(String k, String v) => pw.Padding(

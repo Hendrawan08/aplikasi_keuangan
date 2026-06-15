@@ -50,23 +50,34 @@ List<Notif> generateNotifikasi({
     );
   }
 
-  if (batasBelanja > 0 && totalPengeluaran > batasBelanja) {
-    out.add(
-      Notif(
-        '🚨',
-        'Pengeluaran melebihi batas belanja sebesar '
-            'Rp ${(totalPengeluaran - batasBelanja)}.',
-        NotifLevel.bahaya,
-      ),
-    );
-  } else if (anggaranTerkunci && targetAda && batasBelanja > 0) {
-    out.add(
-      const Notif(
-        '✅',
-        'Pengeluaran masih dalam batas. Pertahankan!',
-        NotifLevel.sukses,
-      ),
-    );
+  // Ambang persen terhadap batas belanja (port: >=100% bahaya, >=80% peringatan).
+  if (batasBelanja > 0) {
+    final pct = (totalPengeluaran / batasBelanja * 100).round();
+    if (pct >= 100) {
+      out.add(
+        Notif(
+          '🚨',
+          'Pengeluaran sudah $pct% dari batas! Target tabungan terancam.',
+          NotifLevel.bahaya,
+        ),
+      );
+    } else if (pct >= 80) {
+      out.add(
+        Notif(
+          '⚠️',
+          'Pengeluaran sudah $pct% dari batas belanja bulan ini.',
+          NotifLevel.peringatan,
+        ),
+      );
+    } else if (anggaranTerkunci && targetAda) {
+      out.add(
+        const Notif(
+          '✅',
+          'Pengeluaran masih dalam batas. Pertahankan!',
+          NotifLevel.sukses,
+        ),
+      );
+    }
   }
 
   if (belanjaJamRawan > 0) {

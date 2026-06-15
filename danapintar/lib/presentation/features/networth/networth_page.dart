@@ -15,8 +15,8 @@ class NetWorthPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(networthListProvider);
-    final now = DateTime.now();
-    final key = bulanKey(now.month, now.year);
+    final sel = ref.watch(selectedPeriodeProvider);
+    final key = bulanKey(sel.month, sel.year);
 
     return Scaffold(
       appBar: AppBar(title: const Text('💎 Net Worth')),
@@ -45,7 +45,7 @@ class NetWorthPage extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'NET WORTH · ${kamusBulan[now.month]} ${now.year}',
+                      'NET WORTH · ${kamusBulan[sel.month]} ${sel.year}',
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 11,

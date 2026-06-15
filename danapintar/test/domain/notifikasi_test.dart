@@ -52,6 +52,32 @@ void main() {
     expect(n.any((e) => e.level == NotifLevel.sukses), true);
   });
 
+  test('tepat di batas (100%) → bahaya, bukan sukses', () {
+    final n = generateNotifikasi(
+      anggaranTerkunci: true,
+      targetAda: true,
+      totalPengeluaran: 800000,
+      batasBelanja: 800000,
+      belanjaJamRawan: 0,
+      sukarelaBerlebihan: false,
+    );
+    expect(n.any((e) => e.level == NotifLevel.bahaya), true);
+    expect(n.any((e) => e.level == NotifLevel.sukses), false);
+  });
+
+  test('mendekati batas (≥80%) → peringatan', () {
+    final n = generateNotifikasi(
+      anggaranTerkunci: true,
+      targetAda: true,
+      totalPengeluaran: 700000, // 87.5% dari 800000
+      batasBelanja: 800000,
+      belanjaJamRawan: 0,
+      sukarelaBerlebihan: false,
+    );
+    expect(ikon(n).contains('⚠️'), true);
+    expect(n.any((e) => e.level == NotifLevel.sukses), false);
+  });
+
   test('jam rawan & sukarela berlebihan muncul', () {
     final n = generateNotifikasi(
       anggaranTerkunci: true,

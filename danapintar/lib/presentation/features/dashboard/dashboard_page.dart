@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../domain/notifikasi.dart';
 import '../../providers/dashboard_provider.dart';
-import '../../providers/providers.dart';
 import '../../widgets/health_card.dart';
 import '../../widgets/kategori_breakdown.dart';
+import '../../widgets/periode_selector.dart';
 import '../../widgets/tx_tile.dart';
 import '../../widgets/wajib_sukarela_chart.dart';
 
@@ -19,7 +18,6 @@ class DashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(dashboardAsyncProvider);
-    final sel = ref.watch(selectedPeriodeProvider);
 
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -36,7 +34,7 @@ class DashboardPage extends ConsumerWidget {
       data: (data) => ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _PeriodeSelector(month: sel.month, year: sel.year),
+          const PeriodeSelector(),
           const SizedBox(height: 12),
           ...data.notifikasi.map((n) => _NotifCard(n)),
           if (data.notifikasi.isNotEmpty) const SizedBox(height: 4),
@@ -89,46 +87,6 @@ class DashboardPage extends ConsumerWidget {
                 ),
         ],
       ),
-    );
-  }
-}
-
-class _PeriodeSelector extends ConsumerWidget {
-  const _PeriodeSelector({required this.month, required this.year});
-  final int month;
-  final int year;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    void shift(int delta) {
-      var m = month + delta;
-      var y = year;
-      if (m < 1) {
-        m = 12;
-        y--;
-      } else if (m > 12) {
-        m = 1;
-        y++;
-      }
-      ref.read(selectedPeriodeProvider.notifier).state = (month: m, year: y);
-    }
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        IconButton(
-          onPressed: () => shift(-1),
-          icon: const Icon(Icons.chevron_left),
-        ),
-        Text(
-          '${kamusBulan[month]} $year',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-        ),
-        IconButton(
-          onPressed: () => shift(1),
-          icon: const Icon(Icons.chevron_right),
-        ),
-      ],
     );
   }
 }

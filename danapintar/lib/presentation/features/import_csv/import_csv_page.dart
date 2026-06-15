@@ -43,13 +43,24 @@ class _ImportCsvPageState extends ConsumerState<ImportCsvPage> {
       withData: true,
     );
     final bytes = res?.files.single.bytes;
-    if (bytes == null) return;
+    if (bytes == null || !mounted) return;
 
     var content = utf8.decode(bytes, allowMalformed: true);
     content = content.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 
-    // Deteksi pemisah sederhana (',' atau ';').
-    final sep = content.split('\n').first.contains(';') ? ';' : ',';
+    // Lewati baris hint 'sep=;' (umum dari ekspor Excel).
+    final lines = content.split('\n');
+    if (lines.isNotEmpty && lines.first.toLowerCase().startsWith('sep=')) {
+      content = lines.skip(1).join('\n');
+    }
+    // Deteksi pemisah: baris pertama berisi mana yang lebih banyak (';' vs ',').
+    final firstLine = content
+        .split('\n')
+        .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
+    final sep =
+        ';'.allMatches(firstLine).length > ','.allMatches(firstLine).length
+        ? ';'
+        : ',';
     final parsed = CsvDecoder(fieldDelimiter: sep).convert(content);
     final clean = parsed.where((r) => r.isNotEmpty).toList();
     if (clean.length < 2) {
@@ -80,7 +91,8 @@ class _ImportCsvPageState extends ConsumerState<ImportCsvPage> {
     for (final row in _rows!.skip(1)) {
       try {
         final tglStr = row[_tglIdx!].toString().trim();
-        final nominal = parseNominal(row[_nomIdx!].toString());
+        // Buang bagian desimal (',xx') sebelum strip pemisah ribuan ('.').
+        final nominal = parseNominal(row[_nomIdx!].toString().split(',').first);
         final desk = row[_deskIdx!].toString().trim();
         if (nominal <= 0 || desk.isEmpty) {
           gagal++;
