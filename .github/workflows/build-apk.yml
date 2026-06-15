@@ -1,0 +1,61 @@
+name: Build APK
+
+# Robot pembangun APK DanaPintar.
+# Berjalan otomatis tiap ada perubahan di branch ini, atau bisa dijalankan
+# manual dari tab "Actions" (tombol "Run workflow").
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/brave-knuth-xfnlxa]
+    paths: ['danapintar/**', '.github/workflows/build-apk.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+
+      - name: Siapkan Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Siapkan Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.2
+
+      - name: Ambil dependencies
+        working-directory: danapintar
+        run: flutter pub get
+
+      - name: Generate kode (drift)
+        working-directory: danapintar
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build APK (release)
+        working-directory: danapintar
+        run: flutter build apk --release
+
+      - name: Unggah APK sebagai artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: danapintar-apk
+          path: danapintar/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Publikasikan ke Release (link download langsung)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: DanaPintar APK (terbaru)
+          body: |
+            APK DanaPintar AI siap install (Android).
+            Buka link `app-release.apk` di bawah dari HP Android → install.
+            Sumber: branch claude/brave-knuth-xfnlxa.
+          files: danapintar/build/app/outputs/flutter-apk/app-release.apk
