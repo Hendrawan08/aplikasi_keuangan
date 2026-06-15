@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../budget_kategori/budget_kategori_page.dart';
 import '../changelog/changelog_page.dart';
+import '../chat/chat_page.dart';
 import '../goals/goals_page.dart';
 import '../hutang/hutang_page.dart';
 import '../import_csv/import_csv_page.dart';
@@ -9,6 +10,7 @@ import '../kategori/kategori_page.dart';
 import '../laporan/laporan_page.dart';
 import '../networth/networth_page.dart';
 import '../recurring/recurring_page.dart';
+import '../scan/scan_page.dart';
 import '../visualisasi/visualisasi_page.dart';
 
 /// Hub menu fitur tambahan.
@@ -18,6 +20,18 @@ class LainnyaPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <_MenuItem>[
+      _MenuItem(
+        '📸',
+        'Scan Struk (AI)',
+        'Foto struk → otomatis jadi transaksi',
+        () => const ScanPage(),
+      ),
+      _MenuItem(
+        '🤖',
+        'DanaBot (AI)',
+        'Chat asisten keuangan pribadi',
+        () => const ChatPage(),
+      ),
       _MenuItem(
         '🎯',
         'Financial Goals',

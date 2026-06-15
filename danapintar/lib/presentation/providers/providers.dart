@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/formatters.dart';
+import '../../data/ai/ai_service.dart';
 import '../../data/backup/backup_service.dart';
 import '../../data/local/database.dart';
 import '../../data/repositories/budget_kategori_repository.dart';
@@ -52,6 +53,7 @@ final budgetKategoriRepoProvider = Provider(
 final backupServiceProvider = Provider(
   (ref) => BackupService(ref.watch(databaseProvider)),
 );
+final aiServiceProvider = Provider((ref) => AiService());
 
 // ── Stream data (reaktif dari DB) ─────────────────────────────
 final transaksiListProvider = StreamProvider<List<TransaksiData>>(
