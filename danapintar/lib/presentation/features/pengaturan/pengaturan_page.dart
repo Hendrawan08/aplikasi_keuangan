@@ -14,6 +14,7 @@ import '../../../core/utils/form_utils.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../domain/budget_rules.dart';
 import '../../providers/providers.dart';
+import 'notifikasi_card.dart';
 
 /// Pengaturan: anggaran terkunci, target tabungan, dan dompet.
 class PengaturanPage extends ConsumerWidget {
@@ -96,6 +97,8 @@ class PengaturanPage extends ConsumerWidget {
             ],
           ),
         ),
+        const SizedBox(height: 12),
+        const NotifikasiCard(),
         const SizedBox(height: 12),
         _Card(
           title: '💾 Data & Backup',

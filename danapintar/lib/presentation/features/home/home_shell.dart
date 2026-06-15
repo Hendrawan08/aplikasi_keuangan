@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../providers/notification_provider.dart';
 import '../dashboard/dashboard_page.dart';
 import '../lainnya/lainnya_page.dart';
 import '../pemasukan/pemasukan_form_page.dart';
@@ -19,6 +20,15 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Setelah frame pertama: minta izin notifikasi & pasang jadwal.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(notifSettingsProvider.notifier).bootstrap();
+    });
+  }
 
   static const _titles = [
     '📊 DanaPintar AI',
@@ -45,6 +55,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    // Pantau kondisi bulan berjalan → picu notifikasi event (anggaran, dll.).
+    ref.listen<CurMonthStatus?>(currentMonthStatusProvider, (prev, next) {
+      if (next == null) return;
+      final cfg = ref.read(notifSettingsProvider).value;
+      if (cfg != null) evaluateEventNotifications(next, cfg);
+    });
+
     final showFab = _index < 3; // tampil di Beranda/Pengeluaran/Pemasukan saja
     return Scaffold(
       appBar: AppBar(
