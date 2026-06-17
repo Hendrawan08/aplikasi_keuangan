@@ -14,7 +14,6 @@ import 'providers.dart';
 const int _idDaily = 1001;
 const int _idMonthStart = 1002;
 const int _idMonthlyReport = 1003;
-const int _idTest = 1900;
 const int _idEvtBudget80 = 2001;
 const int _idEvtBudget100 = 2002;
 const int _idEvtGoal = 2003;
@@ -139,21 +138,6 @@ class NotifSettingsNotifier extends AsyncNotifier<NotifSettings> {
       _update(_cur.copyWith(monthStart: v));
   Future<void> setMonthlyReport(bool v) async =>
       _update(_cur.copyWith(monthlyReport: v));
-
-  /// Kirim notifikasi uji. Memicu dialog izin bila perlu, lalu SELALU mencoba
-  /// menampilkan — tidak digating pada areNotificationsEnabled yang bisa
-  /// false-negative di sebagian perangkat (mis. MIUI). Mengembalikan true bila
-  /// plugin berhasil mengirim tanpa galat.
-  Future<bool> sendTest() async {
-    await NotificationService.instance.requestPermission();
-    return NotificationService.instance.show(
-      _idTest,
-      '🔔 Notifikasi DanaPintar aktif',
-      'Bagus! Kamu akan menerima pengingat & peringatan keuangan di sini.',
-      channel: NotificationService.chAlert,
-      channelName: 'Peringatan Keuangan',
-    );
-  }
 
   Future<void> _applySchedules(NotifSettings s) async {
     final svc = NotificationService.instance;

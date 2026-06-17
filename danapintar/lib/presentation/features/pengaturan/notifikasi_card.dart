@@ -97,34 +97,24 @@ class _NotifikasiCardState extends ConsumerState<NotifikasiCard> {
                       s.monthlyReport,
                       notifier.setMonthlyReport,
                     ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: const Icon(
-                              Icons.notifications_active_outlined,
-                              size: 16,
-                            ),
-                            label: const Text('Kirim uji'),
-                            onPressed: () => _test(notifier),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.text2,
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                          textStyle: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextButton.icon(
-                            icon: const Icon(Icons.settings, size: 16),
-                            label: const Text('Setelan sistem'),
-                            onPressed: () =>
-                                NotificationService.instance.openSystemSettings(),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Text(
-                      'Notifikasi tak muncul? Buka "Setelan sistem" dan pastikan '
-                      'izin notifikasi DanaPintar AI aktif.',
-                      style: TextStyle(color: AppColors.text2, fontSize: 11),
+                        icon: const Icon(Icons.settings_outlined, size: 15),
+                        label: const Text('Setelan notifikasi sistem'),
+                        onPressed: () =>
+                            NotificationService.instance.openSystemSettings(),
+                      ),
                     ),
                   ],
                 ],
@@ -199,26 +189,6 @@ class _NotifikasiCardState extends ConsumerState<NotifikasiCard> {
             ),
           ),
       ],
-    );
-  }
-
-  Future<void> _test(NotifSettingsNotifier notifier) async {
-    final ok = await notifier.sendTest();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 5),
-        content: Text(
-          ok
-              ? '🔔 Notifikasi uji dikirim — cek panel notifikasi HP. '
-                    'Bila tak muncul, buka Setelan sistem.'
-              : '⚠️ Gagal mengirim. Buka Setelan sistem & aktifkan izin notifikasi.',
-        ),
-        action: SnackBarAction(
-          label: 'SETELAN',
-          onPressed: () => NotificationService.instance.openSystemSettings(),
-        ),
-      ),
     );
   }
 }
