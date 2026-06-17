@@ -140,17 +140,18 @@ class NotifSettingsNotifier extends AsyncNotifier<NotifSettings> {
   Future<void> setMonthlyReport(bool v) async =>
       _update(_cur.copyWith(monthlyReport: v));
 
-  /// Kirim notifikasi uji.
+  /// Kirim notifikasi uji. Mengembalikan true bila izin sistem aktif &
+  /// notifikasi berhasil dikirim; false bila izin notifikasi belum diberikan.
   Future<bool> sendTest() async {
     final ok = await NotificationService.instance.requestPermission();
-    await NotificationService.instance.show(
+    if (!ok) return false;
+    return NotificationService.instance.show(
       _idTest,
       '🔔 Notifikasi DanaPintar aktif',
       'Bagus! Kamu akan menerima pengingat & peringatan keuangan di sini.',
-      channel: NotificationService.chUmum,
-      channelName: 'Umum',
+      channel: NotificationService.chAlert,
+      channelName: 'Peringatan Keuangan',
     );
-    return ok;
   }
 
   Future<void> _applySchedules(NotifSettings s) async {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../providers/notification_provider.dart';
 import '../dashboard/dashboard_page.dart';
 import '../lainnya/lainnya_page.dart';
@@ -46,11 +47,115 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     PengaturanPage(),
   ];
 
-  void _tambah() {
-    final route = _index == 2
-        ? MaterialPageRoute<void>(builder: (_) => const PemasukanFormPage())
-        : MaterialPageRoute<void>(builder: (_) => const TransaksiFormPage());
-    Navigator.of(context).push(route);
+  void _push(Widget page) {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+  }
+
+  /// Sheet pemilih: tombol "+" → pilih Pengeluaran atau Pemasukan.
+  void _showTambahSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.bg2,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(left: 4, bottom: 14),
+                child: Text(
+                  'Catat transaksi',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                ),
+              ),
+              _opsiTambah(
+                icon: Icons.trending_down_rounded,
+                color: AppColors.expense,
+                title: 'Pengeluaran',
+                subtitle: 'Catat uang yang keluar',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _push(const TransaksiFormPage());
+                },
+              ),
+              const SizedBox(height: 10),
+              _opsiTambah(
+                icon: Icons.trending_up_rounded,
+                color: AppColors.income,
+                title: 'Pemasukan',
+                subtitle: 'Catat uang yang masuk',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _push(const PemasukanFormPage());
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _opsiTambah({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: AppColors.bg,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: color, size: 26),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: AppColors.text2,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.text2),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -72,10 +177,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       ),
       body: IndexedStack(index: _index, children: _pages),
       floatingActionButton: showFab
-          ? FloatingActionButton.extended(
-              onPressed: _tambah,
-              icon: const Icon(Icons.add),
-              label: Text(_index == 2 ? 'Pemasukan' : 'Pengeluaran'),
+          ? FloatingActionButton(
+              onPressed: _showTambahSheet,
+              tooltip: 'Catat transaksi',
+              child: const Icon(Icons.add),
             )
           : null,
       bottomNavigationBar: NavigationBar(

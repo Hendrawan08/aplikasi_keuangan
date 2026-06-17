@@ -67,12 +67,11 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     _intro.forward();
-    _intro.addStatusListener((s) {
-      if (s == AnimationStatus.completed) _goNext();
-    });
 
-    // Fail-safe: apa pun yang terjadi, masuk aplikasi maksimal 3,2 detik.
-    Timer(const Duration(milliseconds: 3200), _goNext);
+    // Tahan splash ~3 detik agar terasa seperti "loading", lalu masuk app.
+    Timer(const Duration(milliseconds: 3000), _goNext);
+    // Fail-safe ganda: apa pun yang terjadi, aplikasi pasti masuk.
+    Timer(const Duration(milliseconds: 4200), _goNext);
   }
 
   void _goNext() {
@@ -191,7 +190,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   Widget _logo() {
     return AnimatedBuilder(
-      animation: _intro,
+      animation: Listenable.merge([_intro, _ambient]),
       builder: (_, _) {
         final glow = 0.25 + 0.20 * (0.5 + 0.5 * math.sin(_ambient.value * 2 * math.pi));
         return SizedBox(

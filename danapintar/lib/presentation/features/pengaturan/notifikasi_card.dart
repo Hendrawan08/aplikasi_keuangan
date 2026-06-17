@@ -3,15 +3,48 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../data/notifications/notif_settings.dart';
+import '../../../data/notifications/notification_service.dart';
 import '../../providers/notification_provider.dart';
 
 /// Kartu pengaturan notifikasi: saklar utama, sub-toggle per jenis,
-/// pemilih jam pengingat harian, dan tombol uji.
-class NotifikasiCard extends ConsumerWidget {
+/// pemilih jam pengingat harian, banner izin sistem, dan tombol uji.
+class NotifikasiCard extends ConsumerStatefulWidget {
   const NotifikasiCard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NotifikasiCard> createState() => _NotifikasiCardState();
+}
+
+class _NotifikasiCardState extends ConsumerState<NotifikasiCard>
+    with WidgetsBindingObserver {
+  bool? _permEnabled; // null = belum dicek
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshPerm();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Saat kembali dari Setelan HP, perbarui status izin.
+    if (state == AppLifecycleState.resumed) _refreshPerm();
+  }
+
+  Future<void> _refreshPerm() async {
+    final e = await NotificationService.instance.areEnabled();
+    if (mounted) setState(() => _permEnabled = e);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final async = ref.watch(notifSettingsProvider);
     final notifier = ref.read(notifSettingsProvider.notifier);
 
@@ -51,16 +84,20 @@ class NotifikasiCard extends ConsumerWidget {
               final on = s.enabled;
               return Column(
                 children: [
+                  if (on && _permEnabled == false) _permBanner(),
                   _switch(
                     'Aktifkan notifikasi',
                     'Saklar utama untuk semua notifikasi.',
                     s.enabled,
-                    notifier.setEnabled,
+                    (v) async {
+                      await notifier.setEnabled(v);
+                      await _refreshPerm();
+                    },
                     bold: true,
                   ),
                   if (on) ...[
                     const Divider(height: 8),
-                    _dailyTile(context, s, notifier),
+                    _dailyTile(s, notifier),
                     _switch(
                       '⚠️ Peringatan anggaran',
                       'Saat pengeluaran tembus 80% & 100% batas belanja.',
@@ -100,13 +137,50 @@ class NotifikasiCard extends ConsumerWidget {
                           size: 16,
                         ),
                         label: const Text('Kirim notifikasi uji'),
-                        onPressed: () => _test(context, notifier),
+                        onPressed: () => _test(notifier),
                       ),
                     ),
                   ],
                 ],
               );
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _permBanner() {
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.expense.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.expense.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.notifications_off, color: AppColors.expense, size: 20),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Izin notifikasi dimatikan di sistem. Aktifkan agar pengingat & '
+              'peringatan bisa muncul.',
+              style: TextStyle(fontSize: 12, color: AppColors.text),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.expense,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              visualDensity: VisualDensity.compact,
+            ),
+            onPressed: () async {
+              await NotificationService.instance.openSystemSettings();
+            },
+            child: const Text('Buka Setelan'),
           ),
         ],
       ),
@@ -136,11 +210,7 @@ class NotifikasiCard extends ConsumerWidget {
     );
   }
 
-  Widget _dailyTile(
-    BuildContext context,
-    NotifSettings s,
-    NotifSettingsNotifier notifier,
-  ) {
+  Widget _dailyTile(NotifSettings s, NotifSettingsNotifier notifier) {
     return Column(
       children: [
         _switch(
@@ -154,11 +224,7 @@ class NotifikasiCard extends ConsumerWidget {
             padding: const EdgeInsets.only(left: 4, bottom: 4),
             child: Row(
               children: [
-                const Icon(
-                  Icons.schedule,
-                  size: 15,
-                  color: AppColors.text2,
-                ),
+                const Icon(Icons.schedule, size: 15, color: AppColors.text2),
                 const SizedBox(width: 6),
                 const Text(
                   'Jam pengingat:',
@@ -187,20 +253,29 @@ class NotifikasiCard extends ConsumerWidget {
     );
   }
 
-  Future<void> _test(
-    BuildContext context,
-    NotifSettingsNotifier notifier,
-  ) async {
+  Future<void> _test(NotifSettingsNotifier notifier) async {
     final ok = await notifier.sendTest();
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          ok
-              ? '🔔 Notifikasi uji dikirim — cek panel notifikasi HP.'
-              : '⚠️ Izin notifikasi belum aktif. Aktifkan di Setelan HP → Notifikasi → DanaPintar AI.',
+    await _refreshPerm();
+    if (!mounted) return;
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🔔 Notifikasi uji dikirim — cek panel notifikasi HP.'),
         ),
-      ),
-    );
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 6),
+          content: const Text(
+            '⚠️ Izin notifikasi belum aktif di sistem. Buka Setelan untuk mengaktifkan.',
+          ),
+          action: SnackBarAction(
+            label: 'BUKA SETELAN',
+            onPressed: () => NotificationService.instance.openSystemSettings(),
+          ),
+        ),
+      );
+    }
   }
 }

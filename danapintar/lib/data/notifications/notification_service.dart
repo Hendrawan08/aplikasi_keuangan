@@ -1,3 +1,4 @@
+import 'package:app_settings/app_settings.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -97,8 +98,10 @@ class NotificationService {
     }
   }
 
-  /// Minta izin notifikasi (Android 13+). Mengembalikan true bila diizinkan.
+  /// Minta izin notifikasi (Android 13+) lalu kembalikan status SEBENARNYA
+  /// dari sistem (bukan sekadar hasil dialog), agar UI akurat.
   Future<bool> requestPermission() async {
+    await init();
     final android = _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
@@ -107,8 +110,31 @@ class NotificationService {
       _granted = true; // platform non-Android: anggap tersedia.
       return true;
     }
-    final res = await android.requestNotificationsPermission();
-    _granted = res ?? false;
+    try {
+      await android.requestNotificationsPermission();
+    } catch (_) {/* abaikan; cek status di bawah */}
+    _granted = await android.areNotificationsEnabled() ?? false;
+    return _granted;
+  }
+
+  /// Buka layar pengaturan notifikasi aplikasi di sistem (Setelan HP).
+  Future<void> openSystemSettings() async {
+    try {
+      await AppSettings.openAppSettings(type: AppSettingsType.notification);
+    } catch (e) {
+      debugPrint('openSystemSettings gagal: $e');
+    }
+  }
+
+  /// Status izin notifikasi sistem saat ini (tanpa memunculkan dialog).
+  Future<bool> areEnabled() async {
+    await init();
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (android == null) return true;
+    _granted = await android.areNotificationsEnabled() ?? false;
     return _granted;
   }
 
@@ -127,8 +153,8 @@ class NotificationService {
     );
   }
 
-  /// Tampilkan notifikasi seketika.
-  Future<void> show(
+  /// Tampilkan notifikasi seketika. Mengembalikan true bila berhasil dikirim.
+  Future<bool> show(
     int id,
     String title,
     String body, {
@@ -136,7 +162,13 @@ class NotificationService {
     String channelName = 'Umum',
   }) async {
     await init();
-    await _plugin.show(id, title, body, _details(channel, channelName));
+    try {
+      await _plugin.show(id, title, body, _details(channel, channelName));
+      return true;
+    } catch (e) {
+      debugPrint('show notifikasi gagal: $e');
+      return false;
+    }
   }
 
   /// Jadwalkan notifikasi harian berulang pada jam:menit tertentu.
