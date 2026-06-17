@@ -33,11 +33,19 @@ class TxTile extends StatelessWidget {
       child: ListTile(
         onTap: onTap,
         onLongPress: onLongPress,
-        leading: CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.15),
-          child: Text(
-            isExpense ? '⬇' : '⬆',
-            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        leading: Container(
+          width: 42,
+          height: 42,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            isExpense ? Icons.south_west_rounded : Icons.north_east_rounded,
+            color: color,
+            size: 20,
           ),
         ),
         title: Text(

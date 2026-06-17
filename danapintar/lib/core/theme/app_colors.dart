@@ -23,4 +23,18 @@ abstract class AppColors {
     end: Alignment.bottomRight,
     colors: [Color(0xFF1A2744), Color(0xFF0F3460)],
   );
+
+  /// Gradien aksen merek (tombol utama, sorotan).
+  static const accentGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF4ADE80), Color(0xFF16A34A)],
+  );
+
+  /// Latar gelap sinematik (dipakai layar pembuka & header).
+  static const cinemaGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF13203A), Color(0xFF0A1426), Color(0xFF050B16)],
+  );
 }
