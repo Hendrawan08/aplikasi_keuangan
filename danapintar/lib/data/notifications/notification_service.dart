@@ -113,7 +113,9 @@ class NotificationService {
     try {
       await android.requestNotificationsPermission();
     } catch (_) {/* abaikan; cek status di bawah */}
-    _granted = await android.areNotificationsEnabled() ?? false;
+    // Catatan: di sebagian perangkat (mis. MIUI) areNotificationsEnabled bisa
+    // mengembalikan null walau notifikasi aktif → anggap aktif bila tak pasti.
+    _granted = await android.areNotificationsEnabled() ?? true;
     return _granted;
   }
 
@@ -134,7 +136,7 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin
         >();
     if (android == null) return true;
-    _granted = await android.areNotificationsEnabled() ?? false;
+    _granted = await android.areNotificationsEnabled() ?? true;
     return _granted;
   }
 
@@ -166,8 +168,29 @@ class NotificationService {
       await _plugin.show(id, title, body, _details(channel, channelName));
       return true;
     } catch (e) {
-      debugPrint('show notifikasi gagal: $e');
-      return false;
+      debugPrint('show notifikasi gagal ($e) — coba ikon cadangan');
+      // Jaring pengaman: bila ikon kustom bermasalah, pakai ikon peluncur.
+      try {
+        await _plugin.show(
+          id,
+          title,
+          body,
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              channel,
+              channelName,
+              channelDescription: channelName,
+              importance: Importance.high,
+              priority: Priority.high,
+              icon: '@mipmap/ic_launcher',
+            ),
+          ),
+        );
+        return true;
+      } catch (e2) {
+        debugPrint('show notifikasi cadangan gagal: $e2');
+        return false;
+      }
     }
   }
 

@@ -140,11 +140,12 @@ class NotifSettingsNotifier extends AsyncNotifier<NotifSettings> {
   Future<void> setMonthlyReport(bool v) async =>
       _update(_cur.copyWith(monthlyReport: v));
 
-  /// Kirim notifikasi uji. Mengembalikan true bila izin sistem aktif &
-  /// notifikasi berhasil dikirim; false bila izin notifikasi belum diberikan.
+  /// Kirim notifikasi uji. Memicu dialog izin bila perlu, lalu SELALU mencoba
+  /// menampilkan — tidak digating pada areNotificationsEnabled yang bisa
+  /// false-negative di sebagian perangkat (mis. MIUI). Mengembalikan true bila
+  /// plugin berhasil mengirim tanpa galat.
   Future<bool> sendTest() async {
-    final ok = await NotificationService.instance.requestPermission();
-    if (!ok) return false;
+    await NotificationService.instance.requestPermission();
     return NotificationService.instance.show(
       _idTest,
       '🔔 Notifikasi DanaPintar aktif',

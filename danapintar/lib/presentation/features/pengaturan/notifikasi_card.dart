@@ -7,7 +7,7 @@ import '../../../data/notifications/notification_service.dart';
 import '../../providers/notification_provider.dart';
 
 /// Kartu pengaturan notifikasi: saklar utama, sub-toggle per jenis,
-/// pemilih jam pengingat harian, banner izin sistem, dan tombol uji.
+/// pemilih jam pengingat harian, tombol uji, & pintasan ke setelan sistem.
 class NotifikasiCard extends ConsumerStatefulWidget {
   const NotifikasiCard({super.key});
 
@@ -15,34 +15,7 @@ class NotifikasiCard extends ConsumerStatefulWidget {
   ConsumerState<NotifikasiCard> createState() => _NotifikasiCardState();
 }
 
-class _NotifikasiCardState extends ConsumerState<NotifikasiCard>
-    with WidgetsBindingObserver {
-  bool? _permEnabled; // null = belum dicek
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _refreshPerm();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Saat kembali dari Setelan HP, perbarui status izin.
-    if (state == AppLifecycleState.resumed) _refreshPerm();
-  }
-
-  Future<void> _refreshPerm() async {
-    final e = await NotificationService.instance.areEnabled();
-    if (mounted) setState(() => _permEnabled = e);
-  }
-
+class _NotifikasiCardState extends ConsumerState<NotifikasiCard> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(notifSettingsProvider);
@@ -52,8 +25,8 @@ class _NotifikasiCardState extends ConsumerState<NotifikasiCard>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.bg2,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -84,15 +57,11 @@ class _NotifikasiCardState extends ConsumerState<NotifikasiCard>
               final on = s.enabled;
               return Column(
                 children: [
-                  if (on && _permEnabled == false) _permBanner(),
                   _switch(
                     'Aktifkan notifikasi',
                     'Saklar utama untuk semua notifikasi.',
                     s.enabled,
-                    (v) async {
-                      await notifier.setEnabled(v);
-                      await _refreshPerm();
-                    },
+                    notifier.setEnabled,
                     bold: true,
                   ),
                   if (on) ...[
@@ -128,59 +97,39 @@ class _NotifikasiCardState extends ConsumerState<NotifikasiCard>
                       s.monthlyReport,
                       notifier.setMonthlyReport,
                     ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: OutlinedButton.icon(
-                        icon: const Icon(
-                          Icons.notifications_active_outlined,
-                          size: 16,
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(
+                              Icons.notifications_active_outlined,
+                              size: 16,
+                            ),
+                            label: const Text('Kirim uji'),
+                            onPressed: () => _test(notifier),
+                          ),
                         ),
-                        label: const Text('Kirim notifikasi uji'),
-                        onPressed: () => _test(notifier),
-                      ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextButton.icon(
+                            icon: const Icon(Icons.settings, size: 16),
+                            label: const Text('Setelan sistem'),
+                            onPressed: () =>
+                                NotificationService.instance.openSystemSettings(),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Text(
+                      'Notifikasi tak muncul? Buka "Setelan sistem" dan pastikan '
+                      'izin notifikasi DanaPintar AI aktif.',
+                      style: TextStyle(color: AppColors.text2, fontSize: 11),
                     ),
                   ],
                 ],
               );
             },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _permBanner() {
-    return Container(
-      margin: const EdgeInsets.only(top: 8, bottom: 4),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.expense.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.expense.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.notifications_off, color: AppColors.expense, size: 20),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Text(
-              'Izin notifikasi dimatikan di sistem. Aktifkan agar pengingat & '
-              'peringatan bisa muncul.',
-              style: TextStyle(fontSize: 12, color: AppColors.text),
-            ),
-          ),
-          const SizedBox(width: 8),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.expense,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              visualDensity: VisualDensity.compact,
-            ),
-            onPressed: () async {
-              await NotificationService.instance.openSystemSettings();
-            },
-            child: const Text('Buka Setelan'),
           ),
         ],
       ),
@@ -255,27 +204,21 @@ class _NotifikasiCardState extends ConsumerState<NotifikasiCard>
 
   Future<void> _test(NotifSettingsNotifier notifier) async {
     final ok = await notifier.sendTest();
-    await _refreshPerm();
     if (!mounted) return;
-    if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🔔 Notifikasi uji dikirim — cek panel notifikasi HP.'),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 5),
+        content: Text(
+          ok
+              ? '🔔 Notifikasi uji dikirim — cek panel notifikasi HP. '
+                    'Bila tak muncul, buka Setelan sistem.'
+              : '⚠️ Gagal mengirim. Buka Setelan sistem & aktifkan izin notifikasi.',
         ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          duration: const Duration(seconds: 6),
-          content: const Text(
-            '⚠️ Izin notifikasi belum aktif di sistem. Buka Setelan untuk mengaktifkan.',
-          ),
-          action: SnackBarAction(
-            label: 'BUKA SETELAN',
-            onPressed: () => NotificationService.instance.openSystemSettings(),
-          ),
+        action: SnackBarAction(
+          label: 'SETELAN',
+          onPressed: () => NotificationService.instance.openSystemSettings(),
         ),
-      );
-    }
+      ),
+    );
   }
 }

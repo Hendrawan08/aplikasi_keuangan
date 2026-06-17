@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../budget_kategori/budget_kategori_page.dart';
 import '../changelog/changelog_page.dart';
 import '../chat/chat_page.dart';
@@ -99,13 +100,34 @@ class LainnyaPage extends StatelessWidget {
         ...items.map(
           (m) => Card(
             child: ListTile(
-              leading: Text(m.ikon, style: const TextStyle(fontSize: 22)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              leading: Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.accent.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Text(m.ikon, style: const TextStyle(fontSize: 20)),
+              ),
               title: Text(
                 m.judul,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
-              subtitle: Text(m.subtitle),
-              trailing: const Icon(Icons.chevron_right),
+              subtitle: Text(
+                m.subtitle,
+                style: const TextStyle(color: AppColors.text2, fontSize: 12),
+              ),
+              trailing: const Icon(
+                Icons.chevron_right,
+                color: AppColors.text2,
+              ),
               onTap: () => Navigator.of(
                 context,
               ).push(MaterialPageRoute<void>(builder: (_) => m.builder())),
